@@ -1,4 +1,6 @@
-# Type exercise in Rust
+# Type Exercise in Rust
+
+*(In Chinese) Rust 语言中的类型体操 - 以数据库系统为例*
 
 This is a short lecture on how to use the Rust type system to build necessary components in a database system.
 
