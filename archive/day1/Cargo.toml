@@ -1,5 +1,5 @@
 [package]
-name = "type-exercise"
+name = "type-exercise-day1"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,8 +7,3 @@ edition = "2021"
 
 [dependencies]
 bitvec = "1"
-
-[workspace]
-members = [
-    "archive/day1"
-]

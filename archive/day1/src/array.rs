@@ -1,7 +1,7 @@
 //! Contains array types for the system
 //!
 //! This crate contains two category of structs -- ArrayBuilder and Array. Developers may use
-//! ArrayBuilder to create an Array. ArrayBuilder and Array are reciprocal traits. We can associate
+//! ArrayBuilder to create an Array. ArrayBuilder and Array are reciprocal types. We can associate
 //! an Array with an ArrayBuilder at compile time. This module also contains examples on how to use
 //! generics around the Array and ArrayBuilder.
 
@@ -13,25 +13,20 @@ pub use iterator::*;
 pub use primitive_array::*;
 pub use string_array::*;
 
-use crate::scalar::{Scalar, ScalarRef};
-
 /// [`Array`] is a collection of data of the same type.
-pub trait Array: Send + Sync + Sized + 'static
-where
-    for<'a> Self::OwnedItem: Scalar<RefType<'a> = Self::RefItem<'a>>,
-{
+pub trait Array: Send + Sync + Sized + 'static {
     /// The corresponding [`ArrayBuilder`] of this [`Array`].
     ///
     /// We constriant the associated type so that `Self::Builder::Array = Self`.
     type Builder: ArrayBuilder<Array = Self>;
 
     /// The owned item of this array.
-    type OwnedItem: Scalar<ArrayType = Self>;
+    type OwnedItem: 'static + std::fmt::Debug;
 
     /// Type of the item that can be retrieved from the [`Array`]. For example, we can get a `i32`
     /// from [`Int32Array`], while [`StringArray`] produces a `&str`. As we need a lifetime that is
     /// the same as `self` for `&str`, we use GAT here.
-    type RefItem<'a>: ScalarRef<'a, ScalarType = Self::OwnedItem, ArrayType = Self>
+    type RefItem<'a>: Clone + Copy + std::fmt::Debug
     where
         Self: 'a;
 

@@ -2,13 +2,14 @@
 //!
 //! This module implements array for primitive types, like `i32` and `f32`.
 
+use std::fmt::Debug;
+
 use bitvec::prelude::BitVec;
 
 use super::{Array, ArrayBuilder, ArrayIterator};
-use crate::scalar::{Scalar, ScalarRef};
 
 /// A type that is primitive, such as `i32` and `i64`.
-pub trait PrimitiveType: Scalar + Default {}
+pub trait PrimitiveType: Copy + Clone + Send + Sync + Default + Debug + 'static {}
 
 pub type I32Array = PrimitiveArray<i32>;
 pub type F32Array = PrimitiveArray<f32>;
@@ -37,13 +38,7 @@ pub struct PrimitiveArray<T: PrimitiveType> {
     bitmap: BitVec,
 }
 
-impl<T> Array for PrimitiveArray<T>
-where
-    T: PrimitiveType,
-    T: Scalar<ArrayType = Self>,
-    for<'a> T: ScalarRef<'a, ScalarType = T, ArrayType = Self>,
-    for<'a> T: Scalar<RefType<'a> = T>,
-{
+impl<T: PrimitiveType> Array for PrimitiveArray<T> {
     type Builder = PrimitiveArrayBuilder<T>;
 
     type OwnedItem = T;
@@ -79,13 +74,7 @@ pub struct PrimitiveArrayBuilder<T: PrimitiveType> {
     bitmap: BitVec,
 }
 
-impl<T> ArrayBuilder for PrimitiveArrayBuilder<T>
-where
-    T: PrimitiveType,
-    T: Scalar<ArrayType = PrimitiveArray<T>>,
-    for<'a> T: ScalarRef<'a, ScalarType = T, ArrayType = PrimitiveArray<T>>,
-    for<'a> T: Scalar<RefType<'a> = T>,
-{
+impl<T: PrimitiveType> ArrayBuilder for PrimitiveArrayBuilder<T> {
     type Array = PrimitiveArray<T>;
 
     fn with_capacity(capacity: usize) -> Self {
