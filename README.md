@@ -85,7 +85,7 @@ With `Scalar` trait and corresponding implements,
 fn build_array_repeated_owned<A: Array>(item: A::OwnedItem, len: usize) -> A {
     let mut builder = A::Builder::with_capacity(len);
     for _ in 0..len {
-        builder.push(Some(item.as_scalar_ref())); /* Now we have `as_scalar_ref` on `Scalar`!
+        builder.push(Some(item.as_scalar_ref())); // Now we have `as_scalar_ref` on `Scalar`!
     }
     builder.finish()
 }
@@ -148,6 +148,19 @@ impl<'a> ScalarRef<'a> for i32 {
 // repeat the same code fore i64, f64, ...
 ```
 
+```rust
+impl ArrayImpl {
+    /// Get the value at the given index.
+    pub fn get(&self, idx: usize) -> Option<ScalarRefImpl<'_>> {
+        match self {
+            Self::Int32(array) => array.get(idx).map(ScalarRefImpl::Int32),
+            Self::Flaot64(array) => array.get(idx).map(ScalarRefImpl::Int64),
+            // ...
+            // repeat the types for every functions we added on `Array`
+        }
+    }
+```
+
 With macros, we can easily add more and more types. In day 4, we will support:
 
 ```rust
@@ -192,14 +205,16 @@ And they can create `BinaryExpression` around this function with any type:
 ```rust
 // Vectorize `cmp_le` to accept an array instead of a single value.
 let expr = BinaryExpression::<I32Array, I32Array, BoolArray, _>::new(
-            cmp_le::<I32Array, I32Array, I64Array>,
-        );
+        cmp_le::<I32Array, I32Array, I64Array>,
+    );
+// We only need to pass `ArrayImpl` to the expression, and it will do everything for us,
+// including type checks, loopping, etc.
 let result: ArrayImpl = expr.eval(ArrayImpl, ArrayImpl).unwrap();
 
 // `cmp_le` can also be used on `&str`.
 let expr = BinaryExpression::<StringArray, StringArray, BoolArray, _>::new(
-            cmp_le::<StringArray, StringArray, StringArray>,
-        );
+        cmp_le::<StringArray, StringArray, StringArray>,
+    );
 let result: ArrayImpl = expr.eval(ArrayImpl, ArrayImpl).unwrap();
 ```
 
