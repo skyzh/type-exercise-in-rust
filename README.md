@@ -4,6 +4,8 @@
 
 This is a short lecture on how to use the Rust type system to build necessary components in a database system.
 
+Note that most of the techniques described in this lecture is implemented in our educational database system [RisingLight](https://github.com/risinglightdb/risinglight). You may compile and run it by yourself!
+
 The lecture evolves around how Rust programmers (like me) build database systems in the Rust programming language. We leverage the Rust type system to **minimize** runtime cost and make our development process easier with **safe**, **nightly** Rust.
 
 ![Map of Types](map-of-types.png)
