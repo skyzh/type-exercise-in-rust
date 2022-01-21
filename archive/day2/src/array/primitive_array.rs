@@ -4,7 +4,7 @@
 
 use bitvec::prelude::BitVec;
 
-use super::{Array, ArrayBuilder, ArrayImpl, ArrayIterator};
+use super::{Array, ArrayBuilder, ArrayIterator};
 use crate::scalar::{Scalar, ScalarRef};
 
 /// A type that is primitive, such as `i32` and `i64`.
@@ -12,9 +12,6 @@ pub trait PrimitiveType: Scalar + Default {}
 
 pub type I32Array = PrimitiveArray<i32>;
 pub type F32Array = PrimitiveArray<f32>;
-
-pub type I32ArrayBuilder = PrimitiveArrayBuilder<i32>;
-pub type F32ArrayBuilder = PrimitiveArrayBuilder<f32>;
 
 impl PrimitiveType for i32 {}
 impl PrimitiveType for f32 {}
@@ -46,8 +43,6 @@ where
     T: Scalar<ArrayType = Self>,
     for<'a> T: ScalarRef<'a, ScalarType = T, ArrayType = Self>,
     for<'a> T: Scalar<RefType<'a> = T>,
-    Self: Into<ArrayImpl>,
-    Self: TryFrom<ArrayImpl>,
 {
     type Builder = PrimitiveArrayBuilder<T>;
 
@@ -90,8 +85,6 @@ where
     T: Scalar<ArrayType = PrimitiveArray<T>>,
     for<'a> T: ScalarRef<'a, ScalarType = T, ArrayType = PrimitiveArray<T>>,
     for<'a> T: Scalar<RefType<'a> = T>,
-    PrimitiveArray<T>: Into<ArrayImpl>,
-    PrimitiveArray<T>: TryFrom<ArrayImpl>,
 {
     type Array = PrimitiveArray<T>;
 

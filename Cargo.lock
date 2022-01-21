@@ -47,6 +47,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "type-exercise-day2"
+version = "0.1.0"
+dependencies = [
+ "bitvec",
+]
+
+[[package]]
 name = "wyz"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

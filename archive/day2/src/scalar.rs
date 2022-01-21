@@ -9,9 +9,7 @@ use crate::array::{Array, F32Array, I32Array, StringArray};
 /// An owned single value.
 ///  
 /// For example, `i32`, `String` both implements [`Scalar`].
-pub trait Scalar:
-    std::fmt::Debug + Clone + Send + Sync + 'static + TryFrom<ScalarImpl> + Into<ScalarImpl>
-{
+pub trait Scalar: std::fmt::Debug + Clone + Send + Sync + 'static {
     /// The corresponding [`Array`] type.
     type ArrayType: Array<OwnedItem = Self>;
 
@@ -27,9 +25,7 @@ pub trait Scalar:
 /// An borrowed value.
 ///
 /// For example, `i32`, `&str` both implements [`ScalarRef`].
-pub trait ScalarRef<'a>:
-    std::fmt::Debug + Clone + Copy + Send + 'a + TryFrom<ScalarRefImpl<'a>> + Into<ScalarRefImpl<'a>>
-{
+pub trait ScalarRef<'a>: std::fmt::Debug + Clone + Copy + Send + 'a {
     /// The corresponding [`Array`] type.
     type ArrayType: Array<RefItem<'a> = Self>;
 
@@ -60,38 +56,6 @@ impl<'a> ScalarRef<'a> for i32 {
     }
 }
 
-impl<'a> TryFrom<ScalarImpl> for i32 {
-    type Error = ();
-    fn try_from(that: ScalarImpl) -> Result<Self, Self::Error> {
-        match that {
-            ScalarImpl::Int32(v) => Ok(v),
-            _ => Err(()),
-        }
-    }
-}
-
-impl From<i32> for ScalarImpl {
-    fn from(that: i32) -> Self {
-        ScalarImpl::Int32(that)
-    }
-}
-
-impl<'a> TryFrom<ScalarRefImpl<'a>> for i32 {
-    type Error = ();
-    fn try_from(that: ScalarRefImpl<'a>) -> Result<Self, Self::Error> {
-        match that {
-            ScalarRefImpl::Int32(v) => Ok(v),
-            _ => Err(()),
-        }
-    }
-}
-
-impl<'a> From<i32> for ScalarRefImpl<'a> {
-    fn from(that: i32) -> Self {
-        ScalarRefImpl::Int32(that)
-    }
-}
-
 /// Implement [`Scalar`] for `f32`. Note that `f32` is both [`Scalar`] and [`ScalarRef`].
 impl Scalar for f32 {
     type ArrayType = F32Array;
@@ -109,38 +73,6 @@ impl<'a> ScalarRef<'a> for f32 {
 
     fn to_owned_scalar(&self) -> f32 {
         *self
-    }
-}
-
-impl<'a> TryFrom<ScalarImpl> for f32 {
-    type Error = ();
-    fn try_from(that: ScalarImpl) -> Result<Self, Self::Error> {
-        match that {
-            ScalarImpl::Float32(v) => Ok(v),
-            _ => Err(()),
-        }
-    }
-}
-
-impl From<f32> for ScalarImpl {
-    fn from(that: f32) -> Self {
-        ScalarImpl::Float32(that)
-    }
-}
-
-impl<'a> TryFrom<ScalarRefImpl<'a>> for f32 {
-    type Error = ();
-    fn try_from(that: ScalarRefImpl<'a>) -> Result<Self, Self::Error> {
-        match that {
-            ScalarRefImpl::Float32(v) => Ok(v),
-            _ => Err(()),
-        }
-    }
-}
-
-impl<'a> From<f32> for ScalarRefImpl<'a> {
-    fn from(that: f32) -> Self {
-        ScalarRefImpl::Float32(that)
     }
 }
 
@@ -162,52 +94,6 @@ impl<'a> ScalarRef<'a> for &'a str {
     fn to_owned_scalar(&self) -> String {
         self.to_string()
     }
-}
-
-impl<'a> TryFrom<ScalarImpl> for String {
-    type Error = ();
-    fn try_from(that: ScalarImpl) -> Result<Self, Self::Error> {
-        match that {
-            ScalarImpl::String(v) => Ok(v),
-            _ => Err(()),
-        }
-    }
-}
-
-impl From<String> for ScalarImpl {
-    fn from(that: String) -> Self {
-        ScalarImpl::String(that)
-    }
-}
-
-impl<'a> TryFrom<ScalarRefImpl<'a>> for &'a str {
-    type Error = ();
-    fn try_from(that: ScalarRefImpl<'a>) -> Result<Self, Self::Error> {
-        match that {
-            ScalarRefImpl::String(v) => Ok(v),
-            _ => Err(()),
-        }
-    }
-}
-
-impl<'a> From<&'a str> for ScalarRefImpl<'a> {
-    fn from(that: &'a str) -> Self {
-        ScalarRefImpl::String(that)
-    }
-}
-
-/// Encapsules all variants of [`Scalar`]
-pub enum ScalarImpl {
-    Int32(i32),
-    Float32(f32),
-    String(String),
-}
-
-/// Encapsules all variants of [`ScalarRef`]
-pub enum ScalarRefImpl<'a> {
-    Int32(i32),
-    Float32(f32),
-    String(&'a str),
 }
 
 #[cfg(test)]
@@ -261,16 +147,5 @@ mod tests {
         check_array_eq(&array, "233");
         let array = build_array_repeated_owned::<StringArray>("233".to_string(), 5);
         check_array_eq(&array, "233");
-    }
-
-    #[test]
-    fn test_try_from_into() {
-        let i: i32 = 2333;
-        let j: ScalarImpl = i.into();
-        let k: ScalarRefImpl = i.into();
-        let i1: i32 = j.try_into().unwrap();
-        let i2: i32 = k.try_into().unwrap();
-        assert_eq!(i1, i);
-        assert_eq!(i2, i);
     }
 }

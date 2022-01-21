@@ -23,14 +23,20 @@ is also very similar to libraries like arrow, but with much stronger type constr
 overhead on type matching and conversion. Meanwhile, we associate `Scalar` with `Array`, so as to write functions
 more easily.
 
-# TBD Lectures
-
 ## Day 3: `ArrayImpl`, `ArrayBuilderImpl`, `ScalarImpl` and `ScalarRefImpl`
 
 It could be possible that some information is not available until runtime. Therefore, we use `XXXImpl` enums to
-cover all variants of a single type.
+cover all variants of a single type. At the same time, we also add `TryFrom<ArrayImpl>` and `Into<ArrayImpl>`
+bound for `Array`.
 
-## Day 4: More Types with Macro
+# TBD Lectures
+
+## Day 4: More Types and Methods with Macro
+
+`ArrayImpl` should supports common functions in traits, but `Array` trait doesn't have a unified interface for
+all types -- `I32Array` accepts `get(&self, idx: usize) -> Option<i32>` while `StringArray` accepts
+`get(&self, idx: usize) -> &str`. We need a `get(&self, idx:usize) -> ScalarRefImpl<'_>` on `ArrayImpl`. Therefore,
+we have to write the match arms to dispatch the methods.
 
 As we are having more and more data types, we need to write the same code multiple times within a match arm. In
 day 4, we use declarative macros (instead of procedural macros or other kinds of code generator) to generate such
