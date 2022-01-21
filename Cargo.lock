@@ -118,6 +118,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "type-exercise-day4"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "thiserror",
+]
+
+[[package]]
 name = "unicode-xid"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
