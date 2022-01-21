@@ -156,7 +156,7 @@ impl ArrayImpl {
     pub fn get(&self, idx: usize) -> Option<ScalarRefImpl<'_>> {
         match self {
             Self::Int32(array) => array.get(idx).map(ScalarRefImpl::Int32),
-            Self::Flaot64(array) => array.get(idx).map(ScalarRefImpl::Int64),
+            Self::Float64(array) => array.get(idx).map(ScalarRefImpl::Float64),
             // ...
             // repeat the types for every functions we added on `Array`
         }
@@ -242,20 +242,20 @@ let result: ArrayImpl = expr.eval(ArrayImpl, ArrayImpl).unwrap();
 
 # TBD Lectures
 
-## Day 6: Aggregators
+## Day 6: Physical Data Type and Logical Data Type
 
-Aggregators are another kind of expressions. We learn how to implement them easily with our type system in day 6.
+`i32`, `i64` is simply physical types -- how types are stored in memory (or on disk). But in a database system,
+we also have logical types (like `Char`, and `Varchar`). In day 6, we learn how to associate logical types with
+physical types using macros.
 
-## Day 7: Expression Framework
+## Day 7: Aggregators
+
+Aggregators are another kind of expressions. We learn how to implement them easily with our type system in day 7.
+
+## Day 8: Expression Framework
 
 Now we are having more and more expression kinds, and we need an expression framework to unify them -- including
 unary, binary and expressions of more inputs. At the same time, we also need to automatically convert `ArrayImpl`
 into their corresponding concrete types using `TryFrom` and `TryInto` traits.
 
 At the same time, we will also experiment with return value optimizations in variable-size types.
-
-## Day 8: Physical Data Type and Logical Data Type
-
-`i32`, `i64` is simply physical types -- how types are stored in memory (or on disk). But in a database system,
-we also have logical types (like `Char`, and `Varchar`). In day 8, we learn how to associate logical types with
-physical types using macros.

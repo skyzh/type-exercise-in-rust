@@ -1,5 +1,5 @@
 [package]
-name = "type-exercise"
+name = "type-exercise-day5"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,12 +9,3 @@ edition = "2021"
 anyhow = "1"
 bitvec = "1"
 thiserror = "1"
-
-[workspace]
-members = [
-    "archive/day1",
-    "archive/day2",
-    "archive/day3",
-    "archive/day4",
-    "archive/day5",
-]
