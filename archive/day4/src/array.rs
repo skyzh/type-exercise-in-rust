@@ -15,11 +15,9 @@ pub use primitive_array::*;
 pub use string_array::*;
 
 use crate::scalar::{Scalar, ScalarRef};
-use crate::TypeMismatch;
 
 /// [`Array`] is a collection of data of the same type.
-pub trait Array:
-    Send + Sync + Sized + 'static + TryFrom<ArrayImpl, Error = TypeMismatch> + Into<ArrayImpl>
+pub trait Array: Send + Sync + Sized + 'static + TryFrom<ArrayImpl> + Into<ArrayImpl>
 where
     for<'a> Self::OwnedItem: Scalar<RefType<'a> = Self::RefItem<'a>>,
 {
