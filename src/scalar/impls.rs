@@ -1,0 +1,84 @@
+// Copyright 2022 RisingLight Project Authors. Licensed under Apache-2.0.
+
+//! Contains all macro-generated implementations of scalar methods
+
+use crate::macros::for_all_variants;
+use crate::scalar::*;
+use crate::TypeMismatch;
+
+/// Implements dispatch functions for [`Scalar`]
+macro_rules! impl_scalar_dispatch {
+    ([], $( { $Abc:ident, $abc:ident, $AbcArray:ty, $AbcArrayBuilder:ty, $Owned:ty, $Ref:ty } ),*) => {
+        impl ScalarImpl {
+            /// Get identifier of the current array
+            pub fn identifier(&self) -> &'static str {
+                match self {
+                    $(
+                        Self::$Abc(_) => stringify!($Abc),
+                    )*
+                }
+            }
+        }
+    }
+}
+
+for_all_variants! { impl_scalar_dispatch }
+
+/// Implements dispatch functions for [`ScalarRef`]
+macro_rules! impl_scalar_ref_dispatch {
+    ([], $( { $Abc:ident, $abc:ident, $AbcArray:ty, $AbcArrayBuilder:ty, $Owned:ty, $Ref:ty } ),*) => {
+        impl <'a> ScalarRefImpl<'a> {
+            /// Get identifier of the current array
+            pub fn identifier(&self) -> &'static str {
+                match self {
+                    $(
+                        Self::$Abc(_) => stringify!($Abc),
+                    )*
+                }
+            }
+        }
+    }
+}
+
+for_all_variants! { impl_scalar_ref_dispatch }
+
+/// Implements `TryFrom` and `From` for [`Scalar`] and [`ScalarRef`].
+macro_rules! impl_scalar_conversion {
+    ([], $({ $Abc:ident, $abc:ident, $AbcArray:ty, $AbcArrayBuilder:ty, $Owned:ty, $Ref:ty }),*) => {
+        $(
+            impl<'a> TryFrom<ScalarImpl> for $Owned {
+                type Error = TypeMismatch;
+                fn try_from(that: ScalarImpl) -> Result<Self, Self::Error> {
+                    match that {
+                        ScalarImpl::$Abc(v) => Ok(v),
+                        other => Err(TypeMismatch(stringify!($Abc), other.identifier())),
+                    }
+                }
+            }
+
+            impl From<$Owned> for ScalarImpl {
+                fn from(that: $Owned) -> Self {
+                    ScalarImpl::$Abc(that)
+                }
+            }
+
+            impl<'a> TryFrom<ScalarRefImpl<'a>> for $Ref {
+                type Error = TypeMismatch;
+                fn try_from(that: ScalarRefImpl<'a>) -> Result<Self, Self::Error> {
+                    match that {
+                        ScalarRefImpl::$Abc(v) => Ok(v),
+                        other => Err(TypeMismatch(stringify!($Abc), other.identifier())),
+                    }
+                }
+            }
+
+            impl<'a> From<$Ref> for ScalarRefImpl<'a> {
+                fn from(that: $Ref) -> Self {
+                    ScalarRefImpl::$Abc(that)
+                }
+            }
+        )*
+    };
+}
+
+for_all_variants! { impl_scalar_conversion }

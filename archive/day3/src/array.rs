@@ -5,7 +5,6 @@
 //! an Array with an ArrayBuilder at compile time. This module also contains examples on how to use
 //! generics around the Array and ArrayBuilder.
 
-mod impls;
 mod iterator;
 mod primitive_array;
 mod string_array;
@@ -86,6 +85,57 @@ pub enum ArrayImpl {
     String(StringArray),
 }
 
+impl TryFrom<ArrayImpl> for I32Array {
+    type Error = ();
+
+    fn try_from(array: ArrayImpl) -> Result<Self, Self::Error> {
+        match array {
+            ArrayImpl::Int32(array) => Ok(array),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<I32Array> for ArrayImpl {
+    fn from(array: I32Array) -> Self {
+        ArrayImpl::Int32(array)
+    }
+}
+
+impl TryFrom<ArrayImpl> for F32Array {
+    type Error = ();
+
+    fn try_from(array: ArrayImpl) -> Result<Self, Self::Error> {
+        match array {
+            ArrayImpl::Float32(array) => Ok(array),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<F32Array> for ArrayImpl {
+    fn from(array: F32Array) -> Self {
+        ArrayImpl::Float32(array)
+    }
+}
+
+impl TryFrom<ArrayImpl> for StringArray {
+    type Error = ();
+
+    fn try_from(array: ArrayImpl) -> Result<Self, Self::Error> {
+        match array {
+            ArrayImpl::String(array) => Ok(array),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<StringArray> for ArrayImpl {
+    fn from(array: StringArray) -> Self {
+        ArrayImpl::String(array)
+    }
+}
+
 /// Encapsules all variants of array builders in this library.
 pub enum ArrayBuilderImpl {
     Int32(I32ArrayBuilder),
@@ -96,7 +146,6 @@ pub enum ArrayBuilderImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::TypeMismatch;
 
     // These are two examples of using generics over array.
     //
@@ -148,7 +197,7 @@ mod tests {
         builder.finish()
     }
 
-    fn add_i32_wrapper(i1: ArrayImpl, i2: ArrayImpl) -> Result<ArrayImpl, TypeMismatch> {
+    fn add_i32_wrapper(i1: ArrayImpl, i2: ArrayImpl) -> Result<ArrayImpl, ()> {
         Ok(add_i32_vec(i1.try_into()?, i2.try_into()?).into())
     }
 

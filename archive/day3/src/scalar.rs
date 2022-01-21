@@ -4,8 +4,6 @@
 //! owned value of ScalarRef, and ScalarRef is a reference to Scalar. We associate Scalar and
 //! ScalarRef with Array types, and present examples on how to use these traits.
 
-mod impls;
-
 use crate::array::{Array, F32Array, I32Array, StringArray};
 
 /// An owned single value.
@@ -62,6 +60,38 @@ impl<'a> ScalarRef<'a> for i32 {
     }
 }
 
+impl<'a> TryFrom<ScalarImpl> for i32 {
+    type Error = ();
+    fn try_from(that: ScalarImpl) -> Result<Self, Self::Error> {
+        match that {
+            ScalarImpl::Int32(v) => Ok(v),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<i32> for ScalarImpl {
+    fn from(that: i32) -> Self {
+        ScalarImpl::Int32(that)
+    }
+}
+
+impl<'a> TryFrom<ScalarRefImpl<'a>> for i32 {
+    type Error = ();
+    fn try_from(that: ScalarRefImpl<'a>) -> Result<Self, Self::Error> {
+        match that {
+            ScalarRefImpl::Int32(v) => Ok(v),
+            _ => Err(()),
+        }
+    }
+}
+
+impl<'a> From<i32> for ScalarRefImpl<'a> {
+    fn from(that: i32) -> Self {
+        ScalarRefImpl::Int32(that)
+    }
+}
+
 /// Implement [`Scalar`] for `f32`. Note that `f32` is both [`Scalar`] and [`ScalarRef`].
 impl Scalar for f32 {
     type ArrayType = F32Array;
@@ -82,6 +112,38 @@ impl<'a> ScalarRef<'a> for f32 {
     }
 }
 
+impl<'a> TryFrom<ScalarImpl> for f32 {
+    type Error = ();
+    fn try_from(that: ScalarImpl) -> Result<Self, Self::Error> {
+        match that {
+            ScalarImpl::Float32(v) => Ok(v),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<f32> for ScalarImpl {
+    fn from(that: f32) -> Self {
+        ScalarImpl::Float32(that)
+    }
+}
+
+impl<'a> TryFrom<ScalarRefImpl<'a>> for f32 {
+    type Error = ();
+    fn try_from(that: ScalarRefImpl<'a>) -> Result<Self, Self::Error> {
+        match that {
+            ScalarRefImpl::Float32(v) => Ok(v),
+            _ => Err(()),
+        }
+    }
+}
+
+impl<'a> From<f32> for ScalarRefImpl<'a> {
+    fn from(that: f32) -> Self {
+        ScalarRefImpl::Float32(that)
+    }
+}
+
 /// Implement [`Scalar`] for `String`.
 impl Scalar for String {
     type ArrayType = StringArray;
@@ -99,6 +161,38 @@ impl<'a> ScalarRef<'a> for &'a str {
 
     fn to_owned_scalar(&self) -> String {
         self.to_string()
+    }
+}
+
+impl<'a> TryFrom<ScalarImpl> for String {
+    type Error = ();
+    fn try_from(that: ScalarImpl) -> Result<Self, Self::Error> {
+        match that {
+            ScalarImpl::String(v) => Ok(v),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<String> for ScalarImpl {
+    fn from(that: String) -> Self {
+        ScalarImpl::String(that)
+    }
+}
+
+impl<'a> TryFrom<ScalarRefImpl<'a>> for &'a str {
+    type Error = ();
+    fn try_from(that: ScalarRefImpl<'a>) -> Result<Self, Self::Error> {
+        match that {
+            ScalarRefImpl::String(v) => Ok(v),
+            _ => Err(()),
+        }
+    }
+}
+
+impl<'a> From<&'a str> for ScalarRefImpl<'a> {
+    fn from(that: &'a str) -> Self {
+        ScalarRefImpl::String(that)
     }
 }
 
