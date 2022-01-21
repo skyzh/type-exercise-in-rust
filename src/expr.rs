@@ -1,6 +1,7 @@
 //! Expression framework based on array
 
 mod cmp;
+mod string;
 
 use std::marker::PhantomData;
 
@@ -62,6 +63,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::cmp::*;
+    use super::string::*;
     use super::*;
     use crate::array::{BoolArray, I32Array, I64Array, StringArray};
 
@@ -107,6 +109,21 @@ mod tests {
         check_array_eq::<BoolArray>(
             (&result).try_into().unwrap(),
             &[Some(false), Some(true), None],
+        );
+    }
+
+    #[test]
+    fn test_str_contains() {
+        let expr = BinaryExpression::<StringArray, StringArray, BoolArray, _>::new(str_contains);
+        let result = expr
+            .eval(
+                &StringArray::from_slice(&[Some("000"), Some("111"), None]).into(),
+                &StringArray::from_slice(&[Some("0"), Some("0"), None]).into(),
+            )
+            .unwrap();
+        check_array_eq::<BoolArray>(
+            (&result).try_into().unwrap(),
+            &[Some(true), Some(false), None],
         );
     }
 }

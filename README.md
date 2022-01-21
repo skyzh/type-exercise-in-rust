@@ -187,6 +187,26 @@ vectorized one using generics.
 Developers will only need to implement:
 
 ```rust
+pub fn str_contains(i1: &str, i2: &str) -> bool {
+    i1.contains(i2)
+}
+```
+
+And they can create `BinaryExpression` around this function with any type:
+
+```rust
+let expr = BinaryExpression::<StringArray, StringArray, BoolArray, _>::new(str_contains);
+let result = expr
+    .eval(
+        &StringArray::from_slice(&[Some("000"), Some("111"), None]).into(),
+        &StringArray::from_slice(&[Some("0"), Some("0"), None]).into(),
+    )
+    .unwrap();
+```
+
+Developers can even create `BinaryExpression` around generic functions:
+
+```rust
 pub fn cmp_le<'a, I1: Array, I2: Array, C: Array + 'static>(
     i1: I1::RefItem<'a>,
     i2: I2::RefItem<'a>,
@@ -200,7 +220,6 @@ where
 }
 ```
 
-And they can create `BinaryExpression` around this function with any type:
 
 ```rust
 // Vectorize `cmp_le` to accept an array instead of a single value.
