@@ -195,7 +195,10 @@ pub fn str_contains(i1: &str, i2: &str) -> bool {
 And they can create `BinaryExpression` around this function with any type:
 
 ```rust
+// Vectorize `str_contains` to accept an array instead of a single value.
 let expr = BinaryExpression::<StringArray, StringArray, BoolArray, _>::new(str_contains);
+// We only need to pass `ArrayImpl` to the expression, and it will do everything for us,
+// including type checks, loopping, etc.
 let result = expr
     .eval(
         &StringArray::from_slice(&[Some("000"), Some("111"), None]).into(),
@@ -226,8 +229,6 @@ where
 let expr = BinaryExpression::<I32Array, I32Array, BoolArray, _>::new(
         cmp_le::<I32Array, I32Array, I64Array>,
     );
-// We only need to pass `ArrayImpl` to the expression, and it will do everything for us,
-// including type checks, loopping, etc.
 let result: ArrayImpl = expr.eval(ArrayImpl, ArrayImpl).unwrap();
 
 // `cmp_le` can also be used on `&str`.
