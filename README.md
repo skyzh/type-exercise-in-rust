@@ -14,7 +14,12 @@ The lecture evolves around how Rust programmers (like me) build database systems
 using `ArrayBuilder` with existing `Array`. In day 1, we implement arrays for primitive types (like `i32`, `f32`)
 and for variable-length types (like `String`). We use associated types in traits to deduce the right type in generic
 functions and use GAT to unify the `Array` interfaces for both fixed-length and variable-length types. This framework
-is also very similar to libraries like arrow, but with much stronger type constraints and much lower runtime overhead.
+is also very similar to libraries like Apache Arrow, but with much stronger type constraints and much lower runtime
+overhead.
+
+The special thing is that, we use blanket implementation for `i32` and `f32` arrays -- `PrimitiveArray<T>`. This would
+make our journey much more challenging, as we need to carefully evaluate the trait bounds needed for them in the
+following days.
 
 ## Day 2: `Scalar` and `ScalarRef`
 
@@ -29,8 +34,6 @@ It could be possible that some information is not available until runtime. There
 cover all variants of a single type. At the same time, we also add `TryFrom<ArrayImpl>` and `Into<ArrayImpl>`
 bound for `Array`.
 
-# TBD Lectures
-
 ## Day 4: More Types and Methods with Macro
 
 `ArrayImpl` should supports common functions in traits, but `Array` trait doesn't have a unified interface for
@@ -38,9 +41,13 @@ all types -- `I32Array` accepts `get(&self, idx: usize) -> Option<i32>` while `S
 `get(&self, idx: usize) -> &str`. We need a `get(&self, idx:usize) -> ScalarRefImpl<'_>` on `ArrayImpl`. Therefore,
 we have to write the match arms to dispatch the methods.
 
+Also, we have written so many boilerplate code for `From` and `TryFrom`. We need to eliminate such duplicated code.
+
 As we are having more and more data types, we need to write the same code multiple times within a match arm. In
 day 4, we use declarative macros (instead of procedural macros or other kinds of code generator) to generate such
 code and avoid writing boilerplate code.
+
+# TBD Lectures
 
 ## Day 5: Binary Expressions
 

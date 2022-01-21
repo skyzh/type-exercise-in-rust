@@ -192,7 +192,7 @@ mod tests {
     fn add_i32_vec(i1: I32Array, i2: I32Array) -> I32Array {
         let mut builder = I32ArrayBuilder::with_capacity(i1.len());
         for (a, b) in i1.iter().zip(i2.iter()) {
-            builder.push(a.and_then(|a| b.and_then(|b| Some(add_i32(a, b)))));
+            builder.push(a.and_then(|a| b.map(|b| add_i32(a, b))));
         }
         builder.finish()
     }
