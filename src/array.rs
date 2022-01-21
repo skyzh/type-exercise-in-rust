@@ -30,7 +30,7 @@ where
     type OwnedItem: Scalar<ArrayType = Self>;
 
     /// Type of the item that can be retrieved from the [`Array`]. For example, we can get a `i32`
-    /// from [`Int32Array`], while [`StringArray`] produces a `&str`. As we need a lifetime that is
+    /// from [`I32Array`], while [`StringArray`] produces a `&str`. As we need a lifetime that is
     /// the same as `self` for `&str`, we use GAT here.
     type RefItem<'a>: ScalarRef<'a, ScalarType = Self::OwnedItem, ArrayType = Self>
     where
@@ -178,5 +178,9 @@ mod tests {
             I32Array::from_slice(&[Some(1), Some(2), None, Some(4)]).into(),
         );
         assert!(result.is_err());
+        if let Err(err) = result {
+            assert_eq!(err.0, "Int32");
+            assert_eq!(err.1, "String");
+        }
     }
 }

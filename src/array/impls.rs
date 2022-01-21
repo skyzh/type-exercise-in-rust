@@ -94,14 +94,14 @@ for_all_variants! { impl_array_builder_dispatch }
 macro_rules! impl_array_conversion {
     ([], $({ $Abc:ident, $abc:ident, $AbcArray:ty, $AbcArrayBuilder:ty, $Owned:ty, $Ref:ty }),*) => {
         $(
-            /// Implement `AbcArray -> ArrayImpl`
+            #[doc = concat!("Implement [`", stringify!($AbcArray), "`] -> [`ArrayImpl`]")]
             impl From<$AbcArray> for ArrayImpl {
                 fn from(array: $AbcArray) -> Self {
                     Self::$Abc(array)
                 }
             }
 
-            /// Implement `ArrayImpl -> AbcArray`
+            #[doc = concat!("Implement [`ArrayImpl`] -> [`", stringify!($AbcArray), "`]")]
             impl TryFrom<ArrayImpl> for $AbcArray {
                 type Error = TypeMismatch;
 
@@ -113,7 +113,7 @@ macro_rules! impl_array_conversion {
                 }
             }
 
-            /// Implement `&ArrayImpl -> &AbcArray`
+            #[doc = concat!("Implement reference of [`ArrayImpl`] -> [`", stringify!($AbcArray), "`]")]
             impl<'a> TryFrom<&'a ArrayImpl> for &'a $AbcArray {
                 type Error = TypeMismatch;
 
@@ -125,32 +125,32 @@ macro_rules! impl_array_conversion {
                 }
             }
 
-            /// Implement `AbcArrayBuilder -> ArrayBuilderImpl`
+            #[doc = concat!("Implement [`", stringify!($AbcArrayBuilder), "`] -> [`ArrayBuilderImpl`]")]
             impl From<$AbcArrayBuilder> for ArrayBuilderImpl {
-                fn from(array: $AbcArrayBuilder) -> Self {
-                    Self::$Abc(array)
+                fn from(builder: $AbcArrayBuilder) -> Self {
+                    Self::$Abc(builder)
                 }
             }
 
-            /// Implement `ArrayBuilderImpl -> AbcBuilder`
+            #[doc = concat!("Implement [`ArrayBuilderImpl`] -> [`", stringify!($AbcArrayBuilder), "`]")]
             impl TryFrom<ArrayBuilderImpl> for $AbcArrayBuilder {
                 type Error = TypeMismatch;
 
-                fn try_from(array: ArrayBuilderImpl) -> Result<Self, Self::Error> {
-                    match array {
-                        ArrayBuilderImpl::$Abc(array) => Ok(array),
+                fn try_from(builder: ArrayBuilderImpl) -> Result<Self, Self::Error> {
+                    match builder {
+                        ArrayBuilderImpl::$Abc(builder) => Ok(builder),
                         other => Err(TypeMismatch(stringify!($Abc), other.identifier())),
                     }
                 }
             }
 
-            /// Implement `&ArrayBuilderImpl -> &AbcBuilder`
-            impl<'a> TryFrom<&'a ArrayBuilderImpl> for &'a $AbcArrayBuilder {
+            #[doc = concat!("Implement mut ref of [`ArrayBuilderImpl`] -> [`", stringify!($AbcArrayBuilder), "`]")]
+            impl<'a> TryFrom<&'a mut ArrayBuilderImpl> for &'a mut $AbcArrayBuilder {
                 type Error = TypeMismatch;
 
-                fn try_from(array: &'a ArrayBuilderImpl) -> Result<Self, Self::Error> {
-                    match array {
-                        ArrayBuilderImpl::$Abc(array) => Ok(array),
+                fn try_from(builder: &'a mut ArrayBuilderImpl) -> Result<Self, Self::Error> {
+                    match builder {
+                        ArrayBuilderImpl::$Abc(builder) => Ok(builder),
                         other => Err(TypeMismatch(stringify!($Abc), other.identifier())),
                     }
                 }

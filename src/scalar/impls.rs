@@ -47,6 +47,8 @@ for_all_variants! { impl_scalar_ref_dispatch }
 macro_rules! impl_scalar_conversion {
     ([], $({ $Abc:ident, $abc:ident, $AbcArray:ty, $AbcArrayBuilder:ty, $Owned:ty, $Ref:ty }),*) => {
         $(
+            #[doc = concat!(
+                "Implement [`ScalarImpl`] -> [`", stringify!($Owned), "`], return [`TypeMismatch`] error if mismatch")]
             impl<'a> TryFrom<ScalarImpl> for $Owned {
                 type Error = TypeMismatch;
                 fn try_from(that: ScalarImpl) -> Result<Self, Self::Error> {
@@ -57,12 +59,15 @@ macro_rules! impl_scalar_conversion {
                 }
             }
 
+            #[doc = concat!("Implement [`", stringify!($Owned), "`] -> [`ScalarImpl`]")]
             impl From<$Owned> for ScalarImpl {
                 fn from(that: $Owned) -> Self {
                     ScalarImpl::$Abc(that)
                 }
             }
 
+            #[doc = concat!(
+                "Implement [`ScalarRefImpl`] -> [`", stringify!($Ref), "`], return [`TypeMismatch`] error if mismatch")]
             impl<'a> TryFrom<ScalarRefImpl<'a>> for $Ref {
                 type Error = TypeMismatch;
                 fn try_from(that: ScalarRefImpl<'a>) -> Result<Self, Self::Error> {
@@ -73,6 +78,7 @@ macro_rules! impl_scalar_conversion {
                 }
             }
 
+            #[doc = concat!("Implement [`", stringify!($Ref), "`] -> [`ScalarRefImpl`]")]
             impl<'a> From<$Ref> for ScalarRefImpl<'a> {
                 fn from(that: $Ref) -> Self {
                     ScalarRefImpl::$Abc(that)
@@ -88,7 +94,9 @@ for_all_variants! { impl_scalar_conversion }
 macro_rules! impl_scalar {
     ([], $( { $Abc:ident, $abc:ident, $AbcArray:ty, $AbcArrayBuilder:ty, $Owned:ty, $Ref:ty } ),*) => {
         $(
-            /// Implement [`Scalar`] for primitive types. Note that primitive types are both [`Scalar`] and [`ScalarRef`].
+            #[doc = concat!(
+                "Implement [`Scalar`] for primitive type [`", stringify!($Owned), "`]. ",
+                "Note that primitive types are both [`Scalar`] and [`ScalarRef`] as they have little cost for copy.")]
             impl Scalar for $Owned {
                 type ArrayType = $AbcArray;
                 type RefType<'a> = $Owned;
@@ -98,7 +106,9 @@ macro_rules! impl_scalar {
                 }
             }
 
-            /// Implement [`ScalarRef`] for primitive types. Note that primitive types are both [`Scalar`] and [`ScalarRef`].
+            #[doc = concat!(
+                "Implement [`ScalarRef`] for primitive type [`", stringify!($Ref), "`]. ",
+                "Note that primitive types are both [`Scalar`] and [`ScalarRef`] as they have little cost for copy.")]
             impl<'a> ScalarRef<'a> for $Owned {
                 type ArrayType = $AbcArray;
                 type ScalarType = $Owned;
