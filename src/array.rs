@@ -81,15 +81,23 @@ pub trait ArrayBuilder {
 
 /// Encapsules all variants of array in this library.
 pub enum ArrayImpl {
+    Int16(I16Array),
     Int32(I32Array),
+    Int64(I64Array),
     Float32(F32Array),
+    Float64(F64Array),
+    Bool(BoolArray),
     String(StringArray),
 }
 
 /// Encapsules all variants of array builders in this library.
 pub enum ArrayBuilderImpl {
+    Int16(I16ArrayBuilder),
     Int32(I32ArrayBuilder),
+    Int64(I64ArrayBuilder),
     Float32(F32ArrayBuilder),
+    Float64(F64ArrayBuilder),
+    Bool(BoolArrayBuilder),
     String(StringArrayBuilder),
 }
 

@@ -10,14 +10,26 @@ use crate::scalar::{Scalar, ScalarRef};
 /// A type that is primitive, such as `i32` and `i64`.
 pub trait PrimitiveType: Scalar + Default {}
 
+pub type I16Array = PrimitiveArray<i16>;
 pub type I32Array = PrimitiveArray<i32>;
+pub type I64Array = PrimitiveArray<i64>;
 pub type F32Array = PrimitiveArray<f32>;
+pub type F64Array = PrimitiveArray<f64>;
+pub type BoolArray = PrimitiveArray<bool>;
 
+pub type I16ArrayBuilder = PrimitiveArrayBuilder<i16>;
 pub type I32ArrayBuilder = PrimitiveArrayBuilder<i32>;
+pub type I64ArrayBuilder = PrimitiveArrayBuilder<i64>;
 pub type F32ArrayBuilder = PrimitiveArrayBuilder<f32>;
+pub type F64ArrayBuilder = PrimitiveArrayBuilder<f64>;
+pub type BoolArrayBuilder = PrimitiveArrayBuilder<bool>;
 
+impl PrimitiveType for i16 {}
 impl PrimitiveType for i32 {}
+impl PrimitiveType for i64 {}
 impl PrimitiveType for f32 {}
+impl PrimitiveType for f64 {}
+impl PrimitiveType for bool {}
 
 /// An [`Array`] that stores [`PrimitiveType`] items.
 ///

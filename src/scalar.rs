@@ -6,7 +6,7 @@
 
 mod impls;
 
-use crate::array::{Array, F32Array, I32Array, StringArray};
+use crate::array::Array;
 
 /// An owned single value.
 ///  
@@ -42,77 +42,25 @@ pub trait ScalarRef<'a>:
     fn to_owned_scalar(&self) -> Self::ScalarType;
 }
 
-/// Implement [`Scalar`] for `i32`. Note that `i32` is both [`Scalar`] and [`ScalarRef`].
-impl Scalar for i32 {
-    type ArrayType = I32Array;
-    type RefType<'a> = i32;
-
-    fn as_scalar_ref(&self) -> i32 {
-        *self
-    }
-}
-
-/// Implement [`ScalarRef`] for `i32`. Note that `i32` is both [`Scalar`] and [`ScalarRef`].
-impl<'a> ScalarRef<'a> for i32 {
-    type ArrayType = I32Array;
-    type ScalarType = i32;
-
-    fn to_owned_scalar(&self) -> i32 {
-        *self
-    }
-}
-
-/// Implement [`Scalar`] for `f32`. Note that `f32` is both [`Scalar`] and [`ScalarRef`].
-impl Scalar for f32 {
-    type ArrayType = F32Array;
-    type RefType<'a> = f32;
-
-    fn as_scalar_ref(&self) -> f32 {
-        *self
-    }
-}
-
-/// Implement [`ScalarRef`] for `f32`. Note that `f32` is both [`Scalar`] and [`ScalarRef`].
-impl<'a> ScalarRef<'a> for f32 {
-    type ArrayType = F32Array;
-    type ScalarType = f32;
-
-    fn to_owned_scalar(&self) -> f32 {
-        *self
-    }
-}
-
-/// Implement [`Scalar`] for `String`.
-impl Scalar for String {
-    type ArrayType = StringArray;
-    type RefType<'a> = &'a str;
-
-    fn as_scalar_ref(&self) -> &str {
-        self.as_str()
-    }
-}
-
-/// Implement [`ScalarRef`] for `&str`.
-impl<'a> ScalarRef<'a> for &'a str {
-    type ArrayType = StringArray;
-    type ScalarType = String;
-
-    fn to_owned_scalar(&self) -> String {
-        self.to_string()
-    }
-}
-
 /// Encapsules all variants of [`Scalar`]
 pub enum ScalarImpl {
+    Int16(i16),
     Int32(i32),
+    Int64(i64),
     Float32(f32),
+    Float64(f64),
+    Bool(bool),
     String(String),
 }
 
 /// Encapsules all variants of [`ScalarRef`]
 pub enum ScalarRefImpl<'a> {
+    Int16(i16),
     Int32(i32),
+    Int64(i64),
     Float32(f32),
+    Float64(f64),
+    Bool(bool),
     String(&'a str),
 }
 

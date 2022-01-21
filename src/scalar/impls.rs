@@ -2,7 +2,8 @@
 
 //! Contains all macro-generated implementations of scalar methods
 
-use crate::macros::for_all_variants;
+use crate::array::*;
+use crate::macros::{for_all_primitive_variants, for_all_variants};
 use crate::scalar::*;
 use crate::TypeMismatch;
 
@@ -82,3 +83,52 @@ macro_rules! impl_scalar_conversion {
 }
 
 for_all_variants! { impl_scalar_conversion }
+
+/// Implements [`Scalar`] trait for primitive types
+macro_rules! impl_scalar {
+    ([], $( { $Abc:ident, $abc:ident, $AbcArray:ty, $AbcArrayBuilder:ty, $Owned:ty, $Ref:ty } ),*) => {
+        $(
+            /// Implement [`Scalar`] for primitive types. Note that primitive types are both [`Scalar`] and [`ScalarRef`].
+            impl Scalar for $Owned {
+                type ArrayType = $AbcArray;
+                type RefType<'a> = $Owned;
+
+                fn as_scalar_ref(&self) -> $Owned {
+                    *self
+                }
+            }
+
+            /// Implement [`ScalarRef`] for primitive types. Note that primitive types are both [`Scalar`] and [`ScalarRef`].
+            impl<'a> ScalarRef<'a> for $Owned {
+                type ArrayType = $AbcArray;
+                type ScalarType = $Owned;
+
+                fn to_owned_scalar(&self) -> $Owned {
+                    *self
+                }
+            }
+        )*
+    }
+}
+
+for_all_primitive_variants! { impl_scalar }
+
+/// Implement [`Scalar`] for `String`.
+impl Scalar for String {
+    type ArrayType = StringArray;
+    type RefType<'a> = &'a str;
+
+    fn as_scalar_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+/// Implement [`ScalarRef`] for `&str`.
+impl<'a> ScalarRef<'a> for &'a str {
+    type ArrayType = StringArray;
+    type ScalarType = String;
+
+    fn to_owned_scalar(&self) -> String {
+        self.to_string()
+    }
+}
