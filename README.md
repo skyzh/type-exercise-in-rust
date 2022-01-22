@@ -273,7 +273,7 @@ pub trait Expression {
 }
 ```
 
-`Expression` can be made into a `Box<dyn Expression>`, therefore being used at building expressions at runtime.
+`Expression` can be made into a `Box<dyn Expression>`, therefore being used in building expressions at runtime.
 
 ### Failed Attempts
 
@@ -307,13 +307,13 @@ error[E0631]: type mismatch in function arguments
 
 </details>
 
-# TBD Lectures
-
 ## Day 7: Physical Data Type and Logical Data Type
 
 `i32`, `i64` is simply physical types -- how types are stored in memory (or on disk). But in a database system,
 we also have logical types (like `Char`, and `Varchar`). In day 7, we learn how to associate logical types with
 physical types using macros.
+
+# TBD Lectures
 
 ## Day 8: Aggregators
 
@@ -322,7 +322,6 @@ Aggregators are another kind of expressions. We learn how to implement them easi
 ## Day 9: Expression Framework
 
 Now we are having more and more expression kinds, and we need an expression framework to unify them -- including
-unary, binary and expressions of more inputs. At the same time, we also need to automatically convert `ArrayImpl`
-into their corresponding concrete types using `TryFrom` and `TryInto` traits.
+unary, binary and expressions of more inputs.
 
 At the same time, we will also experiment with return value optimizations in variable-size types.
