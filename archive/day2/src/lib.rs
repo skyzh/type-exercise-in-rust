@@ -1,3 +1,5 @@
+// Copyright 2022 Alex Chi. Licensed under Apache-2.0.
+
 //! Type exercise in Rust
 //!
 //! This is a short lecture on how to use the Rust type system to build necessary components in a

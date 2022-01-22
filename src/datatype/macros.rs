@@ -1,3 +1,5 @@
+// Copyright 2022 Alex Chi. Licensed under Apache-2.0.
+
 //! Necessary macros to associated logical data type to array types
 //!
 //! All macros in this module will pass two parameters to the parent:

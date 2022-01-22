@@ -1,3 +1,5 @@
+// Copyright 2022 Alex Chi. Licensed under Apache-2.0.
+
 // Copyright 2022 RisingLight Project Authors. Licensed under Apache-2.0.
 
 //! Necessary macros to cover variants of array types.

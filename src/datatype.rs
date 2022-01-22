@@ -1,3 +1,5 @@
+// Copyright 2022 Alex Chi. Licensed under Apache-2.0.
+
 //! Implements logical types for a database system
 
 pub(crate) mod macros;

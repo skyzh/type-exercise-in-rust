@@ -1,3 +1,5 @@
+// Copyright 2022 Alex Chi. Licensed under Apache-2.0.
+
 //! String array and array builders.
 //!
 //! This module implements array for `String`. `String` is different from other types in the

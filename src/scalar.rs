@@ -1,3 +1,5 @@
+// Copyright 2022 Alex Chi. Licensed under Apache-2.0.
+
 //! Contains types for single values
 //!
 //! This crate contains two reciprocal traits -- Scalar and ScalarRef. As it is named, Scalar is an

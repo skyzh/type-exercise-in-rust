@@ -1,3 +1,5 @@
+// Copyright 2022 Alex Chi. Licensed under Apache-2.0.
+
 //! Implements compare functions for [`Array`] types
 
 #![allow(dead_code)]

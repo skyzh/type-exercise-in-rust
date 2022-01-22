@@ -1,3 +1,5 @@
+// Copyright 2022 Alex Chi. Licensed under Apache-2.0.
+
 //! Contains array types for the system
 //!
 //! This crate contains two category of structs -- ArrayBuilder and Array. Developers may use

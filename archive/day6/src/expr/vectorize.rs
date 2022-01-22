@@ -1,3 +1,5 @@
+// Copyright 2022 Alex Chi. Licensed under Apache-2.0.
+
 //! Utilities to vectorize scalar functions
 
 use std::marker::PhantomData;

@@ -1,3 +1,5 @@
+// Copyright 2022 Alex Chi. Licensed under Apache-2.0.
+
 //! Primitive array and array builders.
 //!
 //! This module implements array for primitive types, like `i32` and `f32`.
