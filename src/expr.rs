@@ -29,6 +29,12 @@ pub enum ExpressionFunc {
 }
 
 /// Composes all combinations of possible comparisons
+///
+/// Each item in the list `{ a, b, c }` represents:
+/// * 1st position: left input type.
+/// * 2nd position: right input type.
+/// * 3rd position: cast type. For example, we need to cast the left i32 to i64 before comparing i32
+///   and i64.
 macro_rules! for_all_cmp_combinations {
     ($macro:tt $(, $x:tt)*) => {
         $macro! {
@@ -78,13 +84,24 @@ macro_rules! impl_cmp_expression_of {
     ([$i1t:ident, $i2t:ident, $cmp_func:tt], $({ $i1:tt, $i2:tt, $convert:tt }),*) => {
         match ($i1t, $i2t) {
             $(
+                // Here we want to fill a match pattern. For example, `DataType::SmalInt` or
+                // `DataType::Decimal { precision: _, .. }`. The `datatype_match_pattern` macro
+                // could help us extract the pattern from `$i1` macro. Therefore, we can use
+                // `$i1! { datatype_match_pattern }` to get something like
+                // `DataType::Decimal { precision: _, .. }`.
                 ($i1! { datatype_match_pattern }, $i2! { datatype_match_pattern }) => {
+                    // Here we want to build BinaryExpression::<InputArray1, InputArray2, OutputArray>.
+                    // Hence, we use `$i1! { datatype_array }` to get `InputArray1`.
+                    // `$i1! { datatype_array }` will generate something like `I32Array`.
                     Box::new(BinaryExpression::<
                         $i1! { datatype_array },
                         $i2! { datatype_array },
                         BoolArray,
                         _
                     >::new(
+                        // Here we want to build CmpFunc::<InputArray1, InputArray2, CastArray>.
+                        // So we use `$convert! { datatype_array }` to get cast array type.
+                        // `$convert! { datatype_array }` will generate something like `I32Array`.
                         $cmp_func::<_, _, $convert! { datatype_array }>(PhantomData),
                     ))
                 }
