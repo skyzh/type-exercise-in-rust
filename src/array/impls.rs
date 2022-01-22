@@ -4,12 +4,16 @@
 
 //! Contains all macro-generated implementations of array methods
 
+use std::any::TypeId;
+
+use paste::paste;
+
 use crate::array::*;
 use crate::macros::for_all_variants;
 use crate::scalar::*;
 use crate::TypeMismatch;
 
-/// Implements dispatch functions for [`Array`]
+/// Implements dispatch functions for [`ArrayImpl`]
 macro_rules! impl_array_dispatch {
     ([], $( { $Abc:ident, $abc:ident, $AbcArray:ty, $AbcArrayBuilder:ty, $Owned:ty, $Ref:ty } ),*) => {
         impl ArrayImpl {
@@ -53,6 +57,70 @@ macro_rules! impl_array_dispatch {
 }
 
 for_all_variants! { impl_array_dispatch }
+
+/// Implements dispatch functions for [`BoxedArrayImpl`]
+macro_rules! impl_boxed_array_dispatch {
+    ([], $( { $Abc:ident, $abc:ident, $AbcArray:ty, $AbcArrayBuilder:ty, $Owned:ty, $Ref:ty } ),*) => {
+        $(
+            paste! {
+                #[doc = concat!("TypeId of [`", stringify!($AbcArray), "`]")]
+                pub const [< TYPEID_OF_ $AbcArray:upper >] : TypeId = TypeId::of::<$AbcArray>();
+            }
+        )*
+
+        paste! {
+            impl BoxedArrayImpl {
+                /// Get the value at the given index.
+                pub fn get(&self, idx: usize) -> Option<ScalarRefImpl<'_>> {
+                    match self.0.type_id() {
+                        $(
+                            [< TYPEID_OF_ $AbcArray:upper >] => self.0
+                                .downcast_ref::<$AbcArray>().unwrap()
+                                .get(idx).map(ScalarRefImpl::$Abc),
+                        )*
+                        type_id => unreachable!("{:?}", type_id)
+                    }
+                }
+
+                /// Number of items of array.
+                pub fn len(&self) -> usize {
+                    match self.0.type_id() {
+                        $(
+                            [< TYPEID_OF_ $AbcArray:upper >] => self.0
+                                .downcast_ref::<$AbcArray>().unwrap()
+                                .len(),
+                        )*
+                        _ => unreachable!()
+                    }
+                }
+
+                /// Number of items of array.
+                pub fn is_empty(&self) -> bool {
+                    match self.0.type_id() {
+                        $(
+                            [< TYPEID_OF_ $AbcArray:upper >] => self.0
+                                .downcast_ref::<$AbcArray>().unwrap()
+                                .is_empty(),
+                        )*
+                        _ => unreachable!()
+                    }
+                }
+
+                /// Get identifier of the current array
+                pub fn identifier(&self) -> &'static str {
+                    match self.0.type_id() {
+                        $(
+                            [< TYPEID_OF_ $AbcArray:upper >] => stringify!($Abc),
+                        )*
+                        _ => unreachable!()
+                    }
+                }
+            }
+        }
+    }
+}
+
+for_all_variants! { impl_boxed_array_dispatch }
 
 /// Implements dispatch functions for [`ArrayBuilder`]
 macro_rules! impl_array_builder_dispatch {

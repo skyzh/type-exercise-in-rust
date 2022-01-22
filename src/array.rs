@@ -12,6 +12,8 @@ mod iterator;
 mod primitive_array;
 mod string_array;
 
+use std::any::Any;
+
 pub use iterator::*;
 pub use primitive_array::*;
 pub use string_array::*;
@@ -95,6 +97,10 @@ pub enum ArrayImpl {
     Decimal(DecimalArray),
 }
 
+/// Encapsules all variants of array in this library. An alternative to used Box<dyn Any> instead of
+/// enum dispatch.
+pub struct BoxedArrayImpl(Box<dyn Any>);
+
 /// Encapsules all variants of array builders in this library.
 pub enum ArrayBuilderImpl {
     Int16(I16ArrayBuilder),
@@ -110,6 +116,7 @@ pub enum ArrayBuilderImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::scalar::ScalarRefImpl;
     use crate::TypeMismatch;
 
     // These are two examples of using generics over array.
@@ -188,5 +195,16 @@ mod tests {
             assert_eq!(err.0, "Int32");
             assert_eq!(err.1, "String");
         }
+    }
+
+    #[test]
+    fn test_boxed_array() {
+        let array = BoxedArrayImpl(Box::new(I32Array::from_slice(&[
+            Some(1),
+            Some(2),
+            None,
+            Some(4),
+        ])));
+        assert_eq!(array.get(0), Some(ScalarRefImpl::Int32(1)));
     }
 }

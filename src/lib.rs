@@ -8,6 +8,7 @@
 //! runtime cost and make our development process easier with **safe**, **nightly** Rust.
 
 #![feature(generic_associated_types)]
+#![feature(const_type_id)]
 
 pub mod array;
 pub mod datatype;
