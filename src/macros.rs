@@ -17,7 +17,8 @@ macro_rules! for_all_variants {
             { Float32, float32, F32Array, F32ArrayBuilder, f32, f32 },
             { Float64, float64, F64Array, F64ArrayBuilder, f64, f64 },
             { Bool, bool, BoolArray, BoolArrayBuilder, bool, bool },
-            { String, string, StringArray, StringArrayBuilder, String, &'a str }
+            { String, string, StringArray, StringArrayBuilder, String, &'a str },
+            { Decimal, decimal, DecimalArray, DecimalArrayBuilder, Decimal, Decimal }
         }
     };
 }
@@ -33,7 +34,8 @@ macro_rules! for_all_primitive_variants {
             { Int64, int64, I64Array, I64ArrayBuilder, i64, i64 },
             { Float32, float32, F32Array, F32ArrayBuilder, f32, f32 },
             { Float64, float64, F64Array, F64ArrayBuilder, f64, f64 },
-            { Bool, bool, BoolArray, BoolArrayBuilder, bool, bool }
+            { Bool, bool, BoolArray, BoolArrayBuilder, bool, bool },
+            { Decimal, decimal, DecimalArray, DecimalArrayBuilder, Decimal, Decimal }
         }
     };
 }

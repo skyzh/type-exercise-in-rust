@@ -6,6 +6,8 @@ use anyhow::Result;
 
 use self::vectorize::BinaryExpression;
 use crate::array::ArrayImpl;
+use crate::datatype::macros::*;
+use crate::datatype::DataType;
 
 mod cmp;
 mod string;
@@ -26,8 +28,81 @@ pub enum ExpressionFunc {
     StrContains,
 }
 
+/// Composes all combinations of possible comparisons
+macro_rules! for_all_cmp_combinations {
+    ($macro:tt $(, $x:tt)*) => {
+        $macro! {
+            [$($x),*],
+            // comparison for the same type
+            { int16, int16, int16 },
+            { int32, int32, int32 },
+            { int64, int64, int64 },
+            { float32, float32, float32 },
+            { float64, float64, float64 },
+            { decimal, decimal, decimal },
+            { fwchar, fwchar, fwchar },
+            { varchar, varchar, varchar },
+            // comparison across integer types
+            { int16, int32, int32 },
+            { int32, int16, int32 },
+            { int16, int64, int64 },
+            { int32, int64, int64 },
+            { int64, int16, int64 },
+            { int64, int32, int64 },
+            // comparison across float types
+            { float32, float64, float64 },
+            { float64, float32, float64 },
+            // comparison across integer and float32 types
+            { int16, float32, float32 },
+            { float32, int16, float32 },
+            { int32, float32, float64 },
+            { float32, int32, float64 },
+            // comparison across integer and float64 types
+            { int32, float64, float64 },
+            { float64, int32, float64 },
+            { int16, float64, float64 },
+            { float64, int16, float64 },
+            // comparison with decimal types
+            { int16, decimal, decimal },
+            { decimal, int16, decimal },
+            { int32, decimal, decimal },
+            { decimal, int32, decimal },
+            { int64, decimal, decimal },
+            { decimal, int64, decimal }
+        }
+    };
+}
+
+/// Generate all variants of comparison expressions
+macro_rules! impl_cmp_expression_of {
+    ([$i1t:ident, $i2t:ident, $cmp_func:tt], $({ $i1:tt, $i2:tt, $convert:tt }),*) => {
+        match ($i1t, $i2t) {
+            $(
+                ($i1! { datatype_match_pattern }, $i2! { datatype_match_pattern }) => {
+                    Box::new(BinaryExpression::<
+                        $i1! { datatype_array },
+                        $i2! { datatype_array },
+                        BoolArray,
+                        _
+                    >::new(
+                        $cmp_func::<_, _, $convert! { datatype_array }>(PhantomData),
+                    ))
+                }
+            )*
+            (other_dt1, other_dt2) => unimplemented!("unsupported comparison: {:?} <{}> {:?}",
+                other_dt1,
+                stringify!($cmp_func),
+                other_dt2)
+        }
+    };
+}
+
 /// Build expression with runtime information.
-pub fn build_binary_expression(f: ExpressionFunc) -> Box<dyn Expression> {
+pub fn build_binary_expression(
+    f: ExpressionFunc,
+    i1: DataType,
+    i2: DataType,
+) -> Box<dyn Expression> {
     use ExpressionFunc::*;
 
     use crate::array::*;
@@ -35,18 +110,10 @@ pub fn build_binary_expression(f: ExpressionFunc) -> Box<dyn Expression> {
     use crate::expr::string::*;
 
     match f {
-        CmpLe => Box::new(BinaryExpression::<I32Array, I32Array, BoolArray, _>::new(
-            ExprCmpLe::<_, _, I32Array>(PhantomData),
-        )),
-        CmpGe => Box::new(BinaryExpression::<I32Array, I32Array, BoolArray, _>::new(
-            ExprCmpGe::<_, _, I32Array>(PhantomData),
-        )),
-        CmpEq => Box::new(BinaryExpression::<I32Array, I32Array, BoolArray, _>::new(
-            ExprCmpEq::<_, _, I32Array>(PhantomData),
-        )),
-        CmpNe => Box::new(BinaryExpression::<I32Array, I32Array, BoolArray, _>::new(
-            ExprCmpNe::<_, _, I32Array>(PhantomData),
-        )),
+        CmpLe => for_all_cmp_combinations! { impl_cmp_expression_of, i1, i2, ExprCmpLe },
+        CmpGe => for_all_cmp_combinations! { impl_cmp_expression_of, i1, i2, ExprCmpGe },
+        CmpEq => for_all_cmp_combinations! { impl_cmp_expression_of, i1, i2, ExprCmpEq },
+        CmpNe => for_all_cmp_combinations! { impl_cmp_expression_of, i1, i2, ExprCmpNe },
         StrContains => Box::new(
             BinaryExpression::<StringArray, StringArray, BoolArray, _>::new(ExprStrContains),
         ),
@@ -56,12 +123,16 @@ pub fn build_binary_expression(f: ExpressionFunc) -> Box<dyn Expression> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::array::{Array, StringArray};
+    use crate::array::{Array, F64Array, I16Array, StringArray};
     use crate::scalar::ScalarRefImpl;
 
     #[test]
     fn test_build_str_contains() {
-        let expr = build_binary_expression(ExpressionFunc::StrContains);
+        let expr = build_binary_expression(
+            ExpressionFunc::StrContains,
+            DataType::Varchar,
+            DataType::Char { width: 10 },
+        );
 
         for _ in 0..10 {
             let result = expr
@@ -74,5 +145,20 @@ mod tests {
             assert_eq!(result.get(1).unwrap(), ScalarRefImpl::Bool(false));
             assert!(result.get(2).is_none());
         }
+    }
+
+    #[test]
+    fn test_cmp_i16_f64() {
+        let expr =
+            build_binary_expression(ExpressionFunc::CmpGe, DataType::SmallInt, DataType::Double);
+
+        let result = expr
+            .eval_expr(&[
+                &I16Array::from_slice(&[Some(1), Some(2), None]).into(),
+                &F64Array::from_slice(&[Some(0.0), Some(3.0), None]).into(),
+            ])
+            .unwrap();
+        assert_eq!(result.get(0).unwrap(), ScalarRefImpl::Bool(true));
+        assert_eq!(result.get(1).unwrap(), ScalarRefImpl::Bool(false));
     }
 }

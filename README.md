@@ -6,7 +6,7 @@ This is a short lecture on how to use the Rust type system to build necessary co
 
 See also... [!["RisingLight"](https://img.shields.io/github/stars/risinglightdb/risinglight?label=RisingLight&style=social)](https://github.com/risinglightdb/risinglight)
 
-Note that most of the techniques described in this lecture is implemented in our educational database system [RisingLight](https://github.com/risinglightdb/risinglight). You may compile and run it by yourself!
+Note that most of the techniques described in this lecture have already been implemented in our educational database system [RisingLight](https://github.com/risinglightdb/risinglight). You may compile and run it by yourself!
 
 The lecture evolves around how Rust programmers (like me) build database systems in the Rust programming language. We leverage the Rust type system to **minimize** runtime cost and make our development process easier with **safe**, **nightly** Rust.
 
@@ -312,6 +312,70 @@ error[E0631]: type mismatch in function arguments
 `i32`, `i64` is simply physical types -- how types are stored in memory (or on disk). But in a database system,
 we also have logical types (like `Char`, and `Varchar`). In day 7, we learn how to associate logical types with
 physical types using macros.
+
+### Goals
+
+Going back to our `build_binary_expression` function,
+
+```rust
+/// Build expression with runtime information.
+pub fn build_binary_expression(
+    f: ExpressionFunc,
+) -> Box<dyn Expression> {
+    match f {
+        CmpLe => Box::new(BinaryExpression::<I32Array, I32Array, BoolArray, _>::new(
+            ExprCmpLe::<_, _, I32Array>(PhantomData),
+        )),
+    /* ... */
+```
+
+Currently, we only support `i32 < i32` for `CmpLe` expression. We should be able to support cross-type comparison here.
+
+```rust
+/// Build expression with runtime information.
+pub fn build_binary_expression(
+    f: ExpressionFunc,
+    i1: DataType,
+    i2: DataType
+) -> Box<dyn Expression> {
+    match f {
+        CmpLe => match (i1, i2) {
+            (SmallInt, SmallInt) => /* I16Array, I16Array */,
+            (SmallInt, Real) => /* I16Array, Float32, cast to Float64 before comparison */,
+            /* ... */
+        }
+    /* ... */
+```
+
+We have so many combinations of cross-type comparison, and we couldn't write them all by-hand. In day 7, we use
+macros to associate logical data type with `Array` traits, and reduce the complexity of writing such functions.
+
+```rust
+/// Build expression with runtime information.
+pub fn build_binary_expression(
+    f: ExpressionFunc,
+    i1: DataType,
+    i2: DataType,
+) -> Box<dyn Expression> {
+    use ExpressionFunc::*;
+
+    use crate::array::*;
+    use crate::expr::cmp::*;
+    use crate::expr::string::*;
+
+    match f {
+        CmpLe => for_all_cmp_combinations! { impl_cmp_expression_of, i1, i2, ExprCmpLe },
+        CmpGe => for_all_cmp_combinations! { impl_cmp_expression_of, i1, i2, ExprCmpGe },
+        CmpEq => for_all_cmp_combinations! { impl_cmp_expression_of, i1, i2, ExprCmpEq },
+        CmpNe => for_all_cmp_combinations! { impl_cmp_expression_of, i1, i2, ExprCmpNe },
+        StrContains => Box::new(
+            BinaryExpression::<StringArray, StringArray, BoolArray, _>::new(ExprStrContains),
+        ),
+    }
+}
+```
+
+The goal is to write as less code as possible to generate all combinations of comparison.
 
 # TBD Lectures
 

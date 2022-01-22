@@ -9,6 +9,7 @@ edition = "2021"
 anyhow = "1"
 bitvec = "1"
 thiserror = "1"
+rust_decimal = "1"
 
 [workspace]
 members = [

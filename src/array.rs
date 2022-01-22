@@ -90,6 +90,7 @@ pub enum ArrayImpl {
     Float64(F64Array),
     Bool(BoolArray),
     String(StringArray),
+    Decimal(DecimalArray),
 }
 
 /// Encapsules all variants of array builders in this library.
@@ -101,6 +102,7 @@ pub enum ArrayBuilderImpl {
     Float64(F64ArrayBuilder),
     Bool(BoolArrayBuilder),
     String(StringArrayBuilder),
+    Decimal(DecimalArrayBuilder),
 }
 
 #[cfg(test)]

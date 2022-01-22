@@ -6,6 +6,8 @@
 
 mod impls;
 
+pub use rust_decimal::Decimal;
+
 use crate::array::Array;
 
 /// An owned single value.
@@ -52,6 +54,7 @@ pub enum ScalarImpl {
     Float64(f64),
     Bool(bool),
     String(String),
+    Decimal(Decimal),
 }
 
 /// Encapsules all variants of [`ScalarRef`]
@@ -64,6 +67,7 @@ pub enum ScalarRefImpl<'a> {
     Float64(f64),
     Bool(bool),
     String(&'a str),
+    Decimal(Decimal),
 }
 
 #[cfg(test)]

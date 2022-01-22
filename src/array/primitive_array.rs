@@ -3,6 +3,7 @@
 //! This module implements array for primitive types, like `i32` and `f32`.
 
 use bitvec::prelude::BitVec;
+use rust_decimal::Decimal;
 
 use super::{Array, ArrayBuilder, ArrayImpl, ArrayIterator};
 use crate::scalar::{Scalar, ScalarRef};
@@ -17,6 +18,7 @@ pub type I64Array = PrimitiveArray<i64>;
 pub type F32Array = PrimitiveArray<f32>;
 pub type F64Array = PrimitiveArray<f64>;
 pub type BoolArray = PrimitiveArray<bool>;
+pub type DecimalArray = PrimitiveArray<Decimal>;
 
 pub type I16ArrayBuilder = PrimitiveArrayBuilder<i16>;
 pub type I32ArrayBuilder = PrimitiveArrayBuilder<i32>;
@@ -24,6 +26,7 @@ pub type I64ArrayBuilder = PrimitiveArrayBuilder<i64>;
 pub type F32ArrayBuilder = PrimitiveArrayBuilder<f32>;
 pub type F64ArrayBuilder = PrimitiveArrayBuilder<f64>;
 pub type BoolArrayBuilder = PrimitiveArrayBuilder<bool>;
+pub type DecimalArrayBuilder = PrimitiveArrayBuilder<Decimal>;
 
 impl PrimitiveType for i16 {}
 impl PrimitiveType for i32 {}
@@ -31,6 +34,7 @@ impl PrimitiveType for i64 {}
 impl PrimitiveType for f32 {}
 impl PrimitiveType for f64 {}
 impl PrimitiveType for bool {}
+impl PrimitiveType for Decimal {}
 
 /// An [`Array`] that stores [`PrimitiveType`] items.
 ///

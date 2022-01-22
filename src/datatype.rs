@@ -1,6 +1,9 @@
 //! Implements logical types for a database system
 
+pub(crate) mod macros;
+
 /// Encapsules all supported (logical) data types in the system.
+#[derive(Debug)]
 pub enum DataType {
     /// Corresponding to Int16 physical type
     SmallInt,
@@ -11,13 +14,13 @@ pub enum DataType {
     /// Corresponding to String physical type
     Varchar,
     /// Corresponding to String physical type
-    Char { length: u16 },
+    Char { width: u16 },
     /// Corresponding to Bool physical type
-    Bool,
+    Boolean,
     /// Corresponding to Float32 physical type
     Real,
     /// Corresponding to Float64 physical type
     Double,
-    /// Not implemented for now
+    /// Corresponding to Decimal physical type
     Decimal { scale: u16, precision: u16 },
 }
