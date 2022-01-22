@@ -240,19 +240,84 @@ let expr = BinaryExpression::<StringArray, StringArray, BoolArray, _>::new(
 let result: ArrayImpl = expr.eval(ArrayImpl, ArrayImpl).unwrap();
 ```
 
+## Day 6: Erase Expression Lifetime
+
+Vectorization looks fancy in the implementation in day 5, but there is a critical flaw -- `BinaryExpression`
+can only process `&'a ArrayImpl` instead of for any lifetime.
+
+In day 6, we erase the expression lifetime by defining a `BinaryExprFunc` trait and implements it for all expression
+functions.
+
+### Goals
+
+Developers will now implement scalar function as follows:
+
+```rust
+pub struct ExprStrContains;
+
+impl BinaryExprFunc<StringArray, StringArray, BoolArray> for ExprStrContains {
+    fn eval(&self, i1: &str, i2: &str) -> bool {
+        i1.contains(i2)
+    }
+}
+```
+
+And now we can have an expression trait over all expression, with all type and lifetime erased:
+
+```rust
+pub trait Expression {
+    /// Evaluate an expression with run-time number of [`ArrayImpl`]s.
+    fn eval_expr(&self, data: &[&ArrayImpl]) -> Result<ArrayImpl>;
+}
+```
+
+`Expression` can be made into a `Box<dyn Expression>`, therefore being used at building expressions at runtime.
+
+### Failed Attempts
+
+Developers could have written their Rust code in a easy way. But when implementing type erase, I met some confusing
+compiler error. I'll leave this failed attempt in archive and investigate it later. Sounds like a bug on lifetime
+deduction in the compiler.
+
+<details>
+<summary>Expand to see the compiler error information</summary>
+
+```
+error[E0631]: type mismatch in function arguments
+  --> archive/day6-failed/src/expr.rs:84:13
+   |
+83 |           let expr = BinaryExpression::<I32Array, I32Array, BoolArray, _>::new(
+   |                      --------------------------------------------------------- required by a bound introduced by this call
+84 |               cmp_le::<I32Array, I32Array, I64Array>,
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected signature of `for<'a> fn(<PrimitiveArray<i32> as array::Array>::RefItem<'a>, <PrimitiveArray<i32> as array::Array>::RefItem<'a>) -> _`
+   |
+  ::: archive/day6-failed/src/expr/cmp.rs:15:1
+   |
+15 | / pub fn cmp_le<'a, I1: Array, I2: Array, C: Array + 'static>(
+16 | |     i1: I1::RefItem<'a>,
+17 | |     i2: I2::RefItem<'a>,
+18 | | ) -> bool
+...  |
+21 | |     I2::RefItem<'a>: Into<C::RefItem<'a>>,
+22 | |     C::RefItem<'a>: PartialOrd,
+   | |_______________________________- found signature of `fn(i32, i32) -> _`
+```
+
+</details>
+
 # TBD Lectures
 
-## Day 6: Physical Data Type and Logical Data Type
+## Day 7: Physical Data Type and Logical Data Type
 
 `i32`, `i64` is simply physical types -- how types are stored in memory (or on disk). But in a database system,
-we also have logical types (like `Char`, and `Varchar`). In day 6, we learn how to associate logical types with
+we also have logical types (like `Char`, and `Varchar`). In day 7, we learn how to associate logical types with
 physical types using macros.
 
-## Day 7: Aggregators
+## Day 8: Aggregators
 
-Aggregators are another kind of expressions. We learn how to implement them easily with our type system in day 7.
+Aggregators are another kind of expressions. We learn how to implement them easily with our type system in day 8.
 
-## Day 8: Expression Framework
+## Day 9: Expression Framework
 
 Now we are having more and more expression kinds, and we need an expression framework to unify them -- including
 unary, binary and expressions of more inputs. At the same time, we also need to automatically convert `ArrayImpl`

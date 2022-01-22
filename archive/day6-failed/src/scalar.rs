@@ -43,7 +43,6 @@ pub trait ScalarRef<'a>:
 }
 
 /// Encapsules all variants of [`Scalar`]
-#[derive(Clone, Debug, PartialEq)]
 pub enum ScalarImpl {
     Int16(i16),
     Int32(i32),
@@ -55,7 +54,6 @@ pub enum ScalarImpl {
 }
 
 /// Encapsules all variants of [`ScalarRef`]
-#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ScalarRefImpl<'a> {
     Int16(i16),
     Int32(i32),
