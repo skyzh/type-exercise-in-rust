@@ -1,0 +1,12 @@
+[package]
+name = "type-exercise-day7-b"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1"
+bitvec = "1"
+thiserror = "1"
+rust_decimal = "1"

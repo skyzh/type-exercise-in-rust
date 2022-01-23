@@ -20,22 +20,36 @@ use crate::TypeMismatch;
 /// erasing the concreate array type. Therefore, users simply call
 /// `BinaryExpression::eval(ArrayImpl, ArrayImpl)`, while developers only need to provide
 /// implementation for functions like `cmp_le(i32, i32)`.
-pub struct BinaryExpression<I1: Array, I2: Array, O: Array, F> {
+pub struct BinaryExpression<I1: Scalar, I2: Scalar, O: Scalar, F> {
     func: F,
     _phantom: PhantomData<(I1, I2, O)>,
+}
+
+pub trait BinaryExprFunc<A: Scalar, B: Scalar, O: Scalar> {
+    fn eval(&self, i1: A::RefType<'_>, i2: B::RefType<'_>) -> O;
+}
+
+impl<A: Scalar, B: Scalar, O: Scalar, F> BinaryExprFunc<A, B, O> for F
+where
+    F: Fn(A::RefType<'_>, B::RefType<'_>) -> O,
+{
+    fn eval(&self, i1: A::RefType<'_>, i2: B::RefType<'_>) -> O {
+        self(i1, i2)
+    }
 }
 
 /// Implement [`BinaryExpression`] for any given scalar function `F`.
 ///
 /// Note that as we cannot add `From<&'a ArrayImpl>` bound on [`Array`], so we have to specify them
 /// here.
-impl<I1: Array, I2: Array, O: Array, F> BinaryExpression<I1, I2, O, F>
+impl<I1, I2, O, F> BinaryExpression<I1, I2, O, F>
 where
-    for<'a> &'a I1: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
-    for<'a> &'a I2: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
-    // FIXME: it seems that some global functions don't satisfy `for<'a>`, so this crate fails to
-    // compile.
-    F: for<'a> Fn(I1::RefItem<'a>, I2::RefItem<'a>) -> O::OwnedItem,
+    O: Scalar,
+    I1: Scalar,
+    I2: Scalar,
+    for<'a> &'a I1::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a I2::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    F: BinaryExprFunc<I1, I2, O>,
 {
     /// Create a binary expression from existing function
     ///
@@ -50,13 +64,17 @@ where
 
     /// Evaluate the expression with the given array.
     pub fn eval(&self, i1: &ArrayImpl, i2: &ArrayImpl) -> Result<ArrayImpl> {
-        let i1a: &I1 = i1.try_into()?;
-        let i2a: &I2 = i2.try_into()?;
+        let i1a: &I1::ArrayType = i1.try_into()?;
+        let i2a: &I2::ArrayType = i2.try_into()?;
         assert_eq!(i1.len(), i2.len(), "array length mismatch");
-        let mut builder: O::Builder = O::Builder::with_capacity(i1.len());
+        let mut builder = <O::ArrayType as Array>::Builder::with_capacity(i1.len());
         for (i1, i2) in i1a.iter().zip(i2a.iter()) {
             match (i1, i2) {
-                (Some(i1), Some(i2)) => builder.push(Some((self.func)(i1, i2).as_scalar_ref())),
+                (Some(i1), Some(i2)) => builder.push(Some(O::cast_s_to_a(
+                    self.func
+                        .eval(I1::cast_a_to_s(i1), I2::cast_a_to_s(i2))
+                        .as_scalar_ref(),
+                ))),
                 _ => builder.push(None),
             }
         }
@@ -69,7 +87,7 @@ mod tests {
     use super::cmp::*;
     use super::string::*;
     use super::*;
-    use crate::array::{BoolArray, I32Array, I64Array, StringArray};
+    use crate::array::{BoolArray, I32Array, StringArray};
 
     /// Test if an array has the same content as a vector
     fn check_array_eq<'a, A: Array>(array: &'a A, vec: &[Option<A::RefItem<'a>>])
@@ -84,9 +102,7 @@ mod tests {
     #[test]
     fn test_cmp_le() {
         // Compare two `i32` array. Cast them to `i64` before comparing.
-        let expr = BinaryExpression::<I32Array, I32Array, BoolArray, _>::new(
-            cmp_le::<I32Array, I32Array, I64Array>,
-        );
+        let expr = BinaryExpression::<i32, i32, bool, _>::new(cmp_le::<i32, i32, i64>);
         let result = expr
             .eval(
                 &I32Array::from_slice(&[Some(0), Some(1), None]).into(),
@@ -101,9 +117,8 @@ mod tests {
 
     #[test]
     fn test_cmp_ge_str() {
-        let expr = BinaryExpression::<StringArray, StringArray, BoolArray, _>::new(
-            cmp_ge::<StringArray, StringArray, StringArray>,
-        );
+        let expr =
+            BinaryExpression::<String, String, bool, _>::new(cmp_ge::<String, String, String>);
         let result = expr
             .eval(
                 &StringArray::from_slice(&[Some("0"), Some("1"), None]).into(),
@@ -118,7 +133,7 @@ mod tests {
 
     #[test]
     fn test_str_contains() {
-        let expr = BinaryExpression::<StringArray, StringArray, BoolArray, _>::new(str_contains);
+        let expr = BinaryExpression::<String, String, bool, _>::new(str_contains);
         let result = expr
             .eval(
                 &StringArray::from_slice(&[Some("000"), Some("111"), None]).into(),

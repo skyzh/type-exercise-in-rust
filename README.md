@@ -259,7 +259,9 @@ can only process `&'a ArrayImpl` instead of for any lifetime.
 In day 6, we erase the expression lifetime by defining a `BinaryExprFunc` trait and implements it for all expression
 functions.
 
-### Goals
+In this day, we have two solutions -- the hard way and the easy way.
+
+### Goals -- The Easy Way
 
 Developers will now implement scalar function as follows:
 
@@ -284,37 +286,40 @@ pub trait Expression {
 
 `Expression` can be made into a `Box<dyn Expression>`, therefore being used in building expressions at runtime.
 
-### Failed Attempts
+### Goals -- The Hard Way
 
-Developers could have written their Rust code in a easy way. But when implementing type erase, I met some confusing
-compiler error. I'll leave this failed attempt in archive and investigate it later. Sounds like a bug on lifetime
-deduction in the compiler.
+In the hard way chapter, we will dive into the black magics and fight against (probably) compiler bugs, so as
+to make function vectorization look very approachable to SQL function developers.
 
-<details>
-<summary>Expand to see the compiler error information</summary>
+To begin with, we will change the signature of `BinaryExpression` to take `Scalar` as parameter:
 
-```
-error[E0631]: type mismatch in function arguments
-  --> archive/day6-failed/src/expr.rs:84:13
-   |
-83 |           let expr = BinaryExpression::<I32Array, I32Array, BoolArray, _>::new(
-   |                      --------------------------------------------------------- required by a bound introduced by this call
-84 |               cmp_le::<I32Array, I32Array, I64Array>,
-   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected signature of `for<'a> fn(<PrimitiveArray<i32> as array::Array>::RefItem<'a>, <PrimitiveArray<i32> as array::Array>::RefItem<'a>) -> _`
-   |
-  ::: archive/day6-failed/src/expr/cmp.rs:15:1
-   |
-15 | / pub fn cmp_le<'a, I1: Array, I2: Array, C: Array + 'static>(
-16 | |     i1: I1::RefItem<'a>,
-17 | |     i2: I2::RefItem<'a>,
-18 | | ) -> bool
-...  |
-21 | |     I2::RefItem<'a>: Into<C::RefItem<'a>>,
-22 | |     C::RefItem<'a>: PartialOrd,
-   | |_______________________________- found signature of `fn(i32, i32) -> _`
+```rust
+pub struct BinaryExpression<I1: Scalar, I2: Scalar, O: Scalar, F> {
+    func: F,
+    _phantom: PhantomData<(I1, I2, O)>,
+}
 ```
 
-</details>
+Then we will do a lot of black magics on `Scalar` type, so as to do the conversion freely between `Array::RefItem`
+and `Scalar::RefType`. This will help us bypass most of the issues in GAT, and yields the following vectorization
+code:
+
+```rust
+builder.push(Some(O::cast_s_to_a(
+    self.func
+        .eval(I1::cast_a_to_s(i1), I2::cast_a_to_s(i2))
+        .as_scalar_ref(),
+)))
+```
+
+We will construct a bridge trait `BinaryExprFunc` between plain functions and the one that can be used by
+`BinaryExpression`.
+
+And finally developers can simply write a function and supply it to `BinaryExpression`.
+
+```rust
+let expr = BinaryExpression::<String, String, bool, _>::new(str_contains);
+```
 
 ## Day 7: Physical Data Type and Logical Data Type
 

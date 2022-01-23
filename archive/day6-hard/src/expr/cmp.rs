@@ -6,7 +6,7 @@
 
 use std::cmp::Ordering;
 
-use crate::array::*;
+use crate::scalar::Scalar;
 
 /// Return if `i1 < i2`. Note that `i1` and `i2` could be different types. This
 /// function will automatically cast them into `C` type.
@@ -14,15 +14,14 @@ use crate::array::*;
 /// * `I1`: left input type.
 /// * `I2`: right input type.
 /// * `C`: cast type.
-pub fn cmp_le<'a, I1: Array, I2: Array, C: Array + 'static>(
-    i1: I1::RefItem<'a>,
-    i2: I2::RefItem<'a>,
-) -> bool
+pub fn cmp_le<I1: Scalar, I2: Scalar, C: Scalar>(i1: I1::RefType<'_>, i2: I2::RefType<'_>) -> bool
 where
-    I1::RefItem<'a>: Into<C::RefItem<'a>>,
-    I2::RefItem<'a>: Into<C::RefItem<'a>>,
-    C::RefItem<'a>: PartialOrd,
+    for<'a> I1::RefType<'a>: Into<C::RefType<'a>>,
+    for<'a> I2::RefType<'a>: Into<C::RefType<'a>>,
+    for<'a> C::RefType<'a>: PartialOrd,
 {
+    let i1 = I1::upcast_gat(i1);
+    let i2 = I2::upcast_gat(i2);
     i1.into().partial_cmp(&i2.into()).unwrap() == Ordering::Less
 }
 
@@ -32,14 +31,13 @@ where
 /// * `I1`: left input type.
 /// * `I2`: right input type.
 /// * `C`: cast type.
-pub fn cmp_ge<'a, I1: Array, I2: Array, C: Array + 'static>(
-    i1: I1::RefItem<'a>,
-    i2: I2::RefItem<'a>,
-) -> bool
+pub fn cmp_ge<I1: Scalar, I2: Scalar, C: Scalar>(i1: I1::RefType<'_>, i2: I2::RefType<'_>) -> bool
 where
-    I1::RefItem<'a>: Into<C::RefItem<'a>>,
-    I2::RefItem<'a>: Into<C::RefItem<'a>>,
-    C::RefItem<'a>: PartialOrd,
+    for<'a> I1::RefType<'a>: Into<C::RefType<'a>>,
+    for<'a> I2::RefType<'a>: Into<C::RefType<'a>>,
+    for<'a> C::RefType<'a>: PartialOrd,
 {
+    let i1 = I1::upcast_gat(i1);
+    let i2 = I2::upcast_gat(i2);
     i1.into().partial_cmp(&i2.into()).unwrap() == Ordering::Greater
 }

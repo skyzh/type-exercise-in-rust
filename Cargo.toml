@@ -18,6 +18,7 @@ members = [
     "archive/day3",
     "archive/day4",
     "archive/day5",
-    "archive/day6",
-    # "archive/day6-failed",
+    "archive/day6-easy",
+    "archive/day6-hard",
+    "archive/day7-easy",
 ]
