@@ -15,11 +15,9 @@ The lecture evolves around how Rust programmers (like me) build database systems
 ## Deep Dive Type Exercise Series (in Chinese)
 
 On My Blog:
-
 * [Part 0 - Part 1](https://www.skyzh.dev/posts/articles/2022-01-22-rust-type-exercise-in-database-executors/)
 
 On Zhihu:
-
 * [Part 0: Intro](https://zhuanlan.zhihu.com/p/460702914)
 * [Part 1: Array and ArrayBuilder](https://zhuanlan.zhihu.com/p/460977012)
 
