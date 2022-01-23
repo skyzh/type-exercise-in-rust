@@ -1,6 +1,6 @@
 # Type Exercise in Rust
 
-*(In Chinese) Rust 语言中的类型体操 - 以数据库系统为例*
+*(In Chinese) 数据库表达式执行的黑魔法：用 Rust 做类型体操*
 
 This is a short lecture on how to use the Rust type system to build necessary components in a database system.
 
@@ -11,6 +11,17 @@ Note that most of the techniques described in this lecture have already been imp
 The lecture evolves around how Rust programmers (like me) build database systems in the Rust programming language. We leverage the Rust type system to **minimize** runtime cost and make our development process easier with **safe**, **nightly** Rust.
 
 ![Map of Types](map-of-types.png)
+
+## Deep Dive Type Exercise Series (in Chinese)
+
+On My Blog:
+
+* [Part 0 - Part 1](https://www.skyzh.dev/posts/articles/2022-01-22-rust-type-exercise-in-database-executors/)
+
+On Zhihu:
+
+* [Part 0: Intro](https://zhuanlan.zhihu.com/p/460702914)
+* [Part 1: Array and ArrayBuilder](https://zhuanlan.zhihu.com/p/460977012)
 
 ## Day 1: `Array` and `ArrayBuilder`
 
