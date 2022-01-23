@@ -256,12 +256,30 @@ let result: ArrayImpl = expr.eval(ArrayImpl, ArrayImpl).unwrap();
 Vectorization looks fancy in the implementation in day 5, but there is a critical flaw -- `BinaryExpression`
 can only process `&'a ArrayImpl` instead of for any lifetime.
 
+```rust
+impl<'a, I1: Array, I2: Array, O: Array, F> BinaryExpression<I1, I2, O, F> {
+    pub fn eval(&self, i1: &'a ArrayImpl, i2: &'a ArrayImpl) -> Result<ArrayImpl> {
+        // ...
+    }
+}
+```
+
 In day 6, we erase the expression lifetime by defining a `BinaryExprFunc` trait and implements it for all expression
 functions.
+
+```rust
+impl<'a, I1: Array, I2: Array, O: Array, F> BinaryExpression<I1, I2, O, F> {
+    pub fn eval(&self, i1: &ArrayImpl, i2: &ArrayImpl) -> Result<ArrayImpl> {
+        // ...
+    }
+}
+```
 
 In this day, we have two solutions -- the hard way and the easy way.
 
 ### Goals -- The Easy Way
+
+If we make each scalar function into a struct, things will be a lot easier.
 
 Developers will now implement scalar function as follows:
 
