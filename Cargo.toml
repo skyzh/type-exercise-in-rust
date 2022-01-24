@@ -21,4 +21,5 @@ members = [
     "archive/day6-easy",
     "archive/day6-hard",
     "archive/day7-easy",
+    "archive/day7-hard",
 ]
