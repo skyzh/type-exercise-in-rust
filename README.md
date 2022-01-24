@@ -464,3 +464,11 @@ Now we are having more and more expression kinds, and we need an expression fram
 unary, binary and expressions of more inputs.
 
 At the same time, we will also experiment with return value optimizations in variable-size types.
+
+## Day 10: Boxed Array
+
+Use `Box<dyn Array>` instead of `ArrayImpl`.
+
+## Day 11: List, Struct, and Nested Types
+
+TBD
