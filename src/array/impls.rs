@@ -13,6 +13,15 @@ use crate::TypeMismatch;
 macro_rules! impl_array_dispatch {
     ([], $( { $Abc:ident, $abc:ident, $AbcArray:ty, $AbcArrayBuilder:ty, $Owned:ty, $Ref:ty } ),*) => {
         impl ArrayImpl {
+            /// Create new [`ArrayBuilder`] from [`Array`] type.
+            pub fn new_builder(&self, capacity: usize) -> ArrayBuilderImpl {
+                match self {
+                    $(
+                        Self::$Abc(_) => ArrayBuilderImpl::$Abc(<$AbcArrayBuilder>::with_capacity(capacity))
+                    ),*
+                }
+            }
+
             /// Get the value at the given index.
             pub fn get(&self, idx: usize) -> Option<ScalarRefImpl<'_>> {
                 match self {
@@ -162,3 +171,20 @@ macro_rules! impl_array_conversion {
 }
 
 for_all_variants! { impl_array_conversion }
+
+/// Implements Debug for [`Array`]
+macro_rules! impl_array_debug {
+    (
+        [], $({ $Abc:ident, $abc:ident, $AbcArray:ty, $AbcArrayBuilder:ty, $Owned:ty, $Ref:ty }),*
+    ) => {
+        $(
+            impl std::fmt::Debug for $AbcArray {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    $crate::array::impl_debug::debug_fmt(self, f)
+                }
+            }
+        )*
+    };
+}
+
+for_all_variants! { impl_array_debug }

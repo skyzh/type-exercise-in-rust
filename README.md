@@ -455,23 +455,32 @@ pub fn build_binary_expression(
 
 The goal is to write as less code as possible to generate all combinations of comparison.
 
+## Day 8: List Type
+
+In Apache Arrow, we have `ListArray`, which is equivalent to `Vec<Option<Vec<Option<T>>>>`. We implement this in
+day 8.
+
+```rust
+let mut builder = ListArrayBuilder::with_capacity(0);
+builder.push(Some((&/* Some ArrayImpl */).into()));
+builder.push(Some((&/* Some ArrayImpl */).into()));
+builder.push(None);
+builder.finish();
+```
+
 # TBD Lectures
 
-## Day 8: Aggregators
+## Day 9: Boxed Array
 
-Aggregators are another kind of expressions. We learn how to implement them easily with our type system in day 8.
+Use `Box<dyn Array>` instead of `ArrayImpl` enum.
 
-## Day 9: Expression Framework
+## Day 10: Aggregators
+
+Aggregators are another kind of expressions. We learn how to implement them easily with our type system in day 10.
+
+## Day 11: Expression Framework
 
 Now we are having more and more expression kinds, and we need an expression framework to unify them -- including
 unary, binary and expressions of more inputs.
 
 At the same time, we will also experiment with return value optimizations in variable-size types.
-
-## Day 10: Boxed Array
-
-Use `Box<dyn Array>` instead of `ArrayImpl`.
-
-## Day 11: List, Struct, and Nested Types
-
-TBD

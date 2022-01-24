@@ -7,12 +7,15 @@
 //! an Array with an ArrayBuilder at compile time. This module also contains examples on how to use
 //! generics around the Array and ArrayBuilder.
 
+pub mod impl_debug;
 mod impls;
 mod iterator;
+mod list_array;
 mod primitive_array;
 mod string_array;
 
 pub use iterator::*;
+pub use list_array::*;
 pub use primitive_array::*;
 pub use string_array::*;
 
@@ -21,7 +24,13 @@ use crate::TypeMismatch;
 
 /// [`Array`] is a collection of data of the same type.
 pub trait Array:
-    Send + Sync + Sized + 'static + TryFrom<ArrayImpl, Error = TypeMismatch> + Into<ArrayImpl>
+    Send
+    + Sync
+    + Sized
+    + 'static
+    + TryFrom<ArrayImpl, Error = TypeMismatch>
+    + Into<ArrayImpl>
+    + std::fmt::Debug
 where
     for<'a> Self::OwnedItem: Scalar<RefType<'a> = Self::RefItem<'a>>,
 {
@@ -84,6 +93,7 @@ pub trait ArrayBuilder {
 }
 
 /// Encapsules all variants of array in this library.
+#[derive(Clone, Debug)]
 pub enum ArrayImpl {
     Int16(I16Array),
     Int32(I32Array),
@@ -93,6 +103,7 @@ pub enum ArrayImpl {
     Bool(BoolArray),
     String(StringArray),
     Decimal(DecimalArray),
+    List(ListArray),
 }
 
 /// Encapsules all variants of array builders in this library.
@@ -105,6 +116,7 @@ pub enum ArrayBuilderImpl {
     Bool(BoolArrayBuilder),
     String(StringArrayBuilder),
     Decimal(DecimalArrayBuilder),
+    List(ListArrayBuilder),
 }
 
 #[cfg(test)]

@@ -7,7 +7,9 @@
 //! ScalarRef with Array types, and present examples on how to use these traits.
 
 mod impls;
+mod list;
 
+pub use list::*;
 use rust_decimal::Decimal;
 
 use crate::array::Array;
@@ -64,7 +66,7 @@ pub trait ScalarRef<'a>:
 }
 
 /// Encapsules all variants of [`Scalar`]
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub enum ScalarImpl {
     Int16(i16),
     Int32(i32),
@@ -74,10 +76,29 @@ pub enum ScalarImpl {
     Bool(bool),
     String(String),
     Decimal(Decimal),
+    List(List),
+}
+
+impl PartialEq for ScalarImpl {
+    fn eq(&self, other: &Self) -> bool {
+        use ScalarImpl::*;
+        match (self, other) {
+            (Int16(a), Int16(b)) => a.eq(b),
+            (Int32(a), Int32(b)) => a.eq(b),
+            (Int64(a), Int64(b)) => a.eq(b),
+            (Float32(a), Float32(b)) => a.eq(b),
+            (Float64(a), Float64(b)) => a.eq(b),
+            (Bool(a), Bool(b)) => a.eq(b),
+            (String(a), String(b)) => a.eq(b),
+            (Decimal(a), Decimal(b)) => a.eq(b),
+            (List(_), List(_)) => unimplemented!("list eq is not implemented"),
+            _ => false,
+        }
+    }
 }
 
 /// Encapsules all variants of [`ScalarRef`]
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum ScalarRefImpl<'a> {
     Int16(i16),
     Int32(i32),
@@ -87,8 +108,26 @@ pub enum ScalarRefImpl<'a> {
     Bool(bool),
     String(&'a str),
     Decimal(Decimal),
+    List(ListRef<'a>),
 }
 
+impl<'a> PartialEq for ScalarRefImpl<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        use ScalarRefImpl::*;
+        match (self, other) {
+            (Int16(a), Int16(b)) => a.eq(b),
+            (Int32(a), Int32(b)) => a.eq(b),
+            (Int64(a), Int64(b)) => a.eq(b),
+            (Float32(a), Float32(b)) => a.eq(b),
+            (Float64(a), Float64(b)) => a.eq(b),
+            (Bool(a), Bool(b)) => a.eq(b),
+            (String(a), String(b)) => a.eq(b),
+            (Decimal(a), Decimal(b)) => a.eq(b),
+            (List(_), List(_)) => unimplemented!("list eq is not implemented"),
+            _ => false,
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -20,7 +20,8 @@ macro_rules! for_all_variants {
             { Float64, float64, F64Array, F64ArrayBuilder, f64, f64 },
             { Bool, bool, BoolArray, BoolArrayBuilder, bool, bool },
             { String, string, StringArray, StringArrayBuilder, String, &'a str },
-            { Decimal, decimal, DecimalArray, DecimalArrayBuilder, Decimal, Decimal }
+            { Decimal, decimal, DecimalArray, DecimalArrayBuilder, Decimal, Decimal },
+            { List, list, ListArray, ListArrayBuilder, List, ListRef<'a> }
         }
     };
 }

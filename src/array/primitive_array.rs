@@ -51,6 +51,7 @@ impl PrimitiveType for Decimal {}
 ///
 /// We store the bitmap apart from data, so as to reduce memory footprint compared with
 /// `Vec<Option<T>>`.
+#[derive(Clone)]
 pub struct PrimitiveArray<T: PrimitiveType> {
     /// The actual data of this array.
     data: Vec<T>,
@@ -67,6 +68,7 @@ where
     for<'a> T: Scalar<RefType<'a> = T>,
     Self: Into<ArrayImpl>,
     Self: TryFrom<ArrayImpl, Error = TypeMismatch>,
+    Self: std::fmt::Debug,
 {
     type Builder = PrimitiveArrayBuilder<T>;
 
@@ -111,6 +113,7 @@ where
     for<'a> T: Scalar<RefType<'a> = T>,
     PrimitiveArray<T>: Into<ArrayImpl>,
     PrimitiveArray<T>: TryFrom<ArrayImpl, Error = TypeMismatch>,
+    PrimitiveArray<T>: std::fmt::Debug,
 {
     type Array = PrimitiveArray<T>;
 
