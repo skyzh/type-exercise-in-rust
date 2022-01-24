@@ -199,4 +199,20 @@ mod tests {
             &[Some(true), Some(false), None],
         );
     }
+
+    #[test]
+    fn test_str_contains_lambda() {
+        let expr =
+            BinaryExpression::<String, String, bool, _>::new(|x1: &str, x2: &str| x1.contains(x2));
+        let result = expr
+            .eval_batch(
+                &StringArray::from_slice(&[Some("000"), Some("111"), None]).into(),
+                &StringArray::from_slice(&[Some("0"), Some("0"), None]).into(),
+            )
+            .unwrap();
+        check_array_eq::<BoolArray>(
+            (&result).try_into().unwrap(),
+            &[Some(true), Some(false), None],
+        );
+    }
 }

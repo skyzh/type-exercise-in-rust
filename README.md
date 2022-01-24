@@ -348,6 +348,12 @@ And finally developers can simply write a function and supply it to `BinaryExpre
 let expr = BinaryExpression::<String, String, bool, _>::new(str_contains);
 ```
 
+... or even with lambda functions:
+
+```rust
+let expr = BinaryExpression::<String, String, bool, _>::new(|x1: &str, x2: &str| x1.contains(x2));
+```
+
 ## Day 7: Physical Data Type and Logical Data Type
 
 `i32`, `i64` is simply physical types -- how types are stored in memory (or on disk). But in a database system,
