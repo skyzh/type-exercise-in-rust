@@ -391,6 +391,8 @@ pub fn build_binary_expression(
 We have so many combinations of cross-type comparison, and we couldn't write them all by-hand. In day 7, we use
 macros to associate logical data type with `Array` traits, and reduce the complexity of writing such functions.
 
+**Goals -- The Easy Way**
+
 ```rust
 /// Build expression with runtime information.
 pub fn build_binary_expression(
@@ -412,6 +414,32 @@ pub fn build_binary_expression(
         StrContains => Box::new(
             BinaryExpression::<StringArray, StringArray, BoolArray, _>::new(ExprStrContains),
         ),
+    }
+}
+```
+
+**Goals -- The Hard Way**
+
+```rust
+/// Build expression with runtime information.
+pub fn build_binary_expression(
+    f: ExpressionFunc,
+    i1: DataType,
+    i2: DataType,
+) -> Box<dyn Expression> {
+    use ExpressionFunc::*;
+
+    use crate::expr::cmp::*;
+    use crate::expr::string::*;
+
+    match f {
+        CmpLe => for_all_cmp_combinations! { impl_cmp_expression_of, i1, i2, cmp_le },
+        CmpGe => for_all_cmp_combinations! { impl_cmp_expression_of, i1, i2, cmp_ge },
+        CmpEq => for_all_cmp_combinations! { impl_cmp_expression_of, i1, i2, cmp_eq },
+        CmpNe => for_all_cmp_combinations! { impl_cmp_expression_of, i1, i2, cmp_ne },
+        StrContains => Box::new(BinaryExpression::<String, String, bool, _>::new(
+            str_contains,
+        )),
     }
 }
 ```
