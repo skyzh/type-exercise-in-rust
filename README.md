@@ -15,11 +15,12 @@ The lecture evolves around how Rust programmers (like me) build database systems
 ## Deep Dive Type Exercise Series (in Chinese)
 
 On My Blog:
-* [Part 0 - Part 1](https://www.skyzh.dev/posts/articles/2022-01-22-rust-type-exercise-in-database-executors/)
+* [Part 0 - Part 2](https://www.skyzh.dev/posts/articles/2022-01-22-rust-type-exercise-in-database-executors/)
 
 On Zhihu:
 * [Part 0: Intro](https://zhuanlan.zhihu.com/p/460702914)
 * [Part 1: Array and ArrayBuilder](https://zhuanlan.zhihu.com/p/460977012)
+* [Part 2: Scalar and ScalarRef](https://zhuanlan.zhihu.com/p/461405621)
 
 ## Day 1: `Array` and `ArrayBuilder`
 
@@ -70,6 +71,8 @@ fn test_build_string_array() {
     let array = build_array_from_vec::<StringArray>(&data[..]);
 }
 ```
+
+Also, we will be able to implement an `ArrayIterator` for all types of `Array`s.
 
 ## Day 2: `Scalar` and `ScalarRef`
 
