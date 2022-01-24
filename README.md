@@ -265,13 +265,22 @@ impl<'a, I1: Array, I2: Array, O: Array, F> BinaryExpression<I1, I2, O, F> {
 ```
 
 In day 6, we erase the expression lifetime by defining a `BinaryExprFunc` trait and implements it for all expression
-functions.
+functions. The `BinaryExpression` will be implemented as follows:
 
 ```rust
-impl<'a, I1: Array, I2: Array, O: Array, F> BinaryExpression<I1, I2, O, F> {
+impl<I1: Array, I2: Array, O: Array, F> BinaryExpression<I1, I2, O, F> {
     pub fn eval(&self, i1: &ArrayImpl, i2: &ArrayImpl) -> Result<ArrayImpl> {
         // ...
     }
+}
+```
+
+And there will be an `Expression` trait which can be made into a trait object:
+
+```rust
+pub trait Expression {
+    /// Evaluate an expression with run-time number of [`ArrayImpl`]s.
+    fn eval_expr(&self, data: &[&ArrayImpl]) -> Result<ArrayImpl>;
 }
 ```
 

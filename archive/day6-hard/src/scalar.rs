@@ -55,13 +55,14 @@ pub trait ScalarRef<'a>:
     type ArrayType: Array<RefItem<'a> = Self>;
 
     /// The corresponding [`Scalar`] type.
-    type ScalarType: Scalar<RefType<'a> = Self, ArrayType = Self::ArrayType>;
+    type ScalarType: Scalar<RefType<'a> = Self>;
 
     /// Convert the reference into an owned value.
     fn to_owned_scalar(&self) -> Self::ScalarType;
 }
 
 /// Encapsules all variants of [`Scalar`]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ScalarImpl {
     Int16(i16),
     Int32(i32),
@@ -73,6 +74,7 @@ pub enum ScalarImpl {
 }
 
 /// Encapsules all variants of [`ScalarRef`]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum ScalarRefImpl<'a> {
     Int16(i16),
     Int32(i32),
