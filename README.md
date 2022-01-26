@@ -16,13 +16,14 @@ The lecture evolves around how Rust programmers (like me) build database systems
 
 On My Blog:
 * [Part 0 - Part 2](https://www.skyzh.dev/posts/articles/2022-01-22-rust-type-exercise-in-database-executors/)
-* [Part 3 - Part 4](https://www.skyzh.dev/posts/articles/2022-01-24-rust-type-exercise-in-database-executors-middle/)
+* [Part 3 - Part 6](https://www.skyzh.dev/posts/articles/2022-01-24-rust-type-exercise-in-database-executors-middle/)
 
 On Zhihu:
 * [Part 0: Intro](https://zhuanlan.zhihu.com/p/460702914)
 * [Part 1: Array and ArrayBuilder](https://zhuanlan.zhihu.com/p/460977012)
 * [Part 2: Scalar and ScalarRef](https://zhuanlan.zhihu.com/p/461405621)
 * [Part 3, 4: TryFrom and Macro Expansion](https://zhuanlan.zhihu.com/p/461657165)
+* [Part 5, 6: Bypassing GAT Compile Errors (or Compiler Bugs?)](https://zhuanlan.zhihu.com/p/461901665)
 
 ## Day 1: `Array` and `ArrayBuilder`
 
