@@ -10,13 +10,17 @@ The lecture evolves around how Rust programmers (like me) build database systems
 
 ## See Also...
 
-### Showcase: RisingLight
+### RisingLight
 
 [RisingLight](https://github.com/risinglightdb/risinglight) is an OLAP database system for educational purpose. Most of the techniques described in this lecture have already been implemented in our educational database system in RisingLight.
 
-### Showcase: Databend
+### Databend
 
 Databend is currently refactoring their expression evaluation system at [`datavalues-dev` branch](https://github.com/datafuselabs/databend/tree/datavalues-dev) (as of writing this tutorial). The new system leverages a lot of techniques described in this tutorial.
+
+### TiKV Coprocessor
+
+I worked on TiKV two years ago on its expression evaluation framework. At the time of building [TiKV coprocessor](https://github.com/tikv/tikv/tree/master/components/tidb_query_expr), there is no GAT. TiKV coprocessor is an example of using procedural macro to unify behavior of different types of arrays, which is totally a different approach from this tutorial (but maybe in a more understandable manner). You may also take a look!
 
 ### Related Issues in Rust Compiler
 
