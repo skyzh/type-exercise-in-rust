@@ -11,6 +11,9 @@ In this tutorial, you will learn:
 * How to build an Arrow-like library with strong compile-time type. (Day 1 - 3)
 * How to use declarative macros to implement dispatch functions on a non-object-safe trait. (Day 4)
 * How to use GAT (generic associated types) and how to vectorize any scalar function with GAT generic parameter. (Day 5 - 6)
+  * ... how to by-pass compiler bugs on GAT lifetime in Fn trait.
+  * ... how to manually implement covariant on GAT lifetime.
+  * ... how to correctly add trait bounds for GAT.
 * How to use declarative macros to associate things together. (Day 7)
 
 ![Map of Types](map-of-types.png)
