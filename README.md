@@ -6,13 +6,20 @@ This is a short lecture on how to use the Rust type system to build necessary co
 
 The lecture evolves around how Rust programmers (like me) build database systems in the Rust programming language. We leverage the Rust type system to **minimize** runtime cost and make our development process easier with **safe**, **nightly** Rust.
 
+In this tutorial, you will learn:
+
+* How to build an Arrow-like library with strong compile-time type. (Day 1 - 3)
+* How to use declarative macros to implement dispatch functions on a non-object-safe trait. (Day 4)
+* How to use GAT (generic associated types) and how to vectorize any scalar function with GAT generic parameter. (Day 5 - 6)
+* How to use declarative macros to associate things together. (Day 7)
+
 ![Map of Types](map-of-types.png)
 
 ## See Also...
 
 ### RisingLight
 
-[RisingLight](https://github.com/risinglightdb/risinglight) is an OLAP database system for educational purpose. Most of the techniques described in this lecture have already been implemented in our educational database system in RisingLight.
+[RisingLight](https://github.com/risinglightdb/risinglight) is an OLAP database system for educational purpose. Most of the techniques described in this lecture have already been implemented in our educational database system “RisingLight”.
 
 ### Databend
 
