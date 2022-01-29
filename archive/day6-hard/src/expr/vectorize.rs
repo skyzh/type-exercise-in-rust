@@ -9,7 +9,7 @@ use crate::TypeMismatch;
 
 /// A trait over all scalar SQL functions.
 ///
-/// It takes `A` and `B` as input prameter, and outputs scalar of type `O`.
+/// It takes `A` and `B` as input parameter, and outputs scalar of type `O`.
 pub trait BinaryExprFunc<A: Scalar, B: Scalar, O: Scalar> {
     /// Evaluate a binary function with two references to data.
     fn eval(&self, i1: A::RefType<'_>, i2: B::RefType<'_>) -> O;
