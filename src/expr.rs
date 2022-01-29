@@ -84,7 +84,7 @@ macro_rules! impl_cmp_expression_of {
     ([$i1t:ident, $i2t:ident, $cmp_func:tt], $({ $i1:tt, $i2:tt, $convert:tt }),*) => {
         match ($i1t, $i2t) {
             $(
-                // Here we want to fill a match pattern. For example, `DataType::SmalInt` or
+                // Here we want to fill a match pattern. For example, `DataType::SmallInt` or
                 // `DataType::Decimal { precision: _, .. }`. The `datatype_match_pattern` macro
                 // could help us extract the pattern from `$i1` macro. Therefore, we can use
                 // `$i1! { datatype_match_pattern }` to get something like

@@ -22,9 +22,7 @@ pub trait Scalar:
     type ArrayType: Array<OwnedItem = Self>;
 
     /// The corresponding [`ScalarRef`] type.
-    type RefType<'a>: ScalarRef<'a, ScalarType = Self, ArrayType = Self::ArrayType>
-    where
-        Self: 'a;
+    type RefType<'a>: ScalarRef<'a, ScalarType = Self, ArrayType = Self::ArrayType>;
 
     /// Get a reference of the current value.
     fn as_scalar_ref(&self) -> Self::RefType<'_>;
