@@ -33,9 +33,7 @@ where
     /// Type of the item that can be retrieved from the [`Array`]. For example, we can get a `i32`
     /// from [`Int32Array`], while [`StringArray`] produces a `&str`. As we need a lifetime that is
     /// the same as `self` for `&str`, we use GAT here.
-    type RefItem<'a>: ScalarRef<'a, ScalarType = Self::OwnedItem, ArrayType = Self>
-    where
-        Self: 'a;
+    type RefItem<'a>: ScalarRef<'a, ScalarType = Self::OwnedItem, ArrayType = Self>;
 
     /// Retrieve a reference to value.
     fn get(&self, idx: usize) -> Option<Self::RefItem<'_>>;
