@@ -61,7 +61,7 @@ where
     /// Get iterator of this array.
     fn iter(&self) -> ArrayIterator<Self>;
 
-    /// Bulid array from slice
+    /// Build array from slice
     fn from_slice(data: &[Option<Self::RefItem<'_>>]) -> Self {
         let mut builder = Self::Builder::with_capacity(data.len());
         for item in data {
