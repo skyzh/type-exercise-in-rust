@@ -44,6 +44,7 @@ During writing this tutorial, I found several confusing compile errors from the 
 On My Blog:
 * [Part 0 - Part 2](https://www.skyzh.dev/posts/articles/2022-01-22-rust-type-exercise-in-database-executors/)
 * [Part 3 - Part 6](https://www.skyzh.dev/posts/articles/2022-01-24-rust-type-exercise-in-database-executors-middle/)
+* [Part 7](https://www.skyzh.dev/posts/articles/2022-02-01-rust-type-exercise-in-database-executors-final/)
 
 On Zhihu:
 * [Part 0: Intro](https://zhuanlan.zhihu.com/p/460702914)
@@ -51,6 +52,7 @@ On Zhihu:
 * [Part 2: Scalar and ScalarRef](https://zhuanlan.zhihu.com/p/461405621)
 * [Part 3, 4: TryFrom and Macro Expansion](https://zhuanlan.zhihu.com/p/461657165)
 * [Part 5, 6: Bypassing GAT Compile Errors (or Compiler Bugs?)](https://zhuanlan.zhihu.com/p/461901665)
+* [Part 7: Associate Logical Types with Physical Types](https://zhuanlan.zhihu.com/p/463477290)
 
 ## Day 1: `Array` and `ArrayBuilder`
 
