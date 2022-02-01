@@ -10,7 +10,7 @@
 /// Every tuple has four elements, where
 /// `{ enum variant name, function suffix name, array type, builder type, scalar type }`
 macro_rules! for_all_variants {
-    ($macro:tt $(, $x:tt)*) => {
+    ($macro:ident $(, $x:ident)*) => {
         $macro! {
             [$($x),*],
             { Int16, int16, I16Array, I16ArrayBuilder, i16, i16 },
@@ -27,7 +27,7 @@ macro_rules! for_all_variants {
 pub(crate) use for_all_variants;
 
 macro_rules! for_all_primitive_variants {
-    ($macro:tt $(, $x:tt)*) => {
+    ($macro:ident $(, $x:ident)*) => {
         $macro! {
             [$($x),*],
             { Int16, int16, I16Array, I16ArrayBuilder, i16, i16 },

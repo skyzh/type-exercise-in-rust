@@ -36,7 +36,7 @@ pub enum ExpressionFunc {
 /// * 3rd position: cast type. For example, we need to cast the left i32 to i64 before comparing i32
 ///   and i64.
 macro_rules! for_all_cmp_combinations {
-    ($macro:tt $(, $x:tt)*) => {
+    ($macro:ident $(, $x:ident)*) => {
         $macro! {
             [$($x),*],
             // comparison for the same type
@@ -81,7 +81,7 @@ macro_rules! for_all_cmp_combinations {
 
 /// Generate all variants of comparison expressions
 macro_rules! impl_cmp_expression_of {
-    ([$i1t:ident, $i2t:ident, $cmp_func:tt], $({ $i1:tt, $i2:tt, $convert:tt }),*) => {
+    ([$i1t:ident, $i2t:ident, $cmp_func:ident], $({ $i1:ident, $i2:ident, $convert:ident }),*) => {
         match ($i1t, $i2t) {
             $(
                 // Here we want to fill a match pattern. For example, `DataType::SmallInt` or

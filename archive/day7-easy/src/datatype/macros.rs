@@ -31,7 +31,7 @@ pub(crate) use datatype_array;
 /// Association information for `Boolean` logical type.
 #[allow(unused_macros)]
 macro_rules! boolean {
-    ($macro:tt) => {
+    ($macro:ident) => {
         $macro! {
             DataType::Boolean,
             BoolArray
@@ -44,7 +44,7 @@ pub(crate) use boolean;
 
 /// Association information for `SmallInt` logical type.
 macro_rules! int16 {
-    ($macro:tt) => {
+    ($macro:ident) => {
         $macro! {
             DataType::SmallInt,
             I16Array
@@ -56,7 +56,7 @@ pub(crate) use int16;
 
 /// Association information for `Integer` logical type.
 macro_rules! int32 {
-    ($macro:tt) => {
+    ($macro:ident) => {
         $macro! {
             DataType::Integer,
             I32Array
@@ -68,7 +68,7 @@ pub(crate) use int32;
 
 /// Association information for `BigInt` logical type.
 macro_rules! int64 {
-    ($macro:tt) => {
+    ($macro:ident) => {
         $macro! {
             DataType::BigInt,
             I64Array
@@ -80,7 +80,7 @@ pub(crate) use int64;
 
 /// Association information for `Varchar` logical type.
 macro_rules! varchar {
-    ($macro:tt) => {
+    ($macro:ident) => {
         $macro! {
             DataType::Varchar,
             StringArray
@@ -92,7 +92,7 @@ pub(crate) use varchar;
 
 /// Association information for `Char` logical type.
 macro_rules! fwchar {
-    ($macro:tt) => {
+    ($macro:ident) => {
         $macro! {
             DataType::Char { .. },
             StringArray
@@ -104,7 +104,7 @@ pub(crate) use fwchar;
 
 /// Association information for `Real` logical type.
 macro_rules! float32 {
-    ($macro:tt) => {
+    ($macro:ident) => {
         $macro! {
             DataType::Real,
             F32Array
@@ -116,7 +116,7 @@ pub(crate) use float32;
 
 /// Association information for `Real` logical type.
 macro_rules! float64 {
-    ($macro:tt) => {
+    ($macro:ident) => {
         $macro! {
             DataType::Double,
             F64Array
@@ -128,7 +128,7 @@ pub(crate) use float64;
 
 /// Association information for `Decimal` logical type.
 macro_rules! decimal {
-    ($macro:tt) => {
+    ($macro:ident) => {
         $macro! {
             DataType::Decimal { .. },
             DecimalArray
