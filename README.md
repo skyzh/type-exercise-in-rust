@@ -500,11 +500,18 @@ builder.push(None);
 builder.finish();
 ```
 
-# TBD Lectures
-
 ## Day 9: Boxed Array
 
 Use `Box<dyn Array>` instead of `ArrayImpl` enum.
+
+To make as few modifications as possible to the current codebase, we add two traits:
+
+* `PhysicalTypeOf`: gets the physical type out of Array.
+* `DynArray`: the object safe trait for Array.
+
+Then, we can have `pub struct BoxedArray(Box<dyn DynArray>);` for dynamic dispatch.
+
+# TBD Lectures
 
 ## Day 10: Aggregators
 

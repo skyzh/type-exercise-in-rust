@@ -1,21 +1,21 @@
 use std::fmt::Debug;
 
 use super::{Scalar, ScalarRef, ScalarRefImpl};
-
-use crate::array::{Array, BoxedArray, ListArray};
+use crate::array::impl_debug::debug_fmt_ranged;
+use crate::array::{Array, ArrayImpl, ListArray};
 use crate::macros::for_all_variants;
 
 #[derive(Clone, Debug)]
-pub struct List(BoxedArray);
+pub struct List(ArrayImpl);
 
 #[derive(Clone, Copy)]
 pub struct ListRef<'a> {
-    pub(crate) array: &'a BoxedArray,
+    pub(crate) array: &'a ArrayImpl,
     pub(crate) offset: (usize, usize),
 }
 
-impl<'a> From<&'a BoxedArray> for ListRef<'a> {
-    fn from(array: &'a BoxedArray) -> Self {
+impl<'a> From<&'a ArrayImpl> for ListRef<'a> {
+    fn from(array: &'a ArrayImpl) -> Self {
         Self {
             array,
             offset: (0, array.len()),
@@ -25,15 +25,18 @@ impl<'a> From<&'a BoxedArray> for ListRef<'a> {
 
 /// Implements [`Debug`] trait for [`ListRef`]
 macro_rules! impl_list_debug {
-    (
-        [], $({ $Abc:ident, $abc:ident, $AbcArray:ty, $AbcArrayBuilder:ty, $Owned:ty, $Ref:ty }),*
-    ) => {
+    ([], $( { $Abc:ident, $abc:ident, $AbcArray:ty, $AbcArrayBuilder:ty, $Owned:ty, $Ref:ty } ),*) => {
         impl<'a> Debug for ListRef<'a> {
-            fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                todo!()
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                match &self.array {
+                    // TODO: add type information for the `Debug` trait
+                    $(
+                        ArrayImpl::$Abc(a) => debug_fmt_ranged(a, self.offset.0, self.offset.1, f)
+                    ),*
+                }
             }
         }
-    };
+    }
 }
 
 for_all_variants! { impl_list_debug }
@@ -90,7 +93,7 @@ impl<'a> ScalarRef<'a> for ListRef<'a> {
         for idx in self.offset.0..self.offset.1 {
             builder.push(self.array.get(idx));
         }
-        List(builder.finish().into_boxed_array())
+        List(builder.finish())
     }
 }
 

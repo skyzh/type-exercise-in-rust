@@ -1,12 +1,12 @@
 use bitvec::prelude::BitVec;
 
-use super::{Array, ArrayBuilder, ArrayBuilderImpl, ArrayIterator, BoxedArray};
+use super::{Array, ArrayBuilder, ArrayBuilderImpl, ArrayImpl, ArrayIterator};
 use crate::scalar::{List, ListRef};
 
 #[derive(Clone)]
 pub struct ListArray {
     /// The actual data of this array.
-    data: BoxedArray,
+    data: Box<ArrayImpl>,
 
     /// The offsets of each list element
     offsets: Vec<usize>,
@@ -94,11 +94,11 @@ impl ArrayBuilder for ListArrayBuilder {
 
     fn finish(self) -> Self::Array {
         ListArray {
-            data: self
-                .builder
-                .expect("cannot create an empty list array")
-                .finish()
-                .into_boxed_array(),
+            data: Box::new(
+                self.builder
+                    .expect("cannot create an empty list array")
+                    .finish(),
+            ),
             bitmap: self.bitmap,
             offsets: self.offsets,
         }
@@ -115,14 +115,11 @@ mod tests {
     fn test_list_build() {
         let mut builder = ListArrayBuilder::with_capacity(0);
         let array1: ArrayImpl = I32Array::from_slice(&[Some(0), Some(1), Some(2)]).into();
-        let array1 = array1.into_boxed_array();
         builder.push(Some((&array1).into()));
         let array2: ArrayImpl = I32Array::from_slice(&[]).into();
-        let array2 = array2.into_boxed_array();
         builder.push(Some((&array2).into()));
         builder.push(None);
         let array3: ArrayImpl = I32Array::from_slice(&[Some(0), None, Some(2)]).into();
-        let array3 = array3.into_boxed_array();
         builder.push(Some((&array3).into()));
         let list_array = builder.finish();
 

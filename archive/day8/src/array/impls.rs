@@ -4,9 +4,7 @@
 
 //! Contains all macro-generated implementations of array methods
 
-use crate::array::all_array_builders::*;
-use crate::array::all_arrays::*;
-use crate::array::{Array, ArrayBuilder, ArrayBuilderImpl, ArrayImpl, PhysicalType};
+use crate::array::*;
 use crate::macros::for_all_variants;
 use crate::scalar::*;
 use crate::TypeMismatch;
@@ -51,11 +49,11 @@ macro_rules! impl_array_dispatch {
                 }
             }
 
-            /// Get physical type of the current array
-            pub fn physical_type(&self) -> PhysicalType {
+            /// Get identifier of the current array
+            pub fn identifier(&self) -> &'static str {
                 match self {
                     $(
-                        Self::$Abc(a) => a.physical_type(),
+                        Self::$Abc(_) => stringify!($Abc),
                     )*
                 }
             }
@@ -76,7 +74,7 @@ macro_rules! impl_array_builder_dispatch {
                         (Self::$Abc(a), Some(ScalarRefImpl::$Abc(v))) => a.push(Some(v)),
                         (Self::$Abc(a), None) => a.push(None),
                     )*
-                    (a, Some(b)) => Err(TypeMismatch(a.physical_type(), b.physical_type())).unwrap(),
+                    (a, Some(b)) => Err(TypeMismatch(a.identifier(), b.identifier())).unwrap(),
                 }
             }
 
@@ -89,11 +87,11 @@ macro_rules! impl_array_builder_dispatch {
                 }
             }
 
-            /// Get physical type of the current array builder
-            pub fn physical_type(&self) -> PhysicalType {
+            /// Get identifier of the current array builder
+            pub fn identifier(&self) -> &'static str {
                 match self {
                     $(
-                        Self::$Abc(a) => a.physical_type(),
+                        Self::$Abc(_) => stringify!($Abc),
                     )*
                 }
             }
@@ -121,7 +119,7 @@ macro_rules! impl_array_conversion {
                 fn try_from(array: ArrayImpl) -> Result<Self, Self::Error> {
                     match array {
                         ArrayImpl::$Abc(array) => Ok(array),
-                        other => Err(TypeMismatch(PhysicalType::$Abc, other.physical_type())),
+                        other => Err(TypeMismatch(stringify!($Abc), other.identifier())),
                     }
                 }
             }
@@ -133,7 +131,7 @@ macro_rules! impl_array_conversion {
                 fn try_from(array: &'a ArrayImpl) -> Result<Self, Self::Error> {
                     match array {
                         ArrayImpl::$Abc(array) => Ok(array),
-                        other => Err(TypeMismatch(PhysicalType::$Abc, other.physical_type())),
+                        other => Err(TypeMismatch(stringify!($Abc), other.identifier())),
                     }
                 }
             }
@@ -152,7 +150,7 @@ macro_rules! impl_array_conversion {
                 fn try_from(builder: ArrayBuilderImpl) -> Result<Self, Self::Error> {
                     match builder {
                         ArrayBuilderImpl::$Abc(builder) => Ok(builder),
-                        other => Err(TypeMismatch(PhysicalType::$Abc, other.physical_type())),
+                        other => Err(TypeMismatch(stringify!($Abc), other.identifier())),
                     }
                 }
             }
@@ -164,7 +162,7 @@ macro_rules! impl_array_conversion {
                 fn try_from(builder: &'a mut ArrayBuilderImpl) -> Result<Self, Self::Error> {
                     match builder {
                         ArrayBuilderImpl::$Abc(builder) => Ok(builder),
-                        other => Err(TypeMismatch(PhysicalType::$Abc, other.physical_type())),
+                        other => Err(TypeMismatch(stringify!($Abc), other.identifier())),
                     }
                 }
             }
@@ -190,26 +188,3 @@ macro_rules! impl_array_debug {
 }
 
 for_all_variants! { impl_array_debug }
-
-/// Implements `physical_type` for [`Array`]
-macro_rules! impl_physical_type {
-    (
-        [], $({ $Abc:ident, $abc:ident, $AbcArray:ty, $AbcArrayBuilder:ty, $Owned:ty, $Ref:ty }),*
-    ) => {
-        $(
-            impl $AbcArray {
-                fn physical_type(&self) -> PhysicalType {
-                    PhysicalType::$Abc
-                }
-            }
-
-            impl $AbcArrayBuilder {
-                fn physical_type(&self) -> PhysicalType {
-                    PhysicalType::$Abc
-                }
-            }
-        )*
-    };
-}
-
-for_all_variants! { impl_physical_type }

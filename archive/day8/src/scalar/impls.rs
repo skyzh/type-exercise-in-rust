@@ -15,11 +15,11 @@ use crate::TypeMismatch;
 macro_rules! impl_scalar_dispatch {
     ([], $( { $Abc:ident, $abc:ident, $AbcArray:ty, $AbcArrayBuilder:ty, $Owned:ty, $Ref:ty } ),*) => {
         impl ScalarImpl {
-            /// Get physical type of the current scalar
-            pub fn physical_type(&self) -> PhysicalType {
+            /// Get identifier of the current array
+            pub fn identifier(&self) -> &'static str {
                 match self {
                     $(
-                        Self::$Abc(_) => PhysicalType::$Abc,
+                        Self::$Abc(_) => stringify!($Abc),
                     )*
                 }
             }
@@ -33,11 +33,11 @@ for_all_variants! { impl_scalar_dispatch }
 macro_rules! impl_scalar_ref_dispatch {
     ([], $( { $Abc:ident, $abc:ident, $AbcArray:ty, $AbcArrayBuilder:ty, $Owned:ty, $Ref:ty } ),*) => {
         impl <'a> ScalarRefImpl<'a> {
-            /// Get physical type of the current scalar
-            pub fn physical_type(&self) -> PhysicalType {
+            /// Get identifier of the current array
+            pub fn identifier(&self) -> &'static str {
                 match self {
                     $(
-                        Self::$Abc(_) => PhysicalType::$Abc,
+                        Self::$Abc(_) => stringify!($Abc),
                     )*
                 }
             }
@@ -58,7 +58,7 @@ macro_rules! impl_scalar_conversion {
                 fn try_from(that: ScalarImpl) -> Result<Self, Self::Error> {
                     match that {
                         ScalarImpl::$Abc(v) => Ok(v),
-                        other => Err(TypeMismatch(PhysicalType::$Abc, other.physical_type())),
+                        other => Err(TypeMismatch(stringify!($Abc), other.identifier())),
                     }
                 }
             }
@@ -77,7 +77,7 @@ macro_rules! impl_scalar_conversion {
                 fn try_from(that: ScalarRefImpl<'a>) -> Result<Self, Self::Error> {
                     match that {
                         ScalarRefImpl::$Abc(v) => Ok(v),
-                        other => Err(TypeMismatch(PhysicalType::$Abc, other.physical_type())),
+                        other => Err(TypeMismatch(stringify!($Abc), other.identifier())),
                     }
                 }
             }

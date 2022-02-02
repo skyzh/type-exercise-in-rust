@@ -7,34 +7,17 @@
 //! an Array with an ArrayBuilder at compile time. This module also contains examples on how to use
 //! generics around the Array and ArrayBuilder.
 
-mod dyn_array;
 pub mod impl_debug;
 mod impls;
 mod iterator;
 mod list_array;
-mod physical_type;
 mod primitive_array;
 mod string_array;
 
 pub use iterator::*;
 pub use list_array::*;
-pub use physical_type::*;
 pub use primitive_array::*;
 pub use string_array::*;
-
-mod all_arrays {
-    pub use super::{
-        BoolArray, DecimalArray, F32Array, F64Array, I16Array, I32Array, I64Array, ListArray,
-        StringArray,
-    };
-}
-
-mod all_array_builders {
-    pub use super::{
-        BoolArrayBuilder, DecimalArrayBuilder, F32ArrayBuilder, F64ArrayBuilder, I16ArrayBuilder,
-        I32ArrayBuilder, I64ArrayBuilder, ListArrayBuilder, StringArrayBuilder,
-    };
-}
 
 use crate::scalar::{Scalar, ScalarRef};
 use crate::TypeMismatch;
@@ -48,7 +31,6 @@ pub trait Array:
     + TryFrom<ArrayImpl, Error = TypeMismatch>
     + Into<ArrayImpl>
     + std::fmt::Debug
-    + Clone
 where
     for<'a> Self::OwnedItem: Scalar<RefType<'a> = Self::RefItem<'a>>,
 {
@@ -121,10 +103,6 @@ pub enum ArrayImpl {
     Decimal(DecimalArray),
     List(ListArray),
 }
-
-/// The boxed array type.
-#[derive(Debug)]
-pub struct BoxedArray(Box<dyn dyn_array::DynArray>);
 
 /// Encapsules all variants of array builders in this library.
 pub enum ArrayBuilderImpl {
@@ -217,8 +195,8 @@ mod tests {
         );
         assert!(result.is_err());
         if let Err(err) = result {
-            assert_eq!(err.0, PhysicalType::Int32);
-            assert_eq!(err.1, PhysicalType::String);
+            assert_eq!(err.0, "Int32");
+            assert_eq!(err.1, "String");
         }
     }
 }
