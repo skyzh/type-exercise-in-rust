@@ -1,7 +1,6 @@
 use std::fmt::Debug;
 
 use super::{Scalar, ScalarRef, ScalarRefImpl};
-
 use crate::array::{Array, BoxedArray, ListArray};
 use crate::macros::for_all_variants;
 
