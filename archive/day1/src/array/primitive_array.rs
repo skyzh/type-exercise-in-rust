@@ -11,7 +11,7 @@ use bitvec::prelude::BitVec;
 use super::{Array, ArrayBuilder, ArrayIterator};
 
 /// A type that is primitive, such as `i32` and `i64`.
-pub trait PrimitiveType: Copy + Clone + Send + Sync + Default + Debug + 'static {}
+pub trait PrimitiveType: Copy + Send + Sync + Default + Debug + 'static {}
 
 pub type I32Array = PrimitiveArray<i32>;
 pub type F32Array = PrimitiveArray<f32>;
