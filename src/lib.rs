@@ -9,6 +9,7 @@
 
 #![feature(generic_associated_types)]
 #![feature(trace_macros)]
+#![feature(trusted_len)]
 
 pub mod array;
 pub mod datatype;
