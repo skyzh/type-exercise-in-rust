@@ -109,16 +109,6 @@ macro_rules! impl_scalar {
                     *self
                 }
 
-                #[allow(clippy::needless_lifetimes)]
-                fn cast_s_to_a<'x>(item: Self::RefType<'x>) -> <Self::ArrayType as Array>::RefItem<'x> {
-                    item
-                }
-
-                #[allow(clippy::needless_lifetimes)]
-                fn cast_a_to_s<'x>(item: <Self::ArrayType as Array>::RefItem<'x>) -> Self::RefType<'x> {
-                    item
-                }
-
                 fn upcast_gat<'short, 'long: 'short>(long: $Owned) -> $Owned {
                     long
                 }
@@ -148,16 +138,6 @@ impl Scalar for String {
 
     fn as_scalar_ref(&self) -> &str {
         self.as_str()
-    }
-
-    #[allow(clippy::needless_lifetimes)]
-    fn cast_s_to_a<'x>(item: Self::RefType<'x>) -> <Self::ArrayType as Array>::RefItem<'x> {
-        item
-    }
-
-    #[allow(clippy::needless_lifetimes)]
-    fn cast_a_to_s<'x>(item: <Self::ArrayType as Array>::RefItem<'x>) -> Self::RefType<'x> {
-        item
     }
 
     fn upcast_gat<'short, 'long: 'short>(long: &'long str) -> &'short str {

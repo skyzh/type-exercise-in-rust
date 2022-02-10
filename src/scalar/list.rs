@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use super::{Scalar, ScalarRef, ScalarRefImpl};
-use crate::array::{Array, BoxedArray, ListArray};
+use crate::array::{BoxedArray, ListArray};
 use crate::macros::for_all_variants;
 
 #[derive(Clone, Debug)]
@@ -47,16 +47,6 @@ impl Scalar for List {
             array: &self.0,
             offset: (0, self.0.len()),
         }
-    }
-
-    #[allow(clippy::needless_lifetimes)]
-    fn cast_s_to_a<'x>(item: Self::RefType<'x>) -> <Self::ArrayType as Array>::RefItem<'x> {
-        item
-    }
-
-    #[allow(clippy::needless_lifetimes)]
-    fn cast_a_to_s<'x>(item: <Self::ArrayType as Array>::RefItem<'x>) -> Self::RefType<'x> {
-        item
     }
 
     fn upcast_gat<'short, 'long: 'short>(long: ListRef<'long>) -> ListRef<'short> {

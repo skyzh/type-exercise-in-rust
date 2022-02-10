@@ -69,11 +69,7 @@ where
         let mut builder = <O::ArrayType as Array>::Builder::with_capacity(i1.len());
         for (i1, i2) in i1a.iter().zip(i2a.iter()) {
             match (i1, i2) {
-                (Some(i1), Some(i2)) => builder.push(Some(O::cast_s_to_a(
-                    self.func
-                        .eval(I1::cast_a_to_s(i1), I2::cast_a_to_s(i2))
-                        .as_scalar_ref(),
-                ))),
+                (Some(i1), Some(i2)) => builder.push(Some(self.func.eval(i1, i2).as_scalar_ref())),
                 _ => builder.push(None),
             }
         }
