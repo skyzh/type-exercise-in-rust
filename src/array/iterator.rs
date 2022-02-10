@@ -31,7 +31,6 @@ impl<'a, A: Array> Iterator for ArrayIterator<'a, A> {
             Some(self.array.len() - self.pos),
         )
     }
-
 }
 
 impl<'a, A: Array> ArrayIterator<'a, A> {
@@ -41,5 +40,10 @@ impl<'a, A: Array> ArrayIterator<'a, A> {
     }
 }
 
-unsafe impl<'a, A: Array> TrustedLen for ArrayIterator<'a, A> {}
+impl<'a, A: Array> ExactSizeIterator for ArrayIterator<'a, A> {
+    fn len(&self) -> usize {
+        self.array.len() - self.pos
+    }
+}
 
+unsafe impl<'a, A: Array> TrustedLen for ArrayIterator<'a, A> {}
