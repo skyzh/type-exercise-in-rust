@@ -15,10 +15,12 @@ use rust_decimal::Decimal;
 use crate::array::Array;
 
 /// An owned single value.
-///  
+///
 /// For example, `i32`, `String` both implements [`Scalar`].
 pub trait Scalar:
     std::fmt::Debug + Clone + Send + Sync + 'static + TryFrom<ScalarImpl> + Into<ScalarImpl>
+where
+    for<'a> Self::ArrayType: Array<RefItem<'a> = Self::RefType<'a>>,
 {
     /// The corresponding [`Array`] type.
     type ArrayType: Array<OwnedItem = Self>;
@@ -28,20 +30,6 @@ pub trait Scalar:
 
     /// Get a reference of the current value.
     fn as_scalar_ref(&self) -> Self::RefType<'_>;
-
-    /// Cast `Scalar::RefType` to `Array::RefItem`.
-    ///
-    /// This function will only be used in internal implementation of `BinaryExpression`, so we
-    /// don't give a meaningful name to this function.
-    #[allow(clippy::needless_lifetimes)]
-    fn cast_s_to_a<'x>(item: Self::RefType<'x>) -> <Self::ArrayType as Array>::RefItem<'x>;
-
-    /// Cast `Array::RefItem` to `Scalar::RefType`
-    ///
-    /// This function will only be used in internal implementation of `BinaryExpression`, so we
-    /// don't give a meaningful name to this function.
-    #[allow(clippy::needless_lifetimes)]
-    fn cast_a_to_s<'x>(item: <Self::ArrayType as Array>::RefItem<'x>) -> Self::RefType<'x>;
 
     /// Upcast GAT type's lifetime.
     fn upcast_gat<'short, 'long: 'short>(long: Self::RefType<'long>) -> Self::RefType<'short>;
