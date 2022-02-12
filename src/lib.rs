@@ -12,6 +12,7 @@
 #![feature(trusted_len)]
 
 pub mod array;
+pub mod column;
 pub mod datatype;
 pub mod expr;
 mod macros;
