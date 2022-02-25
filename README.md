@@ -26,7 +26,7 @@ In this tutorial, you will learn:
 
 ### Databend
 
-Databend is currently refactoring their expression evaluation system at [`datavalues-dev` branch](https://github.com/datafuselabs/databend/tree/datavalues-dev) (as of writing this tutorial). The new system leverages a lot of techniques described in this tutorial.
+Databend is currently refactoring their expression evaluation system in [datavalues crate](https://github.com/datafuselabs/databend/blob/main/common/datavalues/src/scalars/mod.rs)(as of writing this tutorial). The new system leverages a lot of techniques described in this tutorial.
 
 ### TiKV Coprocessor
 
