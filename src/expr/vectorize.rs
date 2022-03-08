@@ -7,14 +7,6 @@ use crate::array::{Array, ArrayBuilder, ArrayImpl};
 use crate::scalar::Scalar;
 use crate::TypeMismatch;
 
-/// A trait over all scalar SQL functions.
-///
-/// It takes `A` and `B` as input parameter, and outputs scalar of type `O`.
-pub trait BinaryExprFunc<A: Scalar, B: Scalar, O: Scalar> {
-    /// Evaluate a binary function with two references to data.
-    fn eval(&self, i1: A::RefType<'_>, i2: B::RefType<'_>) -> O;
-}
-
 /// Represents a binary expression which takes `I1` and `I2` as input parameter, and outputs scalar
 /// of type `O`.
 ///
@@ -25,16 +17,6 @@ pub trait BinaryExprFunc<A: Scalar, B: Scalar, O: Scalar> {
 pub struct BinaryExpression<I1: Scalar, I2: Scalar, O: Scalar, F> {
     func: F,
     _phantom: PhantomData<(I1, I2, O)>,
-}
-
-/// Blanket implementation for all binary expression functions
-impl<A: Scalar, B: Scalar, O: Scalar, F> BinaryExprFunc<A, B, O> for F
-where
-    F: Fn(A::RefType<'_>, B::RefType<'_>) -> O,
-{
-    fn eval(&self, i1: A::RefType<'_>, i2: B::RefType<'_>) -> O {
-        self(i1, i2)
-    }
 }
 
 /// Implement [`BinaryExpression`] for any given scalar function `F`.
@@ -48,12 +30,9 @@ where
     I2: Scalar,
     for<'a> &'a I1::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
     for<'a> &'a I2::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
-    F: BinaryExprFunc<I1, I2, O>,
+    F: Fn(I1::RefType<'_>, I2::RefType<'_>) -> O,
 {
     /// Create a binary expression from existing function
-    ///
-    /// Previously (maybe nightly toolchain 2021-12-15), this function is not possible to be
-    /// compiled due to some lifetime diagnose bug in the Rust compiler.
     pub fn new(func: F) -> Self {
         Self {
             func,
@@ -69,7 +48,7 @@ where
         let mut builder = <O::ArrayType as Array>::Builder::with_capacity(i1.len());
         for (i1, i2) in i1a.iter().zip(i2a.iter()) {
             match (i1, i2) {
-                (Some(i1), Some(i2)) => builder.push(Some(self.func.eval(i1, i2).as_scalar_ref())),
+                (Some(i1), Some(i2)) => builder.push(Some((self.func)(i1, i2).as_scalar_ref())),
                 _ => builder.push(None),
             }
         }
@@ -85,7 +64,7 @@ where
     I2: Scalar,
     for<'a> &'a I1::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
     for<'a> &'a I2::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
-    F: BinaryExprFunc<I1, I2, O>,
+    F: Fn(I1::RefType<'_>, I2::RefType<'_>) -> O,
 {
     fn eval_expr(&self, data: &[&ArrayImpl]) -> Result<ArrayImpl> {
         if data.len() != 2 {
@@ -99,7 +78,10 @@ where
 mod tests {
     use super::*;
 
-    fn test_if_impl<A: Scalar, B: Scalar, O: Scalar, F: BinaryExprFunc<A, B, O>>(_: F) {}
+    fn test_if_impl<A: Scalar, B: Scalar, O: Scalar, F: Fn(A::RefType<'_>, B::RefType<'_>) -> O>(
+        _: F,
+    ) {
+    }
 
     fn binary_str(_: &str, _: &str) -> String {
         todo!()
