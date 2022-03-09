@@ -348,7 +348,9 @@ pub trait Expression {
 
 `Expression` can be made into a `Box<dyn Expression>`, therefore being used in building expressions at runtime.
 
-### Goals -- The Hard Way
+### ~~Goals -- The Hard Way~~
+
+As [rust-lang/rust #90087](https://github.com/rust-lang/rust/pull/90887) lands, the compiler bugs have been fixed. So we don't need to do any extra work for this day to support function expressions. All `BinaryExprFunc` can be replaced with `F: Fn(I1::RefType<'_>, I2::RefType<'_>) -> O`.
 
 In the hard way chapter, we will dive into the black magics and fight against (probably) compiler bugs, so as
 to make function vectorization look very approachable to SQL function developers.
