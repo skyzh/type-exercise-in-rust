@@ -1,16 +1,3 @@
-[package]
-name = "type-exercise"
-version = "0.1.0"
-edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-anyhow = "1"
-bitvec = "1"
-thiserror = "1"
-rust_decimal = "1"
-
 [workspace]
 members = [
     "archive/day1",
@@ -23,4 +10,9 @@ members = [
     "archive/day7-easy",
     "archive/day7-hard",
     "archive/day8",
+    "expr-common",
+    "expr-impl",
+    "expr-template",
+    "expr-template-impl",
+    "expr-macro-rules",
 ]

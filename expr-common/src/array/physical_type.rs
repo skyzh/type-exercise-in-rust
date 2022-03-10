@@ -1,3 +1,5 @@
+// Copyright 2022 Alex Chi. Licensed under Apache-2.0.
+
 #[derive(Clone, Debug, Copy, Eq, PartialEq)]
 pub enum PhysicalType {
     Int16,

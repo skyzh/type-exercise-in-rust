@@ -6,7 +6,7 @@
 
 use crate::array::all_array_builders::*;
 use crate::array::all_arrays::*;
-use crate::array::{Array, ArrayBuilder, ArrayBuilderImpl, ArrayImpl, PhysicalType};
+use crate::array::{Array, ArrayBuilder, ArrayBuilderImpl, ArrayImpl, ArrayImplRef, PhysicalType};
 use crate::macros::for_all_variants;
 use crate::scalar::*;
 use crate::TypeMismatch;
@@ -169,10 +169,25 @@ macro_rules! impl_array_conversion {
                 }
             }
         )*
+
+        impl ArrayImpl {
+            /// Convert [`&ArrayImpl`] to [`ArrayImplRef`].
+            pub fn as_ref(&self) -> ArrayImplRef<'_> {
+                match self {
+                    $(
+                        ArrayImpl::$Abc(array) => ArrayImplRef::$Abc(array),
+                    )*
+                }
+            }
+        }
     };
 }
 
 for_all_variants! { impl_array_conversion }
+
+fn debug_array<A: Array>(f: &mut std::fmt::Formatter<'_>, array: &A) -> std::fmt::Result {
+    f.debug_list().entries(array.iter()).finish()
+}
 
 /// Implements Debug for [`Array`]
 macro_rules! impl_array_debug {
@@ -182,7 +197,7 @@ macro_rules! impl_array_debug {
         $(
             impl std::fmt::Debug for $AbcArray {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    $crate::array::impl_debug::debug_fmt(self, f)
+                    debug_array(f, self)
                 }
             }
         )*

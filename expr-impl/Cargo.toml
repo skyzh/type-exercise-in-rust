@@ -1,10 +1,11 @@
 [package]
-name = "type-exercise-day5"
+name = "expr-impl"
 version = "0.1.0"
 edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 anyhow = "1"
-bitvec = "1"
-thiserror = "1"
+expr-common = { path = "../expr-common" }
+expr-template = { path = "../expr-template" }
+expr-macro-rules = { path = "../expr-macro-rules" }

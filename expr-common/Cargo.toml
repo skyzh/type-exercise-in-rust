@@ -1,5 +1,5 @@
 [package]
-name = "type-exercise-day5"
+name = "expr-common"
 version = "0.1.0"
 edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -7,4 +7,5 @@ edition = "2021"
 [dependencies]
 anyhow = "1"
 bitvec = "1"
+rust_decimal = "1"
 thiserror = "1"

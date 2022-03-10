@@ -513,15 +513,15 @@ To make as few modifications as possible to the current codebase, we add two tra
 
 Then, we can have `pub struct BoxedArray(Box<dyn DynArray>);` for dynamic dispatch.
 
-# TBD Lectures
-
-## Day 10: Aggregators
-
-Aggregators are another kind of expressions. We learn how to implement them easily with our type system in day 10.
-
-## Day 11: Expression Framework
+## Day 10: Expression Framework
 
 Now we are having more and more expression kinds, and we need an expression framework to unify them -- including
 unary, binary and expressions of more inputs.
 
 At the same time, we will also experiment with return value optimizations in variable-size types.
+
+# TBD Lectures
+
+## Day 11: Aggregators
+
+Aggregators are another kind of expressions. We learn how to implement them easily with our type system in day 10.
