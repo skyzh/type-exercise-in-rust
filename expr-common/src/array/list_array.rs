@@ -1,3 +1,5 @@
+// Copyright 2022 Alex Chi. Licensed under Apache-2.0.
+
 use bitvec::prelude::BitVec;
 
 use super::{Array, ArrayBuilder, ArrayBuilderImpl, ArrayIterator, BoxedArray};

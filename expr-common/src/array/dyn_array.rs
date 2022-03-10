@@ -1,7 +1,11 @@
+// Copyright 2022 Alex Chi. Licensed under Apache-2.0.
+
 use std::any::Any;
 
 use super::all_arrays::*;
-use super::{Array, ArrayBuilder, ArrayBuilderImpl, ArrayImpl, BoxedArray, PhysicalType};
+use super::{
+    Array, ArrayBuilder, ArrayBuilderImpl, ArrayImpl, ArrayImplRef, BoxedArray, PhysicalType,
+};
 use crate::macros::for_all_variants;
 use crate::scalar::ScalarRefImpl;
 
@@ -25,6 +29,9 @@ pub trait DynArray: Any + PhysicalTypeOf + 'static + Send + Sync + std::fmt::Deb
 
     /// Convert self into [`Any`].
     fn into_any(self: Box<Self>) -> Box<dyn Any>;
+
+    /// Convert self as [`Any`].
+    fn as_any(&self) -> &dyn Any;
 
     /// Clone the current array
     fn boxed_clone(&self) -> Box<dyn DynArray>;
@@ -51,6 +58,10 @@ where
     }
 
     fn into_any(self: Box<Self>) -> Box<dyn Any> {
+        self
+    }
+
+    fn as_any(&self) -> &dyn Any {
         self
     }
 
@@ -119,7 +130,20 @@ macro_rules! impl_boxed_array_dispatch {
                 match physical_type {
                     $(
                         PhysicalType::$Abc => ArrayImpl::$Abc(
-                            *boxed_any_array.downcast::<$AbcArray>().expect("failed to downcast")
+                            *boxed_any_array.downcast::<$AbcArray>().expect("failed to downcast owned")
+                        ),
+                    )*
+                }
+            }
+
+            /// Convert an [`BoxedArray`] into [`ArrayImpl`]
+            pub fn as_array_impl(&self) -> ArrayImplRef<'_> {
+                let physical_type = self.0.physical_type();
+                let boxed_any_array: &dyn Any = self.0.as_any();
+                match physical_type {
+                    $(
+                        PhysicalType::$Abc => ArrayImplRef::$Abc(
+                            boxed_any_array.downcast_ref::<$AbcArray>().expect("failed to downcast ref")
                         ),
                     )*
                 }

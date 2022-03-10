@@ -8,7 +8,6 @@
 //! generics around the Array and ArrayBuilder.
 
 mod dyn_array;
-pub mod impl_debug;
 mod impls;
 mod iterator;
 mod list_array;
@@ -120,6 +119,19 @@ pub enum ArrayImpl {
     String(StringArray),
     Decimal(DecimalArray),
     List(ListArray),
+}
+
+#[derive(Clone, Debug)]
+pub enum ArrayImplRef<'a> {
+    Int16(&'a I16Array),
+    Int32(&'a I32Array),
+    Int64(&'a I64Array),
+    Float32(&'a F32Array),
+    Float64(&'a F64Array),
+    Bool(&'a BoolArray),
+    String(&'a StringArray),
+    Decimal(&'a DecimalArray),
+    List(&'a ListArray),
 }
 
 /// The boxed array type.

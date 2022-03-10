@@ -1,0 +1,14 @@
+[package]
+name = "expr-template"
+version = "0.1.0"
+edition = "2021"
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1"
+expr-common = { path = "../expr-common" }
+itertools = "0.10"
+
+[build-dependencies]
+anyhow = "1"
+expr-template-impl = { path = "../expr-template-impl" }

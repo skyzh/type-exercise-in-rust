@@ -2,11 +2,9 @@
 
 //! Implements compare functions for [`Array`] types
 
-#![allow(dead_code)]
-
 use std::cmp::Ordering;
 
-use crate::scalar::Scalar;
+use expr_common::scalar::Scalar;
 
 /// Return if `i1 < i2`. Note that `i1` and `i2` could be different types. This
 /// function will automatically cast them into `C` type.

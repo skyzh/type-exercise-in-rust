@@ -2,22 +2,12 @@
 
 //! Expression framework based on array
 
-use anyhow::Result;
+mod impl_;
 
-use self::vectorize::BinaryExpression;
-use crate::array::ArrayImpl;
-use crate::datatype::macros::*;
-use crate::datatype::DataType;
-
-mod cmp;
-mod string;
-mod vectorize;
-
-/// A trait over all expressions -- unary, binary, etc.
-pub trait Expression {
-    /// Evaluate an expression with run-time number of [`ArrayImpl`]s.
-    fn eval_expr(&self, data: &[&ArrayImpl]) -> Result<ArrayImpl>;
-}
+use expr_common::datatype::DataType;
+use expr_common::expr::Expression;
+use expr_macro_rules::datatype_macros::*;
+use expr_template::BinaryExpression;
 
 /// All supported expression functions
 pub enum ExpressionFunc {
@@ -124,10 +114,9 @@ pub fn build_binary_expression(
     i1: DataType,
     i2: DataType,
 ) -> Box<dyn Expression> {
+    use impl_::cmp::*;
+    use impl_::string::*;
     use ExpressionFunc::*;
-
-    use crate::expr::cmp::*;
-    use crate::expr::string::*;
 
     match f {
         CmpLe => for_all_cmp_combinations! { impl_cmp_expression_of, i1, i2, cmp_le },
@@ -142,9 +131,10 @@ pub fn build_binary_expression(
 
 #[cfg(test)]
 mod tests {
+    use expr_common::array::{Array, F64Array, I16Array, StringArray};
+    use expr_common::scalar::ScalarRefImpl;
+
     use super::*;
-    use crate::array::{Array, F64Array, I16Array, StringArray};
-    use crate::scalar::ScalarRefImpl;
 
     #[test]
     fn test_build_str_contains() {

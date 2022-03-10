@@ -2,8 +2,6 @@
 
 //! Implements logical types for a database system
 
-pub(crate) mod macros;
-
 /// Encapsules all supported (logical) data types in the system.
 #[derive(Debug)]
 pub enum DataType {

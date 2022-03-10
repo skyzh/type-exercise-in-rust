@@ -33,10 +33,71 @@ dependencies = [
 ]
 
 [[package]]
+name = "either"
+version = "1.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
+
+[[package]]
+name = "expr-common"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "rust_decimal",
+ "thiserror",
+]
+
+[[package]]
+name = "expr-impl"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "expr-common",
+ "expr-macro-rules",
+ "expr-template",
+]
+
+[[package]]
+name = "expr-macro-rules"
+version = "0.1.0"
+
+[[package]]
+name = "expr-template"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "expr-common",
+ "expr-template-impl",
+ "itertools",
+]
+
+[[package]]
+name = "expr-template-impl"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "itertools",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "funty"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6d5a32815ae3f33302d95fdcb2ce17862f8c65363dcfd29360480ba1001fc9c"
+
+[[package]]
+name = "itertools"
+version = "0.10.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a9a9d19fa1e79b6215ff29b9d6880b706147f16e9b1dbb1e4e5947b5b02bc5e3"
+dependencies = [
+ "either",
+]
 
 [[package]]
 name = "num-traits"
@@ -45,6 +106,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a64b1ec5cda2586e284722486d802acf1f7dbdc623e2bfc57e65ca1cd099290"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "prettyplease"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "53748b0c63a6a276a2c8b591de5b117d7590f1b41e34062efeadd222f841d1a3"
+dependencies = [
+ "proc-macro2",
+ "syn",
 ]
 
 [[package]]
@@ -123,16 +194,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "type-exercise"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bitvec",
- "rust_decimal",
- "thiserror",
 ]
 
 [[package]]
