@@ -1,6 +1,8 @@
 // Copyright 2022 Alex Chi. Licensed under Apache-2.0.
 
 mod common;
+
+#[rustfmt::skip]
 mod gen;
 
 pub use gen::{
