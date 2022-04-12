@@ -26,7 +26,11 @@ In this tutorial, you will learn:
 
 ### Databend
 
-Databend is currently refactoring their expression evaluation system in [datavalues crate](https://github.com/datafuselabs/databend/blob/main/common/datavalues/src/scalars/mod.rs)(as of writing this tutorial). The new system leverages a lot of techniques described in this tutorial.
+Databend's expression evaluation implementation is greatly influenced by type-exercise. You may see the implementation in [datavalues crate](https://github.com/datafuselabs/databend/blob/main/common/datavalues/src/scalars/mod.rs).
+
+### RisingWave
+
+[RisingWave](https://github.com/singularity-data/risingwave) is a cloud-native streaming database product. It is the first time that I experimented with GAT-related things in RisingWave to auto vectorize expressions. It applies almost the same techniques as described in this lecture.
 
 ### TiKV Coprocessor
 
