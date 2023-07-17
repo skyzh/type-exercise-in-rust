@@ -5,7 +5,7 @@ use std::fmt::Write;
 use anyhow::Result;
 
 fn main() -> Result<()> {
-    println!("cargo:rerun-if-changed=../expr-tempalte-impl");
+    println!("cargo:rerun-if-changed=../expr-template-impl");
 
     let mut gen_header = String::new();
 
