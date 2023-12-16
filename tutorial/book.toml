@@ -1,0 +1,6 @@
+[book]
+authors = ["Alex Chi"]
+language = "en"
+multilingual = false
+src = "src"
+title = "Type Exercise in Rust"
