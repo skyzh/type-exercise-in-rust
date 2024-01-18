@@ -1,7 +1,5 @@
 # Type Exercise in Rust
 
-*(In Chinese) 数据库表达式执行的黑魔法：用 Rust 做类型体操*
-
 This is a short lecture on how to use the Rust type system to build necessary components in a database system.
 
 The lecture evolves around how Rust programmers (like me) build database systems in the Rust programming language. We leverage the Rust type system to **minimize** runtime cost and make our development process easier with **safe**, **nightly** Rust.
@@ -17,6 +15,12 @@ In this tutorial, you will learn:
 * How to use declarative macros to associate things together. (Day 7)
 
 ![Map of Types](map-of-types.png)
+
+## Community
+
+You may join skyzh's Discord server and study with the type-exercise community.
+
+[![Join skyzh's Discord Server](https://dcbadge.vercel.app/api/server/ZgXzxpua3H)](https://skyzh.dev/join/discord)
 
 ## See Also...
 
