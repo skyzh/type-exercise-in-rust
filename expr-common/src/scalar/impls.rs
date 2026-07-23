@@ -6,10 +6,10 @@
 
 use rust_decimal::Decimal;
 
+use crate::TypeMismatch;
 use crate::array::*;
 use crate::macros::{for_all_primitive_variants, for_all_variants};
 use crate::scalar::*;
-use crate::TypeMismatch;
 
 /// Implements dispatch functions for [`Scalar`]
 macro_rules! impl_scalar_dispatch {
@@ -102,15 +102,13 @@ macro_rules! impl_scalar {
                 "Implement [`Scalar`] for primitive type [`", stringify!($Owned), "`]. ",
                 "Note that primitive types are both [`Scalar`] and [`ScalarRef`] as they have little cost for copy.")]
             impl Scalar for $Owned {
+                const PHYSICAL_TYPE: PhysicalType = PhysicalType::$Abc;
+
                 type ArrayType = $AbcArray;
                 type RefType<'a> = $Owned;
 
                 fn as_scalar_ref(&self) -> $Owned {
                     *self
-                }
-
-                fn upcast_gat<'short, 'long: 'short>(long: $Owned) -> $Owned {
-                    long
                 }
             }
 
@@ -133,15 +131,13 @@ for_all_primitive_variants! { impl_scalar }
 
 /// Implement [`Scalar`] for `String`.
 impl Scalar for String {
+    const PHYSICAL_TYPE: PhysicalType = PhysicalType::String;
+
     type ArrayType = StringArray;
     type RefType<'a> = &'a str;
 
     fn as_scalar_ref(&self) -> &str {
         self.as_str()
-    }
-
-    fn upcast_gat<'short, 'long: 'short>(long: &'long str) -> &'short str {
-        long
     }
 }
 
