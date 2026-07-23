@@ -1,0 +1,43 @@
+name: Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: ${{ github.repository == 'skyzh/type-exercise-in-rust' }}
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@mdbook
+      - name: Add hosted-book header
+        run: mv tutorial/theme/head.hbs._ tutorial/theme/head.hbs
+      - name: Build book
+        run: mdbook build tutorial
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: tutorial/book
+
+  deploy:
+    if: ${{ github.repository == 'skyzh/type-exercise-in-rust' }}
+    needs: build
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
