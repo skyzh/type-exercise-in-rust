@@ -8,7 +8,7 @@ mod registry;
 use expr_common::datatype::DataType;
 use expr_common::expr::Expression;
 use expr_macro_rules::datatype_macros::*;
-use expr_template::BinaryExpression;
+use expr_template::{BinaryExpression, PrimitiveBinaryExpression};
 pub use registry::{BindError, BoundExpression, FunctionRegistry};
 
 /// All supported expression functions
@@ -124,6 +124,51 @@ macro_rules! for_all_cmp_combinations {
 }
 
 /// Generate all variants of comparison expressions
+macro_rules! build_comparison_expression {
+    (fwchar, $i2:ident, $convert:ident, $cmp_func:ident) => {
+        Box::new(BinaryExpression::<
+            fwchar! { datatype_scalar },
+            $i2! { datatype_scalar },
+            bool,
+            _,
+        >::new(
+            $cmp_func::<
+                fwchar! { datatype_scalar },
+                $i2! { datatype_scalar },
+                $convert! { datatype_scalar },
+            >,
+        )) as Box<dyn Expression>
+    };
+    (varchar, $i2:ident, $convert:ident, $cmp_func:ident) => {
+        Box::new(BinaryExpression::<
+            varchar! { datatype_scalar },
+            $i2! { datatype_scalar },
+            bool,
+            _,
+        >::new(
+            $cmp_func::<
+                varchar! { datatype_scalar },
+                $i2! { datatype_scalar },
+                $convert! { datatype_scalar },
+            >,
+        )) as Box<dyn Expression>
+    };
+    ($i1:ident, $i2:ident, $convert:ident, $cmp_func:ident) => {
+        Box::new(PrimitiveBinaryExpression::<
+            $i1! { datatype_scalar },
+            $i2! { datatype_scalar },
+            bool,
+            _,
+        >::new(
+            $cmp_func::<
+                $i1! { datatype_scalar },
+                $i2! { datatype_scalar },
+                $convert! { datatype_scalar },
+            >,
+        )) as Box<dyn Expression>
+    };
+}
+
 macro_rules! impl_cmp_expression_of {
     ([$i1t:ident, $i2t:ident, $cmp_func:ident, $function:ident], $({ $i1:ident, $i2:ident, $convert:ident }),*) => {
         match ($i1t, $i2t) {
@@ -134,24 +179,7 @@ macro_rules! impl_cmp_expression_of {
                 // `$i1! { datatype_match_pattern }` to get something like
                 // `DataType::Decimal { precision: _, .. }`.
                 ($i1! { datatype_match_pattern }, $i2! { datatype_match_pattern }) => {
-                    // Here we want to build BinaryExpression::<InputArray1, InputArray2, OutputArray>.
-                    // Hence, we use `$i1! { datatype_array }` to get `InputArray1`.
-                    // `$i1! { datatype_array }` will generate something like `I32Array`.
-                    Ok(Box::new(BinaryExpression::<
-                        $i1! { datatype_scalar },
-                        $i2! { datatype_scalar },
-                        bool,
-                        _
-                    >::new(
-                        // Here we want to build CmpFunc::<InputArray1, InputArray2, CastArray>.
-                        // So we use `$convert! { datatype_array }` to get cast array type.
-                        // `$convert! { datatype_array }` will generate something like `I32Array`.
-                        $cmp_func::<
-                            $i1! { datatype_scalar },
-                            $i2! { datatype_scalar },
-                            $convert! { datatype_scalar }
-                        >,
-                    )) as Box<dyn Expression>)
+                    Ok(build_comparison_expression!($i1, $i2, $convert, $cmp_func))
                 }
             )*
             (left, right) => Err(BindError::UnsupportedArguments {
@@ -169,7 +197,7 @@ macro_rules! impl_arithmetic_expression_of {
             $(
                 ($i1! { datatype_match_pattern }, $i2! { datatype_match_pattern }) => {
                     Ok((
-                        Box::new(BinaryExpression::<
+                        Box::new(PrimitiveBinaryExpression::<
                             $i1! { datatype_scalar },
                             $i2! { datatype_scalar },
                             $output! { datatype_scalar },
