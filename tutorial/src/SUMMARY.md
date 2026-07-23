@@ -1,22 +1,21 @@
-# Summary
+# Build a Database Expression Framework in Rust
 
-# Let's start with Volcano...
+[Preface](./preface.md)
+[Environment Setup](./getting_started.md)
 
-- [Overview of the Volcano Model](./volcano/overview.md)
-- [Scalar and Array](./volcano/chunk.md)
-- [Binary Expressions](./volcano/expressions.md)
-- [Data Types and Macros](./volcano/data_types.md)
-- [Expression Framework](./volcano/framework.md)
+- [Part I: Start with a Scalar Evaluator](./volcano/overview.md)
+  - [Values, Chunks, and Nulls](./volcano/chunk.md)
+  - [Evaluate Expressions One Row at a Time](./volcano/expressions.md)
+  - [Bind Logical Data Types](./volcano/data_types.md)
+  - [Draw the Framework Boundary](./volcano/framework.md)
 
-# Well, the real exercise starts!
+- [Part II: Build the Vectorized Runtime](./vectorized/overview.md)
+  - [Arrow-like Arrays and Builders](./vectorized/array.md)
+  - [Owned and Borrowed Scalars](./vectorized/scalar.md)
+  - [Column Views: Arrays, Constants, and Dictionaries](./vectorized/column_view.md)
+  - [Erase Physical Types at the Boundary](./vectorized/impls.md)
+  - [Generate Vectorized Function Templates](./vectorized/func.md)
+  - [Expand Numeric Families, Customize Everything Else](./vectorized/data_types.md)
+  - [Bind and Execute the Complete Framework](./vectorized/framework.md)
 
-- [Overview of the Vectorized Model](./vectorized/overview.md)
-- [Array and ArrayBuilder](./vectorized/array.md)
-- [Scalar and ScalarRef](./vectorized/scalar.md)
-- [Column Views](./vectorized/column_view.md)
-- [Dynamic Dispatch](./vectorized/impls.md)
-- [Vectorize Any Function](./vectorized/func.md)
-- [Data Types and Macros](./vectorized/data_types.md)
-- [Expression Framework](./vectorized/framework.md)
-
-# A taste of JIT (TBD)
+[Benchmarks and Next Steps](./benchmarks.md)

@@ -3,4 +3,7 @@ authors = ["Alex Chi"]
 language = "en"
 multilingual = false
 src = "src"
-title = "Type Exercise in Rust"
+title = "Build a Database Expression Framework in Rust"
+
+[output.html]
+git-repository-url = "https://github.com/skyzh/type-exercise-in-rust"
