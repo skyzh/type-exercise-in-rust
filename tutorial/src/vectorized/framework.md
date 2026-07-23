@@ -38,7 +38,8 @@ The result is `[false, true, null, false]`.
 3. constructs `BinaryExpression<String, String, bool, str_contains>`; and
 4. records Boolean as the logical result type.
 
-Numeric factories additionally select a promotion-table entry.
+Numeric factories additionally select a promotion-table entry and construct a
+`PrimitiveBinaryExpression`. String functions continue to use the general `BinaryExpression`.
 
 ## What Happens Once per Batch
 
@@ -60,6 +61,12 @@ The monomorphized loop:
 5. pushes the Boolean result.
 
 No logical type, function name, type-erased scalar, or view enum is matched per row.
+
+For a primitive numeric or comparison expression, the batch step also checks the cached null count.
+If every regular-array input is valid, the expression reads contiguous value slices and initializes
+output validity in bulk. If any input is nullable—or if the input is a dictionary—the same object
+delegates to the nullable loop described above. Planning does not duplicate function signatures for
+these paths.
 
 ## Extending the Registry
 
@@ -99,6 +106,7 @@ You have built a framework with:
 - reusable strict vectorization;
 - efficient constant and dictionary inputs;
 - generated numeric/comparison families; and
+- a batch-selected, SIMD-friendly primitive fast path;
 - explicit extension points for data-type-specific expressions.
 
 The final chapter checks whether the abstractions remain [competitive with hand-written loops](../benchmarks.md).

@@ -82,14 +82,32 @@ returns `O`.
 `Option<A::RefItem<'a>>`. One implementation now covers fixed-width primitives, variable-width
 strings, decimals, booleans, and lists.
 
+## Proving an All-Valid Primitive Batch
+
+Primitive arrays cache `null_count` alongside their validity bitmap. This keeps ordinary nullable
+`get` exactly as cheap as before while allowing one constant-time check before a numeric loop:
+
+```rust
+if let Some(non_null) = array.as_non_null() {
+    let values: &[i32] = non_null.values();
+    // No validity lookup is needed while reading this slice.
+}
+```
+
+`NonNullPrimitiveArray<'a, T>` is a checked proof wrapper, not another logical data type or another
+`ColumnView` representation. The array remains an ordinary `PrimitiveArray<T>` at framework
+boundaries. `PrimitiveArray::from_values` constructs an all-valid output and initializes its bitmap
+in bulk, avoiding one bitmap push per result row.
+
 ## Task
 
 Implement or inspect these operations in `expr-common/src/array`:
 
 1. `PrimitiveArrayBuilder::push`, including the placeholder value for null rows;
 2. `StringArray::get`, using adjacent offsets;
-3. `StringArrayBuilder::push`, ensuring nulls repeat the previous offset; and
-4. `ArrayIterator::next`.
+3. `StringArrayBuilder::push`, ensuring nulls repeat the previous offset;
+4. `ArrayIterator::next`; and
+5. `PrimitiveArray::as_non_null`, including the cached proof it relies on.
 
 Do not use unchecked indexing unless the surrounding API proves the row is in bounds. The existing
 string implementation uses unchecked UTF-8 conversion because builders only accept `&str`; that

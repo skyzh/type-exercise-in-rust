@@ -10,20 +10,29 @@ Run them in release mode:
 cargo bench -p expr-impl --bench expression
 ```
 
-{{#include copyright.md}}
-
 ## Baselines
 
 The benchmark evaluates nullable `i32 <= i32` over 65,536 rows in three layouts:
 
 | Input layout | Generated path | Hand-written baseline |
 | --- | --- | --- |
-| array / array | `BinaryExpression` over two array views | direct zip of two `I32Array` iterators |
+| array / array | `PrimitiveBinaryExpression` using its nullable fallback | direct zip of two `I32Array` iterators |
 | array / constant | array and constant accessors | direct array loop closing over one `i32` |
 | dictionary / array | dictionary and array accessors | direct index lookup plus array access |
 
 Every case materializes the same `BoolArray`. The comparison therefore isolates framework and view
 dispatch overhead instead of comparing unrelated memory layouts.
+
+The `i32_non_null` group uses all-valid arrays and measures three implementations of comparison and
+addition:
+
+- the general nullable template, which still checks validity per row;
+- `PrimitiveBinaryExpression`, which proves all-valid inputs once and uses contiguous buffers; and
+- a hand-written non-null loop over the same buffers.
+
+The fast and hand-written paths both allocate an output and initialize its all-valid bitmap in
+bulk. The comparison therefore does not hide allocation or give the baseline a different output
+representation.
 
 An Apache Arrow kernel would be another useful system-level baseline, but it would also compare
 bitmap formats, buffer ownership, kernel algorithms, and dependency configuration. Start with the
@@ -45,6 +54,18 @@ Treat these numbers as a local observation, not a portable guarantee. CPU, compi
 and background load change microbenchmarks. The important result is diagnostic: matching the view
 enum inside every row originally made the array/array path roughly 45% slower. Moving representation
 dispatch outside the loop reduced that gap to a few percent.
+
+The all-valid primitive benchmark measured:
+
+| Operation | Nullable template | Primitive fast path | Hand-written | Fast-path gain |
+| --- | ---: | ---: | ---: | ---: |
+| `i32 <= i32` | 190.8 µs | 4.99 µs | 4.95 µs | about 38x |
+| `i32 + i32` | 184.3 µs | 6.81 µs | 6.81 µs | about 27x |
+
+The generated fast paths are within roughly 1% of their hand-written counterparts on this machine.
+The large gain comes from restoring a loop the compiler can vectorize, not from removing expression
+binding or type erasure. Nullable array/array evaluation remains around 184 µs, so selecting the
+fast path does not make the fallback more expensive.
 
 The benchmark README proposes investigating persistent array/array regressions above 15%.
 Dictionary access naturally performs an extra nullable index lookup; future work can inspect bounds
@@ -91,3 +112,5 @@ cargo test --workspace --all-targets
 mdbook build tutorial
 cargo bench -p expr-impl --bench expression
 ```
+
+{{#include copyright.md}}
