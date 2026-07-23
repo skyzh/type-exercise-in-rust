@@ -6,7 +6,7 @@ use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_m
 use expr_common::array::{Array, ArrayBuilder, ArrayImpl, BoolArray, BoolArrayBuilder, I32Array};
 use expr_common::column::ColumnViewImpl;
 use expr_common::scalar::ScalarRefImpl;
-use expr_template::BinaryExpression;
+use expr_template::{BinaryExpression, PrimitiveBinaryExpression};
 
 const ROWS: usize = 65_536;
 
@@ -18,6 +18,12 @@ fn input_arrays() -> (I32Array, I32Array) {
         .map(|row| (row % 19 != 0).then_some((ROWS - row) as i32))
         .collect::<Vec<_>>();
     (I32Array::from_slice(&left), I32Array::from_slice(&right))
+}
+
+fn non_null_input_arrays() -> (I32Array, I32Array) {
+    let left = (0..ROWS).map(|row| row as i32).collect();
+    let right = (0..ROWS).map(|row| (ROWS - row) as i32).collect();
+    (I32Array::from_values(left), I32Array::from_values(right))
 }
 
 fn handwritten_array(left: &I32Array, right: &I32Array) -> BoolArray {
@@ -49,11 +55,36 @@ fn handwritten_dictionary(
     output.finish()
 }
 
+fn handwritten_non_null_compare(left: &I32Array, right: &I32Array) -> BoolArray {
+    let left = left.as_non_null().unwrap();
+    let right = right.as_non_null().unwrap();
+    BoolArray::from_values(
+        left.values()
+            .iter()
+            .zip(right.values())
+            .map(|(left, right)| left <= right)
+            .collect(),
+    )
+}
+
+fn handwritten_non_null_add(left: &I32Array, right: &I32Array) -> I32Array {
+    let left = left.as_non_null().unwrap();
+    let right = right.as_non_null().unwrap();
+    I32Array::from_values(
+        left.values()
+            .iter()
+            .zip(right.values())
+            .map(|(left, right)| left + right)
+            .collect(),
+    )
+}
+
 fn benchmark_expression(c: &mut Criterion) {
     let (left, right) = input_arrays();
     let left_impl: ArrayImpl = left.clone().into();
     let right_impl: ArrayImpl = right.clone().into();
-    let expression = BinaryExpression::<i32, i32, bool, _>::new(|left, right| left <= right);
+    let expression =
+        PrimitiveBinaryExpression::<i32, i32, bool, _>::new(|left, right| left <= right);
 
     let dictionary_values =
         I32Array::from_slice(&(0..256).map(|value| Some(value * 257)).collect::<Vec<_>>());
@@ -119,6 +150,84 @@ fn benchmark_expression(c: &mut Criterion) {
     });
 
     group.finish();
+
+    let (non_null_left, non_null_right) = non_null_input_arrays();
+    let non_null_left_impl: ArrayImpl = non_null_left.clone().into();
+    let non_null_right_impl: ArrayImpl = non_null_right.clone().into();
+    let add_expression =
+        PrimitiveBinaryExpression::<i32, i32, i32, _>::new(|left, right| left + right);
+    let nullable_compare_expression =
+        BinaryExpression::<i32, i32, bool, _>::new(|left, right| left <= right);
+    let nullable_add_expression =
+        BinaryExpression::<i32, i32, i32, _>::new(|left, right| left + right);
+
+    let mut non_null_group = c.benchmark_group("i32_non_null");
+    non_null_group.throughput(Throughput::Elements(ROWS as u64));
+    non_null_group.bench_function("nullable_template_compare", |b| {
+        b.iter(|| {
+            black_box(
+                nullable_compare_expression
+                    .eval_batch(
+                        black_box(&non_null_left_impl),
+                        black_box(&non_null_right_impl),
+                    )
+                    .unwrap(),
+            )
+        })
+    });
+    non_null_group.bench_function("primitive_fast_compare", |b| {
+        b.iter(|| {
+            black_box(
+                expression
+                    .eval_batch(
+                        black_box(&non_null_left_impl),
+                        black_box(&non_null_right_impl),
+                    )
+                    .unwrap(),
+            )
+        })
+    });
+    non_null_group.bench_function("handwritten_compare", |b| {
+        b.iter(|| {
+            black_box(handwritten_non_null_compare(
+                black_box(&non_null_left),
+                black_box(&non_null_right),
+            ))
+        })
+    });
+    non_null_group.bench_function("nullable_template_add", |b| {
+        b.iter(|| {
+            black_box(
+                nullable_add_expression
+                    .eval_batch(
+                        black_box(&non_null_left_impl),
+                        black_box(&non_null_right_impl),
+                    )
+                    .unwrap(),
+            )
+        })
+    });
+    non_null_group.bench_function("primitive_fast_add", |b| {
+        b.iter(|| {
+            black_box(
+                add_expression
+                    .eval_batch(
+                        black_box(&non_null_left_impl),
+                        black_box(&non_null_right_impl),
+                    )
+                    .unwrap(),
+            )
+        })
+    });
+    non_null_group.bench_function("handwritten_add", |b| {
+        b.iter(|| {
+            black_box(handwritten_non_null_add(
+                black_box(&non_null_left),
+                black_box(&non_null_right),
+            ))
+        })
+    });
+    non_null_group.finish();
 }
 
 criterion_group!(benches, benchmark_expression);
