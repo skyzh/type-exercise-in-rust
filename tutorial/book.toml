@@ -1,7 +1,6 @@
 [book]
 authors = ["Alex Chi"]
 language = "en"
-multilingual = false
 src = "src"
 title = "Build a Database Expression Framework in Rust"
 
