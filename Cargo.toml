@@ -8,3 +8,19 @@ members = [
 ]
 
 resolver = "2"
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.85"
+license = "Apache-2.0"
+
+[workspace.dependencies]
+anyhow = "1.0"
+bitvec = "1.0"
+itertools = "0.15"
+prettyplease = "0.3"
+proc-macro2 = "1.0"
+quote = "1.0"
+rust_decimal = "1.39"
+syn = { version = "3.0", features = ["full"] }
+thiserror = "2.0"

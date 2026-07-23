@@ -8,8 +8,8 @@ use bitvec::prelude::BitVec;
 use rust_decimal::Decimal;
 
 use super::{Array, ArrayBuilder, ArrayImpl, ArrayIterator};
-use crate::scalar::{Scalar, ScalarRef};
 use crate::TypeMismatch;
+use crate::scalar::{Scalar, ScalarRef};
 
 /// A type that is primitive, such as `i32` and `i64`.
 pub trait PrimitiveType: Scalar + Default {}
@@ -91,7 +91,7 @@ where
         self.data.len()
     }
 
-    fn iter(&self) -> ArrayIterator<Self> {
+    fn iter(&self) -> ArrayIterator<'_, Self> {
         ArrayIterator::new(self)
     }
 }

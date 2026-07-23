@@ -3,9 +3,9 @@
 mod common;
 
 #[rustfmt::skip]
-mod gen;
+mod r#gen;
 
-pub use gen::{
+pub use r#gen::{
     FnArgs1Expression as UnaryExpression, FnArgs2Expression as BinaryExpression, FnArgs3Expression,
     FnArgs4Expression, FnArgs5Expression,
 };
