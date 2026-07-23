@@ -11,3 +11,10 @@ expr-common = { path = "../expr-common" }
 expr-template = { path = "../expr-template" }
 expr-macro-rules = { path = "../expr-macro-rules" }
 thiserror.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+
+[[bench]]
+name = "expression"
+harness = false
