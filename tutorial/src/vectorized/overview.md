@@ -3,7 +3,7 @@
 A vectorized engine evaluates one expression over a batch of values. The scalar function remains
 small:
 
-```rust
+```rust,ignore
 fn str_contains(left: &str, right: &str) -> bool {
     left.contains(right)
 }

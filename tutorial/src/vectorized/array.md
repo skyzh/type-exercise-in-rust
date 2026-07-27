@@ -20,7 +20,7 @@ This layout returns `&str` without constructing a `String` per row.
 The `Array` trait uses a generic associated type because its borrowed item may depend on the array
 borrow's lifetime:
 
-```rust
+```rust,ignore
 pub trait Array: Sized + Send + Sync + 'static {
     type Builder: ArrayBuilder<Array = Self>;
     type OwnedItem: Scalar<ArrayType = Self>;
@@ -37,7 +37,7 @@ pub trait Array: Sized + Send + Sync + 'static {
 
 The concrete choices are natural:
 
-```rust
+```rust,ignore
 impl Array for PrimitiveArray<i32> {
     type RefItem<'a> = i32;
     // ...
@@ -56,7 +56,7 @@ GATs are stable Rust and require no feature flag.
 An expression knows its output array type `O`, so it must derive the correct builder and know what
 `finish` returns:
 
-```rust
+```rust,ignore
 pub trait ArrayBuilder: Sized {
     type Array: Array<Builder = Self>;
 
@@ -82,12 +82,27 @@ returns `O`.
 `Option<A::RefItem<'a>>`. One implementation now covers fixed-width primitives, variable-width
 strings, decimals, booleans, and lists.
 
+The trait hides that concrete iterator with return-position `impl Trait` in a trait (RPITIT):
+
+```rust,ignore
+fn iter<'a>(
+    &'a self,
+) -> impl Iterator<Item = Option<Self::RefItem<'a>>> + 'a {
+    ArrayIterator::new(self)
+}
+```
+
+The implementation chooses the hidden iterator type; callers only rely on `Iterator`. The explicit
+`'a` proves that neither the iterator nor a borrowed string or list item can outlive the array.
+`Array` is already not dyn-compatible because it requires `Sized` and contains GATs, so RPITIT does
+not remove a capability this trait otherwise had.
+
 ## Proving an All-Valid Primitive Batch
 
 Primitive arrays cache `null_count` alongside their validity bitmap. This keeps ordinary nullable
 `get` exactly as cheap as before while allowing one constant-time check before a numeric loop:
 
-```rust
+```rust,ignore
 if let Some(non_null) = array.as_non_null() {
     let values: &[i32] = non_null.values();
     // No validity lookup is needed while reading this slice.
@@ -106,18 +121,23 @@ Implement or inspect these operations in `expr-common/src/array`:
 1. `PrimitiveArrayBuilder::push`, including the placeholder value for null rows;
 2. `StringArray::get`, using adjacent offsets;
 3. `StringArrayBuilder::push`, ensuring nulls repeat the previous offset;
-4. `ArrayIterator::next`; and
-5. `PrimitiveArray::as_non_null`, including the cached proof it relies on.
+4. `ArrayIterator::next`;
+5. the default `Array::iter` RPITIT signature, preserving the borrow lifetime in its item; and
+6. `PrimitiveArray::as_non_null`, including the cached proof it relies on.
 
 Do not use unchecked indexing unless the surrounding API proves the row is in bounds. The existing
 string implementation uses unchecked UTF-8 conversion because builders only accept `&str`; that
 invariant should be documented where the unsafe operation occurs.
 
+Add or inspect iterator tests for an empty array and an array containing a null. Run
+`cargo test -p expr-common array` and stop before changing physical layouts or adding a second
+iterator implementation per array type.
+
 ## Chapter Checkpoint
 
 You should be able to write a generic function that copies any array:
 
-```rust
+```rust,ignore
 fn copy_array<A: Array>(input: &A) -> A {
     let mut output = A::Builder::with_capacity(input.len());
     for value in input.iter() {

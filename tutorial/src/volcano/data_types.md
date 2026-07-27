@@ -23,7 +23,7 @@ Encoding the policy as explicit data makes it reviewable.
 
 The final binder exposes:
 
-```rust
+```rust,ignore
 pub fn bind_binary_expression(
     function: ExpressionFunc,
     left: DataType,
@@ -45,7 +45,7 @@ For `SmallInt + Integer`, binding selects
 
 `FunctionRegistry` maps a name to a planning-time factory:
 
-```rust
+```rust,ignore
 let registry = FunctionRegistry::with_builtins();
 let expression = registry.bind_binary(
     "contains",

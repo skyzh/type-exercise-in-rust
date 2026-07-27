@@ -3,7 +3,7 @@
 `ColumnView<'a, S>` is the main new abstraction in the revised course. It represents a logical
 nullable column of scalar type `S` without requiring one physical layout.
 
-```rust
+```rust,ignore
 pub enum ColumnView<'a, S: Scalar> {
     Array(ArrayColumnView<'a, S>),
     Constant(ConstantColumnView<'a, S>),
@@ -13,7 +13,7 @@ pub enum ColumnView<'a, S: Scalar> {
 
 Every variant implements the static hot-loop interface:
 
-```rust
+```rust,ignore
 pub trait ColumnAccessor<'a, S: Scalar> {
     fn len(&self) -> usize;
     fn get(&self, row: usize) -> Option<S::RefType<'a>>;
@@ -33,7 +33,7 @@ interface boundary is the important part: storage adapters should not change sca
 
 A constant view stores one optional borrowed scalar and a logical length:
 
-```rust
+```rust,ignore
 ConstantColumnView {
     value: Some(42),
     len: 65_536,
@@ -47,7 +47,7 @@ binding remains checkable even though the value is `None`.
 
 A dictionary view contains nullable indices and one regular values array:
 
-```rust
+```rust,ignore
 DictionaryColumnView {
     indices: &[Some(1), None, Some(0)],
     values: &["red", "green"],
@@ -62,7 +62,7 @@ structural validation.
 
 The runtime boundary uses `ColumnViewImpl<'a>`:
 
-```rust
+```rust,ignore
 pub enum ColumnViewImpl<'a> {
     Array(&'a ArrayImpl),
     Constant { /* ScalarRefImpl, PhysicalType, len */ },
@@ -86,15 +86,40 @@ hand-written baseline on the development machine.
 The lesson is broader than this implementation: type erasure is inexpensive when it occurs around a
 large batch; representation dispatch inside the tight row loop may not be.
 
+## Covariance of Borrowed Views
+
+`ColumnViewImpl<'a>` contains shared references. A view valid for a longer borrow can therefore be
+used for a shorter one:
+
+```rust,ignore
+fn shorten_view<'short, 'long: 'short>(
+    view: ColumnViewImpl<'long>,
+) -> ColumnViewImpl<'short> {
+    view
+}
+```
+
+This is covariance over `'a`. The compiler derives it from the enum's fields; the function performs
+no runtime conversion. Do not generalize this claim to every type involving a GAT: an associated
+type's implementation may place its lifetime in a different variance position. Mutable references
+also remain invariant in their value type.
+
 ## Task
 
-Add a fourth view on paper: a selection view that maps logical row `r` through a selection vector
-before reading another accessor. Decide:
+First, add or inspect the compile-time `shorten_view` check in `expr-common/src/column.rs`. Predict
+whether the same signature would compile if a view stored `&'a mut T`, then explain the result before
+running `cargo test -p expr-common column`.
+
+Next, add a fourth view on paper: a selection view that maps logical row `r` through a selection
+vector before reading another accessor. Decide:
 
 - whether it should be validated at construction;
 - whether it owns or borrows the inner accessor;
 - what lifetime its `get` returns; and
 - how generated one-time dispatch would handle nested views without an exponential enum.
+
+Stop at the design boundary: this task does not add a selection variant or change the generated
+dispatch cross-product.
 
 Next, erase [physical types at the framework boundary](./impls.md).
 

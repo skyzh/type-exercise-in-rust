@@ -12,7 +12,7 @@ price >= discount
 
 A scalar evaluator might expose:
 
-```rust
+```rust,ignore
 trait ScalarExpression {
     fn eval(&self, row: &[ScalarImpl]) -> Result<ScalarImpl>;
 }
@@ -56,7 +56,7 @@ type-erased API.
 We will instead use two layers:
 
 1. concrete generic traits inside a kernel, where the compiler knows the types;
-2. enums or object-safe traits at planning and execution boundaries, where the database knows types
+2. enums or dyn-compatible traits at planning and execution boundaries, where the database knows types
    only at runtime.
 
 ## Part I Roadmap

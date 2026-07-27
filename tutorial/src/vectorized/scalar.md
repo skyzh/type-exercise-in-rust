@@ -6,7 +6,7 @@ generic path from that owned result back to the output builder.
 
 `Scalar` and `ScalarRef` express the relationship:
 
-```rust
+```rust,ignore
 pub trait Scalar: Clone + Send + Sync + 'static {
     const PHYSICAL_TYPE: PhysicalType;
     type ArrayType: Array<OwnedItem = Self>;
@@ -63,7 +63,7 @@ When `func(left, right)` returns `O`, the loop can call `as_scalar_ref()` and pa
 Some relationships must hold for every possible borrow lifetime. Rust writes that requirement with
 a higher-ranked trait bound (HRTB):
 
-```rust
+```rust,ignore
 where
     for<'a> Self::ArrayType: Array<RefItem<'a> = Self::RefType<'a>>
 ```
@@ -71,7 +71,7 @@ where
 Comparison kernels may receive two borrowed values with different lifetimes. Their real requirement
 is also stated directly:
 
-```rust
+```rust,ignore
 for<'a, 'b> C::RefType<'a>: PartialOrd<C::RefType<'b>>
 ```
 

@@ -8,21 +8,47 @@ fn str_contains(left: &str, right: &str) -> bool {
 }
 ```
 
-`BinaryExpression<I1, I2, O, F>` turns that function into an object-safe batch expression. Its
+`BinaryExpression<I1, I2, O, F>` turns that function into a dyn-compatible batch expression. Its
 important bound is direct:
 
-```rust
+```rust,ignore
 F: Fn(I1::RefType<'_>, I2::RefType<'_>) -> O
 ```
 
 Modern stable Rust accepts this higher-ranked behavior for ordinary and generic functions.
+
+## Why the Template Requires `Fn`
+
+An expression may evaluate any number of batches through `&self`, so its scalar callable must be
+reusable without exclusive access:
+
+- `Fn` supports repeated calls through a shared reference;
+- `FnMut` would require `&mut self` or synchronized interior state; and
+- `FnOnce` may consume its captures and cannot represent a reusable expression.
+
+The generated expression also requires `F: Send + Sync` because `Expression` objects may cross and
+be shared between executor threads. A stateful regular-expression kernel can still implement
+`Expression` directly and store immutable compiled state or explicit synchronization.
+
+## Why `PhantomData` Is Not Decorative
+
+`BinaryExpression<I1, I2, O, F>` stores `F`, but it does not store values of `I1`, `I2`, or `O`.
+The marker field records that those types logically participate in the expression:
+
+```rust,ignore
+_phantom: PhantomData<(I1, I2, O)>
+```
+
+It occupies no runtime space, but it makes the generic parameters part of the struct for variance,
+auto-trait, and drop-check analysis. Removing it leaves unused type parameters rather than a
+runtime optimization opportunity.
 
 ## Typed Evaluation
 
 After erased views are converted and their encodings dispatched, the generated hot loop is
 equivalent to:
 
-```rust
+```rust,ignore
 fn eval_typed<'a, V1, V2>(&self, left: V1, right: V2) -> Result<ArrayImpl>
 where
     V1: ColumnAccessor<'a, I1>,
@@ -53,7 +79,7 @@ The nullable loop is necessary when any input can be null, but it blocks the com
 a simple numeric loop into operations over contiguous buffers. `PrimitiveBinaryExpression` wraps
 the same scalar function and selects one of two paths once per batch:
 
-```rust
+```rust,ignore
 if let (Some(left), Some(right)) =
     (left_array.as_non_null(), right_array.as_non_null())
 {
@@ -98,7 +124,7 @@ particularly performance-sensitive numeric families.
 
 The revised expression exposes two entry points:
 
-```rust
+```rust,ignore
 expr.eval_views(ColumnViewImpl::Array(...), ColumnViewImpl::Constant(...));
 expr.eval_batch(&left_array_impl, &right_array_impl);
 ```
@@ -127,6 +153,10 @@ Inspect `expr-template-impl/src/lib.rs`, the generated binary file, and
 4. the strict null branch;
 5. the `Expression` trait implementation; and
 6. the batch-level proof that selects the primitive non-null loop.
+
+Then answer two compiler questions before editing: why would changing `Fn` to `FnOnce` make a second
+batch impossible, and what error appears if the `PhantomData` field is removed? Restore the intended
+bounds and run `cargo test -p expr-template --all-targets`.
 
 Next, decide [which functions deserve generic expansion](./data_types.md).
 

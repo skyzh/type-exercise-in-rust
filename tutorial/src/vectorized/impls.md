@@ -6,7 +6,7 @@ trait object because `get` has a different return type for each implementation.
 
 The course uses exhaustive enums:
 
-```rust
+```rust,ignore
 pub enum ArrayImpl {
     Int16(I16Array),
     Int32(I32Array),
@@ -35,7 +35,7 @@ runtime code a common interface.
 
 Generated expressions recover concrete references through `TryFrom`:
 
-```rust
+```rust,ignore
 impl<'a> TryFrom<&'a ArrayImpl> for &'a I32Array {
     type Error = TypeMismatch;
 
@@ -64,9 +64,25 @@ provides:
 - one place to implement diagnostics and conversions; and
 - a natural `PhysicalType` mapping.
 
-The repository also contains `BoxedArray`, built from an object-safe `DynArray` companion trait, to
-support nested lists. This illustrates the alternative: a trait object can expose a smaller erased
-API and downcast through `Any`. Neither strategy makes the original generic `Array` object safe.
+The repository also contains `BoxedArray`, built from a dyn-compatible `DynArray` companion trait,
+to support nested lists. This illustrates the alternative: a trait object can expose a smaller
+erased API and downcast through `Any`. Neither strategy makes the original generic `Array`
+dyn-compatible.
+
+`DynArray` has `Any` as a supertrait. Modern Rust can upcast the trait object directly before the
+downcast:
+
+```rust,ignore
+let erased: &dyn Any = &*boxed_dyn_array;
+let concrete = erased.downcast_ref::<I32Array>();
+
+let erased: Box<dyn Any> = boxed_dyn_array;
+let concrete = erased.downcast::<I32Array>();
+```
+
+The upcast forgets `DynArray` methods but preserves the concrete value. The checked `Any` downcast
+then recovers a requested concrete type. Historical `as_any` and `into_any` shims are unnecessary
+on the course's minimum Rust version.
 
 Use an enum for a closed runtime universe and a trait object when third-party or recursively nested
 implementations must participate without editing the enum.
@@ -76,7 +92,7 @@ implementations must participate without editing the enum.
 Hand-writing `From`, `TryFrom`, `get`, `len`, builder dispatch, and physical-type matches for every
 variant would make the list easy to desynchronize. `for_all_variants!` stores the association once:
 
-```rust
+```rust,ignore
 { Int32, int32, I32Array, I32ArrayBuilder, i32, i32 }
 { String, string, StringArray, StringArrayBuilder, String, &'a str }
 ```
@@ -88,6 +104,16 @@ the same pattern for expression families, but keep the purpose distinct:
 - the numeric combination list records SQL promotion policy.
 
 They should not be merged merely because both are macros.
+
+## Task
+
+In `expr-common/src/array/dyn_array.rs`, remove explicit `as_any` and `into_any` methods and use the
+two trait-object coercions above. Preserve the `PhysicalType` match: it selects the expected concrete
+type and keeps a failed downcast identifiable as a framework invariant violation. Verify both owned
+and borrowed `BoxedArray` round trips with `cargo test -p expr-common dyn_array`.
+
+Do not replace the closed `ArrayImpl` enum with trait objects. The exercise is to compare the two
+erasure boundaries, not declare one universally superior.
 
 ## Chapter Checkpoint
 

@@ -11,7 +11,7 @@ fn eval_i32_le(left: Option<i32>, right: Option<i32>) -> Option<bool> {
 
 For a row evaluator, the expression also has to locate its children:
 
-```rust
+```rust,ignore
 enum Expr {
     InputRef(usize),
     Literal(ScalarImpl),
@@ -62,7 +62,7 @@ receives `&str`.
 
 Regardless of encoding, a strict binary expression has this logical algorithm:
 
-```rust
+```rust,ignore
 let mut output = O::Builder::with_capacity(len);
 for row in 0..len {
     match (left.get(row), right.get(row)) {

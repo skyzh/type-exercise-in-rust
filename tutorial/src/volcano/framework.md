@@ -8,7 +8,7 @@ before choosing the vectorized data structures.
 The planner consumes a function name and logical input types. It returns a bound expression or a
 specific error:
 
-```rust
+```rust,ignore
 let bound = registry.bind_binary(name, left_type, right_type)?;
 assert_eq!(bound.output_type(), &DataType::Boolean);
 ```
@@ -18,17 +18,18 @@ validation.
 
 ## Execution Contract
 
-The object-safe runtime trait accepts type-erased logical columns:
+The dyn-compatible runtime trait accepts type-erased logical columns and states its executor
+thread-safety contract:
 
-```rust
-pub trait Expression {
+```rust,ignore
+pub trait Expression: Send + Sync {
     fn eval(&self, data: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl>;
 }
 ```
 
 The final code also retains the original array-only API as an adapter:
 
-```rust
+```rust,ignore
 fn eval_expr(&self, data: &[&ArrayImpl]) -> Result<ArrayImpl>;
 ```
 
@@ -71,7 +72,7 @@ Continue to [the vectorized runtime](../vectorized/overview.md).
 
 ## Test Your Understanding
 
-- Why is `Expression` object safe while `Array` will not be?
+- Why is `Expression` dyn-compatible while `Array` will not be?
 - Where does a runtime physical type check happen, and how often?
 - How can a custom expression bypass strict null propagation without changing the registry API?
 

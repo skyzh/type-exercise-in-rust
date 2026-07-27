@@ -17,7 +17,7 @@ Real     + Double   -> Double
 
 The scalar implementation is generic:
 
-```rust
+```rust,ignore
 pub fn add<I1, I2, O>(left: I1::RefType<'_>, right: I2::RefType<'_>) -> O
 where
     I1: Scalar,
@@ -101,6 +101,17 @@ Before adding a macro entry, ask:
 4. Would an explicit typed kernel be shorter and clearer?
 
 If the answer to the last question is yes, use a custom factory.
+
+## Task
+
+Trace one numeric signature such as `SmallInt + Integer` through the arithmetic combination table,
+the callback type macros, the binder match, and the resulting concrete `PrimitiveBinaryExpression`.
+Then trace `str_contains` and identify exactly where it leaves the generated family. Explain why
+adding the string function to the numeric matrix would weaken the policy boundary.
+
+Run `cargo test -p expr-impl` to check both a supported promotion and an unsupported signature. Do
+not add a new physical type merely to exercise a macro; that would require array, scalar, binder,
+and diagnostic work outside this task.
 
 Continue to [binding and executing the complete framework](./framework.md).
 

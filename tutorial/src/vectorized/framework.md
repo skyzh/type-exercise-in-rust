@@ -3,7 +3,7 @@
 The pieces now form one end-to-end path. This example binds a custom string function and evaluates
 it without materializing either a dictionary column or a constant column:
 
-```rust
+```rust,ignore
 let registry = FunctionRegistry::with_builtins();
 let expression = registry.bind_binary(
     "contains",
@@ -72,7 +72,7 @@ these paths.
 
 A custom binary factory has this shape:
 
-```rust
+```rust,ignore
 registry.register_binary("my_function", |left, right| {
     // Check DataType values and choose a typed Expression implementation.
     // Return BoundExpression::new(expression, [left, right], output_type).
@@ -84,11 +84,26 @@ custom expression objects. A production system would likely add richer function 
 overload priorities, cast insertion, variadic factories, and serialization-friendly function IDs.
 Those features can grow around the same planning/runtime boundary.
 
+## Executor Thread Safety
+
+The erased runtime boundary states its concurrency contract directly:
+
+```rust,ignore
+pub trait Expression: Send + Sync {
+    fn eval(&self, data: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl>;
+}
+```
+
+`Send` allows ownership to move to another executor thread; `Sync` allows multiple workers to hold
+shared references. These are auto traits, so a captured `Rc` or `RefCell` prevents an expression
+from satisfying the boundary while immutable values, `Arc`, and synchronized state compose as
+expected.
+
 ## Compatibility
 
 Existing code can continue to call:
 
-```rust
+```rust,ignore
 let expression = build_binary_expression(function, left_type, right_type);
 let result = expression.eval_expr(&[&left_array, &right_array])?;
 ```
@@ -110,6 +125,13 @@ You have built a framework with:
 - explicit extension points for data-type-specific expressions.
 
 The final chapter checks whether the abstractions remain [competitive with hand-written loops](../benchmarks.md).
+
+## Task
+
+Keep `assert_send_sync::<Box<dyn Expression>>()` passing. Predict what happens if a registered
+factory captures `Rc<String>`, then explain whether `Arc<String>` changes the answer. Run
+`cargo test -p expr-common expr` and stop before adding executor threads; scheduling is outside this
+course.
 
 ## Test Your Understanding
 

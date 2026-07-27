@@ -19,3 +19,4 @@
   - [Bind and Execute the Complete Framework](./vectorized/framework.md)
 
 [Benchmarks and Next Steps](./benchmarks.md)
+[Appendix: Rust Language Concepts by Task](./appendix/rust_language.md)

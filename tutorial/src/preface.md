@@ -28,7 +28,7 @@ SQL / plan
 logical binder ---- rejects invalid signatures and selects promotions
     |
     v
-bound expression -- concrete scalar types hidden behind an object-safe trait
+bound expression -- concrete scalar types hidden behind a dyn-compatible trait
     |
     v
 column views ------ array, constant, or dictionary without materialization
@@ -80,6 +80,10 @@ required.
 Each implementation chapter includes a checkpoint and questions. Predict what the compiler or
 runtime should do before reading the next section; the type relationships are easier to remember
 when they solve a concrete failure you have already seen.
+
+If you are using the course as an advanced Rust syllabus, the
+[language-concept appendix](./appendix/rust_language.md) maps each concept to the exact framework
+task where it matters. It is a navigation aid, not a second feature-driven course.
 
 ## Community
 

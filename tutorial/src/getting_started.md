@@ -1,7 +1,9 @@
 # Environment Setup
 
-The repository pins Rust 1.94 and uses Rust Edition 2024. Edition 2024 requires Rust 1.85 or newer,
-but using the pinned toolchain makes generated code and diagnostics reproducible.
+The repository pins Rust 1.94 and uses Rust Edition 2024. Edition 2024 itself requires Rust 1.85 or
+newer. The workspace declares Rust 1.86 as its minimum because the implementation uses stable
+trait-object upcasting. Using the pinned toolchain makes generated code and diagnostics
+reproducible.
 
 Install [rustup](https://rustup.rs/) and mdBook, then verify the workspace:
 
@@ -45,6 +47,7 @@ cargo test --workspace --all-targets
 
 The generated files in `expr-template/src/gen` are written by `expr-template/build.rs`. Edit
 `expr-template-impl/src/lib.rs`, not the generated output. A normal Cargo build regenerates them.
+`--all-targets` also compiles the appendix's batch-async example.
 
 ## Learning Strategy
 

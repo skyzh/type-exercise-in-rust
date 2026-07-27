@@ -23,7 +23,7 @@ pub enum DataType {
 
 `DataType::physical_type` deliberately collapses logical distinctions:
 
-```rust
+```rust,ignore
 DataType::Varchar          -> PhysicalType::String
 DataType::Char { .. }      -> PhysicalType::String
 DataType::Decimal { .. }   -> PhysicalType::Decimal
