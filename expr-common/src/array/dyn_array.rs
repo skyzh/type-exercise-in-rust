@@ -13,7 +13,7 @@ pub trait PhysicalTypeOf {
     fn physical_type(&self) -> PhysicalType;
 }
 
-/// The object-safe array trait.
+/// The dyn-compatible array trait.
 pub trait DynArray: Any + PhysicalTypeOf + 'static + Send + Sync + std::fmt::Debug {
     /// Get the array builder of the current array.
     fn new_builder(&self, capacity: usize) -> ArrayBuilderImpl;
@@ -26,12 +26,6 @@ pub trait DynArray: Any + PhysicalTypeOf + 'static + Send + Sync + std::fmt::Deb
 
     /// Number of items of array.
     fn is_empty(&self) -> bool;
-
-    /// Convert self into [`Any`].
-    fn into_any(self: Box<Self>) -> Box<dyn Any>;
-
-    /// Convert self as [`Any`].
-    fn as_any(&self) -> &dyn Any;
 
     /// Clone the current array
     fn boxed_clone(&self) -> Box<dyn DynArray>;
@@ -55,14 +49,6 @@ where
 
     fn is_empty(&self) -> bool {
         Array::is_empty(self)
-    }
-
-    fn into_any(self: Box<Self>) -> Box<dyn Any> {
-        self
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 
     fn boxed_clone(&self) -> Box<dyn DynArray> {
@@ -126,7 +112,7 @@ macro_rules! impl_boxed_array_dispatch {
             /// Convert an [`BoxedArray`] into [`ArrayImpl`]
             pub fn into_array_impl(self) -> ArrayImpl {
                 let physical_type = self.0.physical_type();
-                let boxed_any_array = self.0.into_any();
+                let boxed_any_array: Box<dyn Any> = self.0;
                 match physical_type {
                     $(
                         PhysicalType::$Abc => ArrayImpl::$Abc(
@@ -139,7 +125,7 @@ macro_rules! impl_boxed_array_dispatch {
             /// Convert an [`BoxedArray`] into [`ArrayImpl`]
             pub fn as_array_impl(&self) -> ArrayImplRef<'_> {
                 let physical_type = self.0.physical_type();
-                let boxed_any_array: &dyn Any = self.0.as_any();
+                let boxed_any_array: &dyn Any = &*self.0;
                 match physical_type {
                     $(
                         PhysicalType::$Abc => ArrayImplRef::$Abc(
@@ -163,6 +149,14 @@ mod tests {
         let a: ArrayImpl = I32Array::from_slice(&[Some(1), Some(2), Some(3), None]).into();
         let a = a.into_boxed_array();
         assert_eq!(a.get(0), Some(ScalarRefImpl::Int32(1)));
+        let ArrayImplRef::Int32(borrowed) = a.as_array_impl() else {
+            panic!("borrowed downcast changed the physical type");
+        };
+        assert_eq!(
+            Array::get(borrowed, 3),
+            None,
+            "borrowed downcast preserves nulls"
+        );
         let a = a.into_array_impl();
         assert_eq!(a.get(0), Some(ScalarRefImpl::Int32(1)));
     }

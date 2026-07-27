@@ -2,7 +2,7 @@
 
 use bitvec::prelude::BitVec;
 
-use super::{Array, ArrayBuilder, ArrayBuilderImpl, ArrayIterator, BoxedArray};
+use super::{Array, ArrayBuilder, ArrayBuilderImpl, BoxedArray};
 use crate::scalar::{List, ListRef};
 
 #[derive(Clone)]
@@ -37,10 +37,6 @@ impl Array for ListArray {
 
     fn len(&self) -> usize {
         self.data.len()
-    }
-
-    fn iter(&self) -> ArrayIterator<'_, Self> {
-        ArrayIterator::new(self)
     }
 }
 

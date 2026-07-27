@@ -75,8 +75,13 @@ where
         self.len() == 0
     }
 
-    /// Get iterator of this array.
-    fn iter(&self) -> ArrayIterator<'_, Self>;
+    /// Iterate over nullable borrowed values.
+    ///
+    /// The opaque return type hides the iterator implementation while preserving the lifetime
+    /// relationship between the array borrow and each borrowed item.
+    fn iter<'a>(&'a self) -> impl Iterator<Item = Option<Self::RefItem<'a>>> + 'a {
+        ArrayIterator::new(self)
+    }
 
     /// Build array from slice
     fn from_slice(data: &[Option<Self::RefItem<'_>>]) -> Self {
@@ -192,6 +197,18 @@ mod tests {
         let data = [Some("1"), Some("2"), Some("3"), None, Some("5"), Some("")];
         let array = build_array_from_vec::<StringArray>(&data[..]);
         check_array_eq(&array, &data[..]);
+    }
+
+    #[test]
+    fn default_iterator_handles_empty_and_null_arrays() {
+        let empty = I32Array::from_values(vec![]);
+        assert_eq!(empty.iter().next(), None);
+
+        let nullable = I32Array::from_slice(&[Some(1), None, Some(3)]);
+        assert_eq!(
+            nullable.iter().collect::<Vec<_>>(),
+            vec![Some(1), None, Some(3)]
+        );
     }
 
     fn add_i32(i1: i32, i2: i32) -> i32 {

@@ -6,7 +6,7 @@ use crate::array::ArrayImpl;
 use crate::column::ColumnViewImpl;
 
 /// A trait over all expressions -- unary, binary, etc.
-pub trait Expression {
+pub trait Expression: Send + Sync {
     /// Evaluate type-erased input views.
     fn eval(&self, data: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl>;
 
@@ -17,5 +17,17 @@ pub trait Expression {
             .map(|array| ColumnViewImpl::array(array))
             .collect::<Vec<_>>();
         self.eval(&views)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assert_send_sync<T: Send + Sync>() {}
+
+    #[test]
+    fn erased_expressions_can_cross_executor_threads() {
+        assert_send_sync::<Box<dyn Expression>>();
     }
 }
