@@ -16,11 +16,12 @@ pub fn cmp_le<I1: Scalar, I2: Scalar, C: Scalar>(i1: I1::RefType<'_>, i2: I2::Re
 where
     for<'a> I1::RefType<'a>: Into<C::RefType<'a>>,
     for<'a> I2::RefType<'a>: Into<C::RefType<'a>>,
-    for<'a> C::RefType<'a>: PartialOrd,
+    for<'a, 'b> C::RefType<'a>: PartialOrd<C::RefType<'b>>,
 {
-    let i1 = I1::upcast_gat(i1);
-    let i2 = I2::upcast_gat(i2);
-    i1.into().partial_cmp(&i2.into()).unwrap() == Ordering::Less
+    matches!(
+        i1.into().partial_cmp(&i2.into()),
+        Some(Ordering::Less | Ordering::Equal)
+    )
 }
 
 /// Return if `i1 > i2`. Note that `i1` and `i2` could be different types. This
@@ -33,11 +34,12 @@ pub fn cmp_ge<I1: Scalar, I2: Scalar, C: Scalar>(i1: I1::RefType<'_>, i2: I2::Re
 where
     for<'a> I1::RefType<'a>: Into<C::RefType<'a>>,
     for<'a> I2::RefType<'a>: Into<C::RefType<'a>>,
-    for<'a> C::RefType<'a>: PartialOrd,
+    for<'a, 'b> C::RefType<'a>: PartialOrd<C::RefType<'b>>,
 {
-    let i1 = I1::upcast_gat(i1);
-    let i2 = I2::upcast_gat(i2);
-    i1.into().partial_cmp(&i2.into()).unwrap() == Ordering::Greater
+    matches!(
+        i1.into().partial_cmp(&i2.into()),
+        Some(Ordering::Greater | Ordering::Equal)
+    )
 }
 
 /// Return if `i1 == i2`. Note that `i1` and `i2` could be different types. This
@@ -50,10 +52,8 @@ pub fn cmp_eq<I1: Scalar, I2: Scalar, C: Scalar>(i1: I1::RefType<'_>, i2: I2::Re
 where
     for<'a> I1::RefType<'a>: Into<C::RefType<'a>>,
     for<'a> I2::RefType<'a>: Into<C::RefType<'a>>,
-    for<'a> C::RefType<'a>: PartialEq,
+    for<'a, 'b> C::RefType<'a>: PartialEq<C::RefType<'b>>,
 {
-    let i1 = I1::upcast_gat(i1);
-    let i2 = I2::upcast_gat(i2);
     i1.into().eq(&i2.into())
 }
 
@@ -67,9 +67,7 @@ pub fn cmp_ne<I1: Scalar, I2: Scalar, C: Scalar>(i1: I1::RefType<'_>, i2: I2::Re
 where
     for<'a> I1::RefType<'a>: Into<C::RefType<'a>>,
     for<'a> I2::RefType<'a>: Into<C::RefType<'a>>,
-    for<'a> C::RefType<'a>: PartialEq,
+    for<'a, 'b> C::RefType<'a>: PartialEq<C::RefType<'b>>,
 {
-    let i1 = I1::upcast_gat(i1);
-    let i2 = I2::upcast_gat(i2);
     !i1.into().eq(&i2.into())
 }

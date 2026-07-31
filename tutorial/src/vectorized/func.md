@@ -1,1 +1,0 @@
-# Vectorize Any Function

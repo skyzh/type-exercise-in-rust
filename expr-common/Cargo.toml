@@ -1,11 +1,12 @@
 [package]
 name = "expr-common"
 version = "0.1.0"
-edition = "2021"
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
 
 [dependencies]
-anyhow = "1"
-bitvec = "1"
-rust_decimal = "1"
-thiserror = "1"
+anyhow.workspace = true
+bitvec.workspace = true
+rust_decimal.workspace = true
+thiserror.workspace = true

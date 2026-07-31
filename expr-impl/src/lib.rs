@@ -114,9 +114,9 @@ pub fn build_binary_expression(
     i1: DataType,
     i2: DataType,
 ) -> Box<dyn Expression> {
+    use ExpressionFunc::*;
     use impl_::cmp::*;
     use impl_::string::*;
-    use ExpressionFunc::*;
 
     match f {
         CmpLe => for_all_cmp_combinations! { impl_cmp_expression_of, i1, i2, cmp_le },

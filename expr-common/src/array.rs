@@ -35,8 +35,8 @@ mod all_array_builders {
     };
 }
 
-use crate::scalar::{Scalar, ScalarRef};
 use crate::TypeMismatch;
+use crate::scalar::{Scalar, ScalarRef};
 
 /// [`Array`] is a collection of data of the same type.
 pub trait Array:
@@ -76,7 +76,7 @@ where
     }
 
     /// Get iterator of this array.
-    fn iter(&self) -> ArrayIterator<Self>;
+    fn iter(&self) -> ArrayIterator<'_, Self>;
 
     /// Build array from slice
     fn from_slice(data: &[Option<Self::RefItem<'_>>]) -> Self {

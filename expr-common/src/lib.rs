@@ -1,13 +1,13 @@
 // Copyright 2022 Alex Chi. Licensed under Apache-2.0.
 
-//! Type exercise in Rust
+//! A typed database expression framework in Rust.
 //!
-//! This is a short lecture on how to use the Rust type system to build necessary components in a
-//! database system. The lecture evolves around how Rust programmers (like me) build database
-//! systems in the Rust programming language. We leverage the Rust type system to **minimize**
-//! runtime cost and make our development process easier with **safe**, **nightly** Rust.
+//! The framework keeps physical array layouts, borrowed scalar values, column views, and runtime
+//! type erasure separate. Generic machinery is used where it pays off—especially numeric and
+//! comparison kernels—while data-type-specific expressions can use the same execution interface.
 
 pub mod array;
+pub mod column;
 pub mod datatype;
 pub mod expr;
 mod macros;
@@ -17,7 +17,7 @@ use array::PhysicalType;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-#[error("Type mismatch on conversion: expected {0:?}, get {1:?}")]
-pub struct TypeMismatch(PhysicalType, PhysicalType);
+#[error("type mismatch: expected {0:?}, got {1:?}")]
+pub struct TypeMismatch(pub PhysicalType, pub PhysicalType);
 
 pub use rust_decimal::Decimal;

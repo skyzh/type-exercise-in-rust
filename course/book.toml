@@ -1,0 +1,9 @@
+[book]
+authors = ["Alex Chi"]
+language = "en"
+src = "src"
+title = "Type Exercise in Rust — Build a Database Expression Framework"
+description = "A five-day Rust course on typed column views, expression binding, vectorized kernels, fast paths, and asynchronous boundaries."
+
+[output.html]
+git-repository-url = "https://github.com/skyzh/type-exercise-in-rust"

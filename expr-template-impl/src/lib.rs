@@ -12,7 +12,28 @@ pub fn generate_expression_template(param_number: usize) -> Result<String> {
     let it = (0..param_number)
         .map(|i| format_ident!("i{}", i + 1))
         .collect_vec();
+    let vp = (0..param_number)
+        .map(|i| format_ident!("V{}", i + 1))
+        .collect_vec();
     let position = 0..param_number;
+    let view_kinds = [
+        format_ident!("Array"),
+        format_ident!("Constant"),
+        format_ident!("Dictionary"),
+    ];
+    let dispatch_arms = (0..param_number)
+        .map(|_| view_kinds.iter().cloned())
+        .multi_cartesian_product()
+        .map(|kinds| {
+            let patterns = it
+                .iter()
+                .zip(kinds)
+                .map(|(input, kind)| quote! { ColumnView::#kind(#input) });
+            quote! {
+                (#(#patterns,)*) => self.eval_typed(#(#it),*)
+            }
+        })
+        .collect_vec();
 
     let impl_before = quote! {
         #( #gp, )* O, F
@@ -32,6 +53,7 @@ pub fn generate_expression_template(param_number: usize) -> Result<String> {
 
     let extra_bounds = quote! {
         #( for<'a> &'a #gp::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>, )*
+        #( for<'a> #gp::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>, )*
     };
 
     let tokens = quote! {
@@ -66,24 +88,48 @@ pub fn generate_expression_template(param_number: usize) -> Result<String> {
                 }
             }
 
-            /// Evaluate the expression with the given array.
-            pub fn eval_batch(&self, #( #it: &ArrayImpl),*) -> Result<ArrayImpl> {
+            #[inline]
+            fn eval_typed<'a, #(#vp,)*>(&self, #(#it: #vp),*) -> Result<ArrayImpl>
+            where
+                #(#vp: ColumnAccessor<'a, #gp>,)*
+            {
+                let len = i1.len();
                 #(
-                    let #it: &#gp::ArrayType = #it.try_into()?;
+                    if #it.len() != len {
+                        return Err(anyhow!(
+                            "column length mismatch: expected {}, got {}",
+                            len,
+                            #it.len(),
+                        ));
+                    }
                 )*
-                #(
-                    assert_eq!(i1.len(), #it.len(), "array length mismatch");
-                )*
-                let mut builder = <O::ArrayType as Array>::Builder::with_capacity(i1.len());
-                for ( #( #it ),* ) in itertools::izip!(
-                    #( #it.iter() ),*
-                ) {
-                    match ( #( #it, )* ) {
-                        ( #( Some(#it), )* ) => builder.push(Some((self.func)(#( #it, )*).as_scalar_ref())),
+                let mut builder = <O::ArrayType as Array>::Builder::with_capacity(len);
+                for row in 0..len {
+                    match ( #( #it.get(row), )* ) {
+                        ( #( Some(#it), )* ) => {
+                            builder.push(Some((self.func)(#( #it, )*).as_scalar_ref()))
+                        }
                         _ => builder.push(None),
                     }
                 }
                 Ok(builder.finish().into())
+            }
+
+            /// Evaluate the expression over logical column views.
+            pub fn eval_views<'a>(&self, #( #it: ColumnViewImpl<'a>),*) -> Result<ArrayImpl> {
+                #(
+                    let #it = ColumnView::<#gp>::try_from(#it)?;
+                )*
+                match (#(#it,)*) {
+                    #(#dispatch_arms,)*
+                }
+            }
+
+            /// Evaluate regular arrays through the column-view compatibility adapter.
+            pub fn eval_batch(&self, #( #it: &ArrayImpl),*) -> Result<ArrayImpl> {
+                self.eval_views(
+                    #(ColumnViewImpl::array(#it),)*
+                )
             }
         }
 
@@ -93,11 +139,11 @@ pub fn generate_expression_template(param_number: usize) -> Result<String> {
             #bounds
             #extra_bounds
         {
-            fn eval_expr(&self, data: &[&ArrayImpl]) -> Result<ArrayImpl> {
+            fn eval(&self, data: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl> {
                 if data.len() != #param_number {
-                    return Err(anyhow!("Expect {} inputs for {}", #param_number, stringify!(#expr_template_name)));
+                    return Err(anyhow!("expected {} inputs for {}", #param_number, stringify!(#expr_template_name)));
                 }
-                self.eval_batch(
+                self.eval_views(
                     #(data[ #position ],)*
                 )
             }

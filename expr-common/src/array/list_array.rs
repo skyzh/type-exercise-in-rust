@@ -39,7 +39,7 @@ impl Array for ListArray {
         self.data.len()
     }
 
-    fn iter(&self) -> ArrayIterator<Self> {
+    fn iter(&self) -> ArrayIterator<'_, Self> {
         ArrayIterator::new(self)
     }
 }
@@ -77,7 +77,7 @@ impl ArrayBuilder for ListArrayBuilder {
             Some(v) => {
                 // Dynamically detect the `ListArray` type upon first push.
                 if self.builder.is_none() {
-                    self.builder = Box::new(Some(v.array.new_builder(self.bitmap.capacity())));
+                    *self.builder = Some(v.array.new_builder(self.bitmap.capacity()));
                 }
                 let builder = (*self.builder).as_mut().unwrap();
                 for i in v.offset.0..v.offset.1 {

@@ -1,11 +1,13 @@
 [package]
 name = "expr-impl"
 version = "0.1.0"
-edition = "2021"
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
 
 [dependencies]
-anyhow = "1"
+anyhow.workspace = true
 expr-common = { path = "../expr-common" }
 expr-template = { path = "../expr-template" }
 expr-macro-rules = { path = "../expr-macro-rules" }
+thiserror.workspace = true

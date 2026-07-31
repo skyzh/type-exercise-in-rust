@@ -46,7 +46,7 @@ impl Array for StringArray {
         self.bitmap.len()
     }
 
-    fn iter(&self) -> ArrayIterator<Self> {
+    fn iter(&self) -> ArrayIterator<'_, Self> {
         ArrayIterator::new(self)
     }
 }

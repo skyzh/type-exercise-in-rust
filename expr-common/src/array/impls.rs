@@ -4,12 +4,12 @@
 
 //! Contains all macro-generated implementations of array methods
 
+use crate::TypeMismatch;
 use crate::array::all_array_builders::*;
 use crate::array::all_arrays::*;
 use crate::array::{Array, ArrayBuilder, ArrayBuilderImpl, ArrayImpl, ArrayImplRef, PhysicalType};
 use crate::macros::for_all_variants;
 use crate::scalar::*;
-use crate::TypeMismatch;
 
 /// Implements dispatch functions for [`Array`]
 macro_rules! impl_array_dispatch {

@@ -12,7 +12,7 @@ mod list;
 pub use list::*;
 use rust_decimal::Decimal;
 
-use crate::array::Array;
+use crate::array::{Array, PhysicalType};
 
 /// An owned single value.
 ///
@@ -22,6 +22,9 @@ pub trait Scalar:
 where
     for<'a> Self::ArrayType: Array<RefItem<'a> = Self::RefType<'a>>,
 {
+    /// The runtime physical type used for type erasure.
+    const PHYSICAL_TYPE: PhysicalType;
+
     /// The corresponding [`Array`] type.
     type ArrayType: Array<OwnedItem = Self>;
 
@@ -30,9 +33,6 @@ where
 
     /// Get a reference of the current value.
     fn as_scalar_ref(&self) -> Self::RefType<'_>;
-
-    /// Upcast GAT type's lifetime.
-    fn upcast_gat<'short, 'long: 'short>(long: Self::RefType<'long>) -> Self::RefType<'short>;
 }
 
 /// An borrowed value.

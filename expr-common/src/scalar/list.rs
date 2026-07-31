@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use std::ops::{Bound, RangeBounds};
 
 use super::{Array, Scalar, ScalarRef, ScalarRefImpl};
-use crate::array::{ArrayImplRef, BoxedArray, ListArray};
+use crate::array::{ArrayImplRef, BoxedArray, ListArray, PhysicalType};
 use crate::macros::for_all_variants;
 
 #[derive(Clone, Debug)]
@@ -56,6 +56,8 @@ for_all_variants! { impl_list_debug }
 
 /// Implement [`Scalar`] for `List`.
 impl Scalar for List {
+    const PHYSICAL_TYPE: PhysicalType = PhysicalType::List;
+
     type ArrayType = ListArray;
     type RefType<'a> = ListRef<'a>;
 
@@ -64,10 +66,6 @@ impl Scalar for List {
             array: &self.0,
             offset: (0, self.0.len()),
         }
-    }
-
-    fn upcast_gat<'short, 'long: 'short>(long: ListRef<'long>) -> ListRef<'short> {
-        long
     }
 }
 
