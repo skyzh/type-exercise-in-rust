@@ -175,6 +175,6 @@ Before moving on, explain:
 - why a reusable expression stores `Fn` rather than `FnOnce`; and
 - what the covariance test proves—and what it does not prove.
 
-Next, you will add an asynchronous boundary around whole batches.
+Next, [add an asynchronous boundary around whole batches](./day-5-async-boundary.md).
 
 {{#include copyright.md}}
