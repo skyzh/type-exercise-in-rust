@@ -251,6 +251,10 @@ mod tests {
     use super::*;
     use crate::array::{Array, I32Array, StringArray};
 
+    fn shorten_view<'short, 'long: 'short>(view: ColumnViewImpl<'long>) -> ColumnViewImpl<'short> {
+        view
+    }
+
     #[test]
     fn reads_array_constant_and_dictionary_through_one_type() {
         let array = I32Array::from_slice(&[Some(10), None, Some(30)]).into();
@@ -284,5 +288,12 @@ mod tests {
                 dictionary_len: 1,
             }
         );
+    }
+
+    #[test]
+    fn type_erased_column_view_is_covariant_over_its_borrow() {
+        let array = I32Array::from_slice(&[Some(1)]).into();
+        let view = shorten_view(ColumnViewImpl::array(&array));
+        assert_eq!(view.len(), 1);
     }
 }

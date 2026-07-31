@@ -170,6 +170,6 @@ Before moving on, explain:
 - how the fast path preserves Day 1 and Day 2 errors and null behavior; and
 - why the hand-written baseline uses the same storage and output builder.
 
-Next, you will strengthen the Rust boundaries around the same framework.
+Next, [strengthen the Rust boundaries around the same framework](./day-4-rust-boundaries.md).
 
 {{#include copyright.md}}

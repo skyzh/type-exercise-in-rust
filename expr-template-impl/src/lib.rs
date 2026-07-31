@@ -48,7 +48,7 @@ pub fn generate_expression_template(param_number: usize) -> Result<String> {
         #( #gp: Scalar, )*
         F: Fn(
             #( #gp::RefType<'_>, )*
-        ) -> O,
+        ) -> O + Send + Sync,
     };
 
     let extra_bounds = quote! {

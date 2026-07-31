@@ -26,7 +26,7 @@ where
     for<'a> I1: Scalar<RefType<'a> = I1>,
     for<'a> I2: Scalar<RefType<'a> = I2>,
     for<'a> O: Scalar<RefType<'a> = O>,
-    F: Fn(I1, I2) -> O,
+    F: Fn(I1, I2) -> O + Send + Sync,
 {
     func: F,
     _phantom: PhantomData<(I1, I2, O)>,
@@ -44,7 +44,7 @@ where
     for<'a> &'a PrimitiveArray<I2>: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
     for<'a> I1: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> I2: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-    F: Fn(I1, I2) -> O,
+    F: Fn(I1, I2) -> O + Send + Sync,
     PrimitiveArray<O>: Into<ArrayImpl>,
 {
     /// Create an expression around one primitive scalar function.
@@ -139,7 +139,7 @@ where
     for<'a> &'a PrimitiveArray<I2>: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
     for<'a> I1: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> I2: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-    F: Fn(I1, I2) -> O,
+    F: Fn(I1, I2) -> O + Send + Sync,
     PrimitiveArray<O>: Into<ArrayImpl>,
 {
     fn eval(&self, data: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl> {

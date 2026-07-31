@@ -10,7 +10,7 @@
 
 use bitvec::prelude::BitVec;
 
-use super::{Array, ArrayBuilder, ArrayIterator};
+use super::{Array, ArrayBuilder};
 
 /// An [`Array`] that stores [`String`]
 #[derive(Clone)]
@@ -44,10 +44,6 @@ impl Array for StringArray {
 
     fn len(&self) -> usize {
         self.bitmap.len()
-    }
-
-    fn iter(&self) -> ArrayIterator<'_, Self> {
-        ArrayIterator::new(self)
     }
 }
 

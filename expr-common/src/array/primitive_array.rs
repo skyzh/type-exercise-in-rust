@@ -7,7 +7,7 @@
 use bitvec::prelude::BitVec;
 use rust_decimal::Decimal;
 
-use super::{Array, ArrayBuilder, ArrayImpl, ArrayIterator};
+use super::{Array, ArrayBuilder, ArrayImpl};
 use crate::TypeMismatch;
 use crate::scalar::{Scalar, ScalarRef};
 
@@ -133,10 +133,6 @@ where
 
     fn len(&self) -> usize {
         self.data.len()
-    }
-
-    fn iter(&self) -> ArrayIterator<'_, Self> {
-        ArrayIterator::new(self)
     }
 }
 
