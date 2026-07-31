@@ -58,6 +58,50 @@ pub struct PrimitiveArray<T: PrimitiveType> {
 
     /// The null bitmap of this array.
     bitmap: BitVec,
+
+    /// Cached so the executor can select an all-valid loop once per batch.
+    null_count: usize,
+}
+
+/// A primitive array proven to contain no nulls.
+///
+/// Construct this wrapper once per batch with [`PrimitiveArray::as_non_null`], then use
+/// [`values`](Self::values) without checking validity inside the hot loop.
+#[derive(Clone, Copy)]
+pub struct NonNullPrimitiveArray<'a, T: PrimitiveType>(&'a PrimitiveArray<T>);
+
+impl<'a, T: PrimitiveType> NonNullPrimitiveArray<'a, T> {
+    /// Contiguous values with the same lifetime as the borrowed array.
+    pub fn values(self) -> &'a [T] {
+        &self.0.data
+    }
+}
+
+impl<T: PrimitiveType> PrimitiveArray<T> {
+    /// Construct an array whose rows are all valid, initializing validity in bulk.
+    pub fn from_values(data: Vec<T>) -> Self {
+        let bitmap = BitVec::repeat(true, data.len());
+        Self {
+            data,
+            bitmap,
+            null_count: 0,
+        }
+    }
+
+    /// Prove once that the array has no nulls.
+    pub fn as_non_null(&self) -> Option<NonNullPrimitiveArray<'_, T>> {
+        (self.null_count == 0).then_some(NonNullPrimitiveArray(self))
+    }
+
+    /// Whether at least one row is null.
+    pub fn has_nulls(&self) -> bool {
+        self.null_count() != 0
+    }
+
+    /// Number of null rows, cached for constant-time batch dispatch.
+    pub fn null_count(&self) -> usize {
+        self.null_count
+    }
 }
 
 impl<T> Array for PrimitiveArray<T>
@@ -103,6 +147,9 @@ pub struct PrimitiveArrayBuilder<T: PrimitiveType> {
 
     /// The null bitmap of this array.
     bitmap: BitVec,
+
+    /// Number of nulls pushed into this builder.
+    null_count: usize,
 }
 
 impl<T> ArrayBuilder for PrimitiveArrayBuilder<T>
@@ -121,6 +168,7 @@ where
         Self {
             data: Vec::with_capacity(capacity),
             bitmap: BitVec::with_capacity(capacity),
+            null_count: 0,
         }
     }
 
@@ -133,6 +181,7 @@ where
             None => {
                 self.data.push(T::default());
                 self.bitmap.push(false);
+                self.null_count += 1;
             }
         }
     }
@@ -141,6 +190,29 @@ where
         PrimitiveArray {
             data: self.data,
             bitmap: self.bitmap,
+            null_count: self.null_count,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn recognizes_all_valid_arrays() {
+        let array = I32Array::from_slice(&[Some(1), Some(2), Some(3)]);
+        assert!(!array.has_nulls());
+        assert_eq!(array.as_non_null().unwrap().values(), &[1, 2, 3]);
+    }
+
+    #[test]
+    fn rejects_non_null_proof_when_a_null_exists() {
+        let array = I32Array::from_slice(&[Some(1), None, Some(3)]);
+        assert!(array.has_nulls());
+        assert!(array.as_non_null().is_none());
+        assert_eq!(array.get(0), Some(1));
+        assert_eq!(array.get(1), None);
+        assert_eq!(array.get(2), Some(3));
     }
 }

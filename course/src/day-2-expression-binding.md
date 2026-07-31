@@ -181,6 +181,6 @@ Before moving on, explain:
 - which checks occur once per expression, once per batch, and once per row; and
 - why a custom string function belongs in the registry but not the numeric matrix.
 
-Next, you will specialize and measure the primitive hot path.
+Next, [specialize and measure the primitive hot path](./day-3-fast-paths.md).
 
 {{#include copyright.md}}

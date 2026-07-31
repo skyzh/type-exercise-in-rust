@@ -17,6 +17,7 @@ license = "Apache-2.0"
 [workspace.dependencies]
 anyhow = "1.0"
 bitvec = "1.0"
+criterion = "0.8.2"
 itertools = "0.15"
 prettyplease = "0.3"
 proc-macro2 = "1.0"
