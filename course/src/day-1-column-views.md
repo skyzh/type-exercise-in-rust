@@ -161,6 +161,6 @@ Before moving on, explain:
 - which data the three view variants borrow; and
 - why matching a representation once per batch is different from materializing it.
 
-Next, you will bind logical function signatures before evaluation.
+Next, [bind logical function signatures before evaluation](./day-2-expression-binding.md).
 
 {{#include copyright.md}}
