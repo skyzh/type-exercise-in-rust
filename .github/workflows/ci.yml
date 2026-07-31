@@ -25,3 +25,7 @@ jobs:
         run: cargo test --no-fail-fast --workspace --all-features --locked
       - name: Test course
         run: mdbook test course
+      - name: Install sitemap generator
+        run: npm install --global static-sitemap-cli@2.2.7
+      - name: Check sitemap
+        run: course/sitemap.sh --check

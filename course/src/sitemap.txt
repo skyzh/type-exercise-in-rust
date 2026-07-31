@@ -1,0 +1,8 @@
+https://skyzh.github.io/type-exercise-in-rust
+https://skyzh.github.io/type-exercise-in-rust/day-1-column-views
+https://skyzh.github.io/type-exercise-in-rust/day-2-expression-binding
+https://skyzh.github.io/type-exercise-in-rust/day-3-fast-paths
+https://skyzh.github.io/type-exercise-in-rust/day-4-rust-boundaries
+https://skyzh.github.io/type-exercise-in-rust/day-5-async-boundary
+https://skyzh.github.io/type-exercise-in-rust/preface
+https://skyzh.github.io/type-exercise-in-rust/setup

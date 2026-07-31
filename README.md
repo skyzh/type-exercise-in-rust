@@ -23,6 +23,10 @@ Read the published mdBook at
 
 - [Preface](https://skyzh.github.io/type-exercise-in-rust/preface.html)
 - [Day 1: Read Arrays, Constants, and Dictionaries](https://skyzh.github.io/type-exercise-in-rust/day-1-column-views.html)
+- [Day 2: Bind Logical Expressions](https://skyzh.github.io/type-exercise-in-rust/day-2-expression-binding.html)
+- [Day 3: Specialize and Measure Primitive Loops](https://skyzh.github.io/type-exercise-in-rust/day-3-fast-paths.html)
+- [Day 4: Strengthen Rust Type Boundaries](https://skyzh.github.io/type-exercise-in-rust/day-4-rust-boundaries.html)
+- [Day 5: Add a Batch Async Boundary](https://skyzh.github.io/type-exercise-in-rust/day-5-async-boundary.html)
 
 To preview the book locally:
 
@@ -50,6 +54,12 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-targets
 mdbook test course
+```
+
+Run the generated-kernel and hand-written-loop comparisons:
+
+```console
+cargo bench -p expr-impl --bench expression
 ```
 
 ## Community

@@ -12,6 +12,10 @@
 
 - [课程首页](https://skyzh.github.io/type-exercise-in-rust/)
 - [第一天：统一读取数组、常量和字典列](https://skyzh.github.io/type-exercise-in-rust/day-1-column-views.html)
+- [第二天：绑定逻辑表达式](https://skyzh.github.io/type-exercise-in-rust/day-2-expression-binding.html)
+- [第三天：优化并测量原生类型循环](https://skyzh.github.io/type-exercise-in-rust/day-3-fast-paths.html)
+- [第四天：加强 Rust 类型边界](https://skyzh.github.io/type-exercise-in-rust/day-4-rust-boundaries.html)
+- [第五天：增加批次级异步边界](https://skyzh.github.io/type-exercise-in-rust/day-5-async-boundary.html)
 
 在本地预览课程：
 

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+        <loc>https://skyzh.github.io/type-exercise-in-rust</loc>
+    </url>
+    <url>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/day-1-column-views</loc>
+    </url>
+    <url>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/day-2-expression-binding</loc>
+    </url>
+    <url>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/day-3-fast-paths</loc>
+    </url>
+    <url>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/day-4-rust-boundaries</loc>
+    </url>
+    <url>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/day-5-async-boundary</loc>
+    </url>
+    <url>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/preface</loc>
+    </url>
+    <url>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/setup</loc>
+    </url>
+</urlset>
