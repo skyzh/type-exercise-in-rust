@@ -3,10 +3,8 @@ name: CI
 on:
   push:
     branches:
-      - master
+      - main
   pull_request:
-    branches:
-      - master
 
 env:
   CARGO_TERM_COLOR: always
@@ -15,23 +13,23 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          components: rustfmt, clippy
-      - name: Check code format
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
-      - name: Clippy
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: --workspace --all-targets --all-features --locked -- -D warnings
-      - name: Test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --no-fail-fast --workspace --all-features --locked
+      - uses: actions/checkout@v4
+      - name: Install latest stable Rust
+        run: |
+          rustup update stable
+          rustc --version
+      - uses: taiki-e/install-action@mdbook
+      - name: Check type-exercise-ref format
+        run: cargo fmt --manifest-path archived/type-exercise-ref/Cargo.toml --all -- --check
+      - name: Check type-exercise-starter format
+        run: cargo fmt --manifest-path type-exercise-starter/Cargo.toml --all -- --check
+      - name: Clippy type-exercise-ref
+        run: cargo clippy --manifest-path archived/type-exercise-ref/Cargo.toml --workspace --all-targets --all-features --locked -- -D warnings
+      - name: Clippy type-exercise-starter baseline
+        run: cargo clippy --manifest-path type-exercise-starter/Cargo.toml --lib --locked -- -D warnings
+      - name: Test type-exercise-ref
+        run: cargo test --manifest-path archived/type-exercise-ref/Cargo.toml --no-fail-fast --workspace --all-features --locked
+      - name: Check type-exercise-starter baseline
+        run: cargo test --manifest-path type-exercise-starter/Cargo.toml --locked
+      - name: Test course
+        run: mdbook test course

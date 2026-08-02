@@ -1,0 +1,8 @@
+[book]
+authors = ["Alex Chi"]
+language = "en"
+src = "src"
+title = "Build a Database Expression Framework in Rust"
+
+[output.html]
+git-repository-url = "https://github.com/skyzh/type-exercise-in-rust"

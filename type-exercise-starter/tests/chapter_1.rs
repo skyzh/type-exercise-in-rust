@@ -1,0 +1,117 @@
+#![cfg(feature = "chapter-1")]
+
+use type_exercise_starter::{
+    Array, ArrayBuilder, ArrayImpl, I32Array, PhysicalType, Scalar, ScalarImpl, ScalarRef,
+    ScalarRefImpl, StringArray, StringArrayBuilder, TypeMismatch,
+};
+
+fn assert_complete_family<S, A>()
+where
+    S: Scalar<ArrayType = A>,
+    A: Array<OwnedItem = S>,
+    for<'a> S: Scalar<RefType<'a> = A::RefItem<'a>>,
+    for<'a> A::RefItem<'a>: ScalarRef<'a, ScalarType = S, ArrayType = A>,
+    A::Builder: ArrayBuilder<Array = A>,
+{
+}
+
+#[test]
+fn connects_owned_borrowed_and_array_types() {
+    assert_complete_family::<i32, I32Array>();
+    assert_complete_family::<String, StringArray>();
+
+    let integer = 42_i32;
+    let integer_ref: <i32 as Scalar>::RefType<'_> = integer.as_scalar_ref();
+    assert_eq!(integer_ref, 42);
+    assert_eq!(integer_ref.to_owned_scalar(), 42);
+
+    let string = String::from("type system");
+    let string_ref: <String as Scalar>::RefType<'_> = string.as_scalar_ref();
+    assert_eq!(string_ref, "type system");
+    assert_eq!(string_ref.to_owned_scalar(), string);
+
+    let integers: <i32 as Scalar>::ArrayType = I32Array::from_slice(&[Some(1), None, Some(3)]);
+    let strings: <String as Scalar>::ArrayType =
+        StringArray::from_slice(&[Some("one"), None, Some("three")]);
+    assert_eq!(integers.get(0), Some(1));
+    assert_eq!(strings.get(0), Some("one"));
+
+    let source = String::from("owned by the array");
+    let mut builder = StringArrayBuilder::with_capacity(1);
+    builder.push(Some(source.as_str()));
+    drop(source);
+    let built = builder.finish();
+    assert_eq!(built.get(0), Some("owned by the array"));
+}
+
+#[test]
+fn builds_nullable_integer_and_string_arrays() {
+    let integers = I32Array::from_slice(&[Some(10), None, Some(30)]);
+    assert_eq!(integers.len(), 3);
+    assert_eq!(
+        integers.iter().collect::<Vec<_>>(),
+        vec![Some(10), None, Some(30)]
+    );
+
+    let strings = StringArray::from_slice(&[Some("db"), None, Some("rust")]);
+    assert_eq!(strings.len(), 3);
+    assert_eq!(
+        strings.iter().collect::<Vec<_>>(),
+        vec![Some("db"), None, Some("rust")]
+    );
+
+    let empty = StringArray::from_slice(&[]);
+    assert!(empty.is_empty());
+    assert_eq!(empty.iter().next(), None);
+}
+
+#[test]
+fn round_trips_erased_values_and_arrays() {
+    let integer = i32::try_from(ScalarImpl::from(9_i32)).unwrap();
+    assert_eq!(integer, 9);
+
+    let string = String::try_from(ScalarImpl::from(String::from("owned"))).unwrap();
+    assert_eq!(string, "owned");
+
+    let borrowed = i32::try_from(ScalarRefImpl::from(7_i32)).unwrap();
+    assert_eq!(borrowed, 7);
+
+    let borrowed = <&str>::try_from(ScalarRefImpl::from("borrowed")).unwrap();
+    assert_eq!(borrowed, "borrowed");
+
+    let erased: ArrayImpl = I32Array::from_slice(&[Some(1), None]).into();
+    let typed = I32Array::try_from(erased).unwrap();
+    assert_eq!(typed.iter().collect::<Vec<_>>(), vec![Some(1), None]);
+
+    let erased: ArrayImpl = StringArray::from_slice(&[Some("a"), Some("b")]).into();
+    let typed = <&StringArray>::try_from(&erased).unwrap();
+    assert_eq!(typed.get(1), Some("b"));
+}
+
+#[test]
+fn rejects_mismatched_erased_values_and_arrays() {
+    assert_eq!(
+        i32::try_from(ScalarImpl::String("wrong".to_owned())),
+        Err(TypeMismatch {
+            expected: PhysicalType::Int32,
+            actual: PhysicalType::String,
+        })
+    );
+
+    assert_eq!(
+        <&str>::try_from(ScalarRefImpl::Int32(1)),
+        Err(TypeMismatch {
+            expected: PhysicalType::String,
+            actual: PhysicalType::Int32,
+        })
+    );
+
+    let strings: ArrayImpl = StringArray::from_slice(&[Some("wrong")]).into();
+    assert_eq!(
+        <&I32Array>::try_from(&strings).unwrap_err(),
+        TypeMismatch {
+            expected: PhysicalType::Int32,
+            actual: PhysicalType::String,
+        }
+    );
+}
