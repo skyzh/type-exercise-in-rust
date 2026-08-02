@@ -9,47 +9,45 @@ rustc --version
 ```
 
 The repository's `rust-toolchain` selects the rolling `stable` channel, and the learner crate uses
-Rust Edition 2024. It does not declare an older minimum supported Rust version. The learner
-workspace is the standalone crate in `type-exercise-starter/`; it is intentionally separate from
-the completed historical implementations under `archived/`. The repository root is a course
-container, not a Cargo workspace.
+Rust Edition 2024. It does not declare an older minimum supported Rust version. The root workspace
+contains the minimal learner crate, a separate reference solution, and the `xtask` support tool.
 
 ## Check Out the Starting State
 
-Clone the repository, then create your working branch from the durable starter branch:
+Clone the repository, then create your working branch from `main`:
 
 ```console
 git fetch origin
-git switch --create course-work --track origin/skyzh/course-starter
+git switch --create course-work --track origin/main
 ```
 
 If `course-work` already exists, choose another local branch name. Confirm that the starter contains
-only `ScalarImpl`, its baseline test, and the gated chapter contract tests:
+only `ScalarImpl`, its baseline test, and the empty copied-test module list:
 
 ```console
 find type-exercise-starter -maxdepth 3 -type f | sort
-cargo check --manifest-path type-exercise-starter/Cargo.toml --lib --locked
-cargo test --manifest-path type-exercise-starter/Cargo.toml --locked
+cargo check -p type-exercise-starter --lib --locked
+cargo test -p type-exercise-starter --lib --locked
 ```
 
-The check and test commands should succeed. Chapter contract tests are behind Cargo features, so
-they become executable specifications only when you run the matching chapter command. Before you
-implement that chapter, the featured test is expected to report missing APIs.
+Both commands should succeed. Chapter tests are not present in the starter until you intentionally
+copy one with `cargo x copy-test --chapter <N>`.
 
 ## Learner Boundary
 
 For the first two chapters:
 
-- modify only `type-exercise-starter/src/`;
-- keep `type-exercise-starter/tests/`, public names, feature names, and dependencies unchanged;
+- modify implementation files only under `type-exercise-starter/src/`;
+- keep copied files under `type-exercise-starter/src/tests/`, `src/tests.rs`, public names, and dependencies unchanged;
 - do not add macros, unsafe code, expression traits, generated code, or additional scalar types;
-- use the current chapter, `type-exercise-starter/README.md`, supplied tests, compiler diagnostics, and official
-  Rust documentation as implementation sources; and
-- leave `archived/` unread until after your chapter reflection; it contains broader historical
-  implementations, not exercise inputs or dependencies.
+- use the current chapter, `type-exercise-starter/README.md`, copied tests, compiler diagnostics,
+  and official Rust documentation as implementation sources; and
+- do not read, search, diff, or copy `type-exercise/` or `archived/` while solving a chapter.
 
-There is intentionally no Cargo workspace at the repository root. Always use the exact
-`--manifest-path type-exercise-starter/Cargo.toml` command from the chapter.
+The only allowed reference-to-starter operation is the exact repository-root test-copy command
+shown in each chapter. Run it without opening the source test first; afterward you may inspect the
+copied destination. Coding agents launched inside `type-exercise-starter/` receive the same rule
+from its `AGENTS.md`.
 
 ## Preview the Course
 

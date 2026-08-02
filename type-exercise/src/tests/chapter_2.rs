@@ -1,6 +1,4 @@
-#![cfg(feature = "chapter-2")]
-
-use type_exercise_starter::{
+use crate::{
     Array, ArrayImpl, ColumnView, ColumnViewImpl, I32Array, InvalidDictionaryKey, PhysicalType,
     ScalarRefImpl, StringArray, TypeMismatch,
 };

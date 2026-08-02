@@ -16,9 +16,8 @@ type family from Chapter 1.
 
 ## Starting Point and Result
 
-Continue from your own completed Chapter 1 implementation. If you need a recovery or comparison
-checkpoint, it is available at `origin/skyzh/course-chapter-1-type-connections`. Its traits enforce
-these two families:
+Continue from your own completed Chapter 1 implementation. Its traits should enforce these two
+families:
 
 ```text
 i32     <-> i32    <-> I32Array
@@ -40,8 +39,14 @@ Expect roughly two to three hours.
 
 ## Chapter Boundary
 
-Add `type-exercise-starter/src/column.rs` and export its public types from
-`type-exercise-starter/src/lib.rs`. Keep the Chapter 1 public API and both supplied tests unchanged.
+Copy the Chapter 2 test from the repository root before validation:
+
+```console
+cargo x copy-test --chapter 2
+```
+
+Then add `type-exercise-starter/src/column.rs` and export its public types from
+`type-exercise-starter/src/lib.rs`. Keep the Chapter 1 public API and all copied tests unchanged.
 Use public wrapper types whose fields and encoding variants remain private, so callers cannot
 construct an unchecked dictionary. Do not add dependencies, expressions, generated code, or new
 scalar types.
@@ -221,7 +226,7 @@ Build the view in this order:
 Run the canonical command from the repository root:
 
 ```console
-cargo test --manifest-path type-exercise-starter/Cargo.toml --features chapter-2 --test chapter_2 --locked
+cargo test -p type-exercise-starter chapter_2 --locked
 ```
 
 The expected result is four passing tests. They cover:
@@ -234,7 +239,7 @@ The expected result is four passing tests. They cover:
 Then verify that Chapter 1 remains green:
 
 ```console
-cargo test --manifest-path type-exercise-starter/Cargo.toml --features chapter-1 --test chapter_1 --locked
+cargo test -p type-exercise-starter chapter_1 --locked
 ```
 
 Before moving on, explain in your own words:

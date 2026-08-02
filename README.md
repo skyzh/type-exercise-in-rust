@@ -1,8 +1,9 @@
 # Build a Database Expression Framework in Rust
 
 This course builds a small vectorized database expression framework from an explicit Rust starter.
-The starter contains one owned scalar enum and no trait relationships. You will connect owned
-values, borrowed values, and arrays yourself before adding runtime-erased column views.
+The starter contains one owned scalar enum and no trait relationships. A separate reference crate
+contains the maintained solution and canonical tests; an `xtask` copies each selected test into
+the starter when the learner is ready to validate a chapter.
 
 The current review boundary contains two chapters:
 
@@ -16,49 +17,60 @@ async adapter. These topics are not forced into a fixed calendar.
 
 ## Start Here
 
-The starter is a real standalone crate at
-[`type-exercise-starter`](./type-exercise-starter). Begin from the
-`skyzh/course-starter` branch so the chapter solutions are not present:
+The learner workspace is [`type-exercise-starter`](./type-exercise-starter). Begin from `main`,
+where its only implemented data model is `ScalarImpl::{Int32, String}`:
 
 ```console
 git fetch origin
-git switch --create course-work --track origin/skyzh/course-starter
-cargo test --manifest-path type-exercise-starter/Cargo.toml --locked
+git switch --create course-work --track origin/main
+cargo check -p type-exercise-starter --lib --locked
 mdbook serve course --open
 ```
 
-The repository root is a course container, not a Cargo workspace. `type-exercise-starter/` is the
-only learner workspace. Everything under [`archived/`](./archived) predates this course structure
-and is neither a starter dependency nor part of the chapter work. Keep it out of the learner path
-until you finish the chapter reflection.
+The repository workspace contains the learner crate, [`type-exercise`](./type-exercise) reference
+solution, and [`xtask`](./xtask) support tool. Learners must not inspect the reference or anything
+under [`archived/`](./archived) while implementing a chapter. The starter-local `AGENTS.md`
+enforces that boundary for coding agents.
 
 Read the mdBook source in [`course`](./course), beginning with the
 [preface](./course/src/preface.md), [setup](./course/src/setup.md), and
 [Chapter 1](./course/src/chapter-1-type-connections.md). Continue with
 [Chapter 2](./course/src/chapter-2-column-views.md).
 
-## Repository Validation
-
-Maintainers can validate the maintained archived reference workspace, the starter baseline, and
-the book with:
+Copy a chapter's canonical test into the starter with the same workflow used by Mini-LSM:
 
 ```console
+cargo x copy-test --chapter 1
+cargo test -p type-exercise-starter chapter_1 --locked
+```
+
+The copied files under `type-exercise-starter/src/tests/` are supplied checks, not learner-owned
+implementation files.
+
+## Repository Validation
+
+Maintainers can validate the current reference solution, minimal starter, support tool, historical
+reference workspace, and book with:
+
+```console
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
 cargo fmt --manifest-path archived/type-exercise-ref/Cargo.toml --all --check
 cargo clippy --manifest-path archived/type-exercise-ref/Cargo.toml --workspace --all-targets --all-features --locked -- -D warnings
 cargo test --manifest-path archived/type-exercise-ref/Cargo.toml --workspace --all-targets --all-features --locked
-cargo test --manifest-path type-exercise-starter/Cargo.toml --locked
+cargo check -p type-exercise-starter --lib --locked
 mdbook test course
 ```
 
-On a completed solution checkpoint, also run its gated contract test:
+To validate a completed learner checkpoint, copy and run its test:
 
 ```console
-cargo test --manifest-path type-exercise-starter/Cargo.toml --features chapter-1 --test chapter_1 --locked
-cargo test --manifest-path type-exercise-starter/Cargo.toml --features chapter-2 --test chapter_2 --locked
+cargo x copy-test --chapter 1
+cargo test -p type-exercise-starter chapter_1 --locked
+cargo x copy-test --chapter 2
+cargo test -p type-exercise-starter chapter_2 --locked
 ```
-
-The second command implies the Chapter 1 feature. On the scalar-only starter checkpoint, these
-featured contracts are expected to fail to compile until the matching implementation exists.
 
 ## Community
 

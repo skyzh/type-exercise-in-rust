@@ -15,7 +15,7 @@ In this chapter, you will build the compile-time type family that makes that pos
 
 ## Starting Point and Result
 
-Start from `origin/skyzh/course-starter`. Its implemented Rust model is only:
+Start from `main`. The starter's implemented Rust model is only:
 
 ```rust
 pub enum ScalarImpl {
@@ -24,11 +24,12 @@ pub enum ScalarImpl {
 }
 ```
 
-The gated contract test already names the public interface you must create. Run it once to see the
+Use the course tool to copy the Chapter 1 contract into the starter, then run it once to see the
 missing symbols:
 
 ```console
-cargo test --manifest-path type-exercise-starter/Cargo.toml --features chapter-1 --test chapter_1 --locked
+cargo x copy-test --chapter 1
+cargo test -p type-exercise-starter chapter_1 --locked
 ```
 
 Before this chapter, the enum variants have no relationship to borrowed values or arrays. After
@@ -47,10 +48,11 @@ higher-ranked trait bounds are new to you.
 
 ## Chapter Boundary
 
-Modify only `type-exercise-starter/src/`. You may add modules and reorganize your implementation,
-but preserve the public names used by `type-exercise-starter/tests/chapter_1.rs`.
+Modify only implementation files under `type-exercise-starter/src/`. You may add modules and
+reorganize your implementation, but do not modify the copied test in
+`type-exercise-starter/src/tests/chapter_1.rs` or the generated `src/tests.rs` module list.
 
-Do not change the tests, features, dependencies, or `ScalarImpl` variants. Stop before macros,
+Do not change the tests, dependencies, or `ScalarImpl` variants. Stop before macros,
 additional data types, constants, dictionaries, expression traits, or generated code. Array buffer
 layout is your choice as long as the observable contract holds and the code remains safe Rust.
 
@@ -199,7 +201,7 @@ has not yet been connected.
 Run the canonical command from the repository root:
 
 ```console
-cargo test --manifest-path type-exercise-starter/Cargo.toml --features chapter-1 --test chapter_1 --locked
+cargo test -p type-exercise-starter chapter_1 --locked
 ```
 
 The expected result is four passing tests. Together they cover:
@@ -212,7 +214,7 @@ The expected result is four passing tests. Together they cover:
 Then run the baseline as a regression check:
 
 ```console
-cargo test --manifest-path type-exercise-starter/Cargo.toml --locked
+cargo test -p type-exercise-starter --lib --locked
 ```
 
 Before moving on, explain in your own words:
