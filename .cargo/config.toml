@@ -1,0 +1,3 @@
+[alias]
+x = "run --package type-exercise-xtask --"
+xtask = "run --package type-exercise-xtask --"

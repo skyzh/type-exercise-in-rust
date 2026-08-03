@@ -1,0 +1,10 @@
+[workspace]
+resolver = "3"
+members = ["type-exercise", "type-exercise-starter", "xtask"]
+exclude = ["archived/type-exercise-ref", "archived/legacy-days/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
