@@ -37,5 +37,6 @@ jobs:
         run: |
           cargo x copy-test --chapter 1
           cargo x copy-test --chapter 2
+          cargo x copy-test --chapter 3
       - name: Test course
         run: mdbook test course
