@@ -21,8 +21,9 @@ cargo x copy-test --chapter 3
 cargo test -p type-exercise-starter chapter_3 --locked
 ```
 
-After this chapter, the reference API has three new pieces:
+After this chapter, your API has four new pieces:
 
+- `ExpressionError`, which reports checked type and length failures;
 - `BinaryScalarFunction`, which names the left, right, and output scalar families;
 - `I32Add`, the first typed scalar function; and
 - `evaluate_binary`, which evaluates that function over two `ColumnViewImpl` inputs.

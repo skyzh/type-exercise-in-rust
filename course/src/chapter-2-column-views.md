@@ -250,7 +250,8 @@ Before moving on, explain in your own words:
 - how one `ColumnView<'a, S>` preserves both the runtime representation choice and the compile-time
   scalar family.
 
-Stop here. The next chapter will vectorize one scalar function over these views. It will decide how
-to move representation dispatch out of the row loop; this chapter intentionally does not.
+Stop here. The next chapter will vectorize one scalar function over these views. It will convert
+the erased physical scalar families once before the row loop; array, constant, and dictionary
+representation dispatch remains inside `ColumnView::get` until a later specialization chapter.
 
 {{#include copyright.md}}

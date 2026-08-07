@@ -1,7 +1,19 @@
 use crate::{
-    Array, ArrayImpl, ColumnViewImpl, ExpressionError, I32Add, I32Array, PhysicalType,
-    ScalarRefImpl, StringArray, TypeMismatch, evaluate_binary,
+    Array, ArrayImpl, BinaryScalarFunction, ColumnViewImpl, ExpressionError, I32Add, I32Array,
+    PhysicalType, ScalarRefImpl, StringArray, TypeMismatch, evaluate_binary,
 };
+
+struct StringLengthAdd;
+
+impl BinaryScalarFunction for StringLengthAdd {
+    type Left = String;
+    type Right = i32;
+    type Output = i32;
+
+    fn evaluate(&self, left: &str, right: i32) -> i32 {
+        i32::try_from(left.len()).unwrap().wrapping_add(right)
+    }
+}
 
 #[test]
 fn vectorizes_addition_over_arrays_constants_and_dictionaries() {
@@ -40,6 +52,34 @@ fn propagates_nulls_without_calling_the_scalar_function() {
     let result = evaluate_binary(&I32Add, left, right).unwrap();
     let result = <&I32Array>::try_from(&result).unwrap();
     assert_eq!(result.iter().collect::<Vec<_>>(), vec![None, None]);
+}
+
+#[test]
+fn vectorizes_a_borrowed_mixed_family_function() {
+    let strings: ArrayImpl = StringArray::from_slice(&[Some("rust"), None, Some("db")]).into();
+    let result = evaluate_binary(
+        &StringLengthAdd,
+        ColumnViewImpl::array(&strings),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 3),
+    )
+    .unwrap();
+    let result = <&I32Array>::try_from(&result).unwrap();
+    assert_eq!(
+        result.iter().collect::<Vec<_>>(),
+        vec![Some(6), None, Some(4)]
+    );
+}
+
+#[test]
+fn addition_uses_explicit_wrapping_overflow() {
+    let result = evaluate_binary(
+        &I32Add,
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(i32::MAX), 1),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
+    )
+    .unwrap();
+    let result = <&I32Array>::try_from(&result).unwrap();
+    assert_eq!(result.get(0), Some(i32::MIN));
 }
 
 #[test]
