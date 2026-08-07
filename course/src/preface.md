@@ -29,7 +29,7 @@ The course has eight chapters. This is a dependency order, not an eight-day sche
 | Connect Scalars, References, and Arrays | Build the reciprocal type families manually for integers and strings. | Available |
 | Read Arrays, Constants, and Dictionaries | Expose three borrowed encodings as the same nullable logical rows. | Available |
 | Vectorize a Scalar Function | Apply one typed scalar function to nullable column views. | Available |
-| Erase and Generate Expressions | Support runtime arity and generate the repetitive typed adapters. | Planned |
+| Erase and Generate Expressions | Support runtime arity and generate the repetitive typed adapters. | Available |
 | Bind Logical Expressions | Reject invalid logical signatures and select a concrete kernel. | Planned |
 | Specialize Primitive Loops | Add and measure all-valid primitive fast paths. | Planned |
 | Strengthen Rust Type Boundaries | Exercise opaque iterators, variance, upcasting, and thread-safety contracts. | Planned |
