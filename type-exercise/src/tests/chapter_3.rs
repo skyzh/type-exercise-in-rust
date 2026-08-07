@@ -15,6 +15,18 @@ impl BinaryScalarFunction for StringLengthAdd {
     }
 }
 
+struct I32PairLabel;
+
+impl BinaryScalarFunction for I32PairLabel {
+    type Left = i32;
+    type Right = i32;
+    type Output = String;
+
+    fn evaluate(&self, left: i32, right: i32) -> String {
+        format!("{left}:{right}")
+    }
+}
+
 #[test]
 fn vectorizes_addition_over_arrays_constants_and_dictionaries() {
     let left: ArrayImpl = I32Array::from_slice(&[Some(10), None, Some(30)]).into();
@@ -68,6 +80,19 @@ fn vectorizes_a_borrowed_mixed_family_function() {
         result.iter().collect::<Vec<_>>(),
         vec![Some(6), None, Some(4)]
     );
+}
+
+#[test]
+fn builds_the_associated_output_array_family() {
+    let left: ArrayImpl = I32Array::from_slice(&[Some(4), None]).into();
+    let result = evaluate_binary(
+        &I32PairLabel,
+        ColumnViewImpl::array(&left),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 2),
+    )
+    .unwrap();
+    let result = <&StringArray>::try_from(&result).unwrap();
+    assert_eq!(result.iter().collect::<Vec<_>>(), vec![Some("4:2"), None]);
 }
 
 #[test]
