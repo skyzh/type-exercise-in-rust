@@ -40,15 +40,22 @@ fn binds_integer_addition_before_execution() {
 #[test]
 fn preserves_distinct_logical_string_types() {
     let registry = FunctionRegistry::with_builtins();
+    let char = DataType::Char { width: 4 };
+    for (left, right) in [
+        (DataType::Varchar, DataType::Varchar),
+        (DataType::Varchar, char),
+        (char, DataType::Varchar),
+        (char, char),
+    ] {
+        let expression = registry.bind_binary("concat", left, right).unwrap();
+        assert_eq!(expression.input_types(), &[left, right]);
+        assert_eq!(expression.output_type(), DataType::Varchar);
+        assert_eq!(expression.physical_name(), "string_concat");
+    }
+
     let expression = registry
-        .bind_binary("concat", DataType::Char { width: 4 }, DataType::Varchar)
+        .bind_binary("concat", char, DataType::Varchar)
         .unwrap();
-    assert_eq!(
-        expression.input_types(),
-        &[DataType::Char { width: 4 }, DataType::Varchar]
-    );
-    assert_eq!(expression.output_type(), DataType::Varchar);
-    assert_eq!(expression.physical_name(), "string_concat");
 
     let values: ArrayImpl = StringArray::from_slice(&[Some("data"), Some("rust")]).into();
     let keys = [Some(0), None, Some(1)];
@@ -87,6 +94,14 @@ fn rejects_unsupported_logical_signatures() {
         }
     );
     assert_eq!(
+        expect_bind_error(registry.bind_binary("+", DataType::Integer, DataType::Varchar,)),
+        BindError::UnsupportedArguments {
+            name: "+".to_owned(),
+            left: DataType::Integer,
+            right: DataType::Varchar,
+        }
+    );
+    assert_eq!(
         expect_bind_error(registry.bind_binary("concat", DataType::Integer, DataType::Varchar,)),
         BindError::UnsupportedArguments {
             name: "concat".to_owned(),
@@ -94,20 +109,44 @@ fn rejects_unsupported_logical_signatures() {
             right: DataType::Varchar,
         }
     );
+    assert_eq!(
+        expect_bind_error(registry.bind_binary("concat", DataType::Varchar, DataType::Integer,)),
+        BindError::UnsupportedArguments {
+            name: "concat".to_owned(),
+            left: DataType::Varchar,
+            right: DataType::Integer,
+        }
+    );
 }
 
 #[test]
 fn rejects_a_factory_with_inconsistent_physical_metadata() {
-    let error = expect_bind_error(BoundExpression::new(
+    let input_error = expect_bind_error(BoundExpression::new(
         build_builtin_expression("string_concat").unwrap(),
         [DataType::Integer, DataType::Integer],
-        DataType::Integer,
+        DataType::Varchar,
     ));
     assert_eq!(
-        error,
+        input_error,
         BindError::PhysicalSignatureMismatch {
             name: "string_concat",
             expected_inputs: [PhysicalType::Int32, PhysicalType::Int32],
+            actual_inputs: vec![PhysicalType::String, PhysicalType::String],
+            expected_output: PhysicalType::String,
+            actual_output: PhysicalType::String,
+        }
+    );
+
+    let output_error = expect_bind_error(BoundExpression::new(
+        build_builtin_expression("string_concat").unwrap(),
+        [DataType::Varchar, DataType::Varchar],
+        DataType::Integer,
+    ));
+    assert_eq!(
+        output_error,
+        BindError::PhysicalSignatureMismatch {
+            name: "string_concat",
+            expected_inputs: [PhysicalType::String, PhysicalType::String],
             actual_inputs: vec![PhysicalType::String, PhysicalType::String],
             expected_output: PhysicalType::Int32,
             actual_output: PhysicalType::String,
