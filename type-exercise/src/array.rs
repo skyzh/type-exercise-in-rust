@@ -3,7 +3,9 @@ mod primitive_array;
 mod string_array;
 
 pub use iterator::ArrayIterator;
-pub use primitive_array::{I32Array, I32ArrayBuilder, PrimitiveArray, PrimitiveArrayBuilder};
+pub use primitive_array::{
+    I32Array, I32ArrayBuilder, NonNullPrimitiveArray, PrimitiveArray, PrimitiveArrayBuilder,
+};
 pub use string_array::{StringArray, StringArrayBuilder};
 
 use std::fmt::Debug;

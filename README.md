@@ -5,15 +5,18 @@ The starter contains one owned scalar enum and no trait relationships. A separat
 contains the maintained solution and canonical tests; an `xtask` copies each selected test into
 the starter when the learner is ready to validate a chapter.
 
-The current review boundary contains two chapters:
+The current review boundary contains six chapters:
 
 1. connect `i32`, `String`, their borrowed forms, and their physical arrays with traits and generic
    associated types;
-2. read arrays, repeated constants, and dictionary-encoded values through one borrowed interface.
+2. read arrays, repeated constants, and dictionary-encoded values through one borrowed interface;
+3. vectorize a typed scalar function over nullable inputs;
+4. erase typed expressions behind runtime metadata and generate a builtin catalog;
+5. bind logical signatures to physical expressions; and
+6. select and measure all-valid primitive loops while preserving every general fallback.
 
-Later chapters will vectorize scalar functions, erase and generate expressions, bind logical
-signatures, specialize primitive loops, strengthen Rust type boundaries, and add a batch-level
-async adapter. These topics are not forced into a fixed calendar.
+Later chapters will strengthen Rust type boundaries and add a batch-level async adapter. These
+topics are not forced into a fixed calendar.
 
 ## Start Here
 
@@ -35,7 +38,11 @@ enforces that boundary for coding agents.
 Read the mdBook source in [`course`](./course), beginning with the
 [preface](./course/src/preface.md), [setup](./course/src/setup.md), and
 [Chapter 1](./course/src/chapter-1-type-connections.md). Continue with
-[Chapter 2](./course/src/chapter-2-column-views.md).
+[Chapter 2](./course/src/chapter-2-column-views.md),
+[Chapter 3](./course/src/chapter-3-vectorize-scalar.md),
+[Chapter 4](./course/src/chapter-4-expression-erasure.md),
+[Chapter 5](./course/src/chapter-5-logical-binding.md), and
+[Chapter 6](./course/src/chapter-6-primitive-loops.md).
 
 Copy a chapter's canonical test into the starter with the same workflow used by Mini-LSM:
 
@@ -70,6 +77,14 @@ cargo x copy-test --chapter 1
 cargo test -p type-exercise-starter chapter_1 --locked
 cargo x copy-test --chapter 2
 cargo test -p type-exercise-starter chapter_2 --locked
+cargo x copy-test --chapter 3
+cargo test -p type-exercise-starter chapter_3 --locked
+cargo x copy-test --chapter 4
+cargo test -p type-exercise-starter chapter_4 --locked
+cargo x copy-test --chapter 5
+cargo test -p type-exercise-starter chapter_5 --locked
+cargo x copy-test --chapter 6
+cargo test -p type-exercise-starter chapter_6 --locked
 ```
 
 ## Community
