@@ -7,3 +7,4 @@
 - [Read Arrays, Constants, and Dictionaries](./chapter-2-column-views.md)
 - [Vectorize a Scalar Function](./chapter-3-vectorize-scalar.md)
 - [Erase and Generate Expressions](./chapter-4-expression-erasure.md)
+- [Bind Logical Expressions](./chapter-5-logical-binding.md)
