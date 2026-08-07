@@ -16,6 +16,18 @@ impl BinaryScalarFunction for PanicOnCall {
     }
 }
 
+struct StringLengthAdd;
+
+impl BinaryScalarFunction for StringLengthAdd {
+    type Left = String;
+    type Right = i32;
+    type Output = i32;
+
+    fn evaluate(&self, left: &str, right: i32) -> i32 {
+        i32::try_from(left.len()).unwrap().wrapping_add(right)
+    }
+}
+
 #[test]
 fn evaluates_a_builtin_through_a_trait_object() {
     let expression: Box<dyn Expression> = build_builtin_expression("i32_add").unwrap();
@@ -38,6 +50,23 @@ fn evaluates_a_builtin_through_a_trait_object() {
         result.iter().collect::<Vec<_>>(),
         vec![Some(12), None, Some(32)]
     );
+
+    let expression: Box<dyn Expression> =
+        Box::new(BinaryExpression::new("string_length_add", StringLengthAdd));
+    assert_eq!(
+        expression.input_types(),
+        &[PhysicalType::String, PhysicalType::Int32]
+    );
+    assert_eq!(expression.output_type(), PhysicalType::Int32);
+
+    let strings: ArrayImpl = StringArray::from_slice(&[Some("rust"), None]).into();
+    let inputs = [
+        ColumnViewImpl::array(&strings),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 2),
+    ];
+    let result = expression.evaluate(&inputs).unwrap();
+    let result = <&I32Array>::try_from(&result).unwrap();
+    assert_eq!(result.iter().collect::<Vec<_>>(), vec![Some(6), None]);
 }
 
 #[test]
@@ -108,6 +137,19 @@ fn rejects_arity_before_indexing_or_converting_inputs() {
         Err(ExpressionError::InputArityMismatch {
             expected: 2,
             actual: 1,
+        })
+    );
+
+    let inputs = [
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 1),
+        ColumnViewImpl::null(PhysicalType::String, 1),
+    ];
+    assert_eq!(
+        expression.evaluate(&inputs),
+        Err(ExpressionError::InputArityMismatch {
+            expected: 2,
+            actual: 3,
         })
     );
 }
