@@ -3,8 +3,8 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 
 use crate::{
-    ArrayImpl, ColumnViewImpl, DataType, Expression, ExpressionError, PhysicalType, PrimitiveLoop,
-    build_builtin_expression,
+    ArrayImpl, AsyncExpression, BatchFuture, ColumnViewImpl, DataType, Expression, ExpressionError,
+    PhysicalType, PrimitiveLoop, build_builtin_expression,
 };
 
 /// A checked failure while selecting one physical expression.
@@ -119,6 +119,12 @@ impl BoundExpression {
         inputs: &[ColumnViewImpl<'_>],
     ) -> Result<(ArrayImpl, PrimitiveLoop), ExpressionError> {
         self.expression.evaluate_with_loop(inputs)
+    }
+}
+
+impl AsyncExpression for BoundExpression {
+    fn evaluate_async<'a>(&'a self, inputs: &'a [ColumnViewImpl<'a>]) -> BatchFuture<'a> {
+        Box::pin(async move { self.evaluate(inputs) })
     }
 }
 

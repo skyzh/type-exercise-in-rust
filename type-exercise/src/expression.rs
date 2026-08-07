@@ -1,6 +1,8 @@
 use std::any::Any;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
+use std::future::Future;
+use std::pin::Pin;
 
 use crate::column::NonNullI32Column;
 use crate::{
@@ -69,6 +71,44 @@ pub trait Expression: Any + Send + Sync {
     ) -> Result<(ArrayImpl, PrimitiveLoop), ExpressionError> {
         self.evaluate(inputs)
             .map(|output| (output, PrimitiveLoop::General))
+    }
+}
+
+/// One erased future for one complete batch evaluation.
+pub type BatchFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<ArrayImpl, ExpressionError>> + Send + 'a>>;
+
+/// Evaluate one borrowed batch while keeping the future type compiler-known.
+#[allow(clippy::manual_async_fn)]
+pub fn evaluate_static<'a, E>(
+    expression: &'a E,
+    inputs: &'a [ColumnViewImpl<'a>],
+) -> impl Future<Output = Result<ArrayImpl, ExpressionError>> + Send + 'a
+where
+    E: Expression + ?Sized,
+{
+    async move { expression.evaluate(inputs) }
+}
+
+/// A dyn-compatible asynchronous boundary around one synchronous batch evaluation.
+pub trait AsyncExpression: Send + Sync {
+    fn evaluate_async<'a>(&'a self, inputs: &'a [ColumnViewImpl<'a>]) -> BatchFuture<'a>;
+}
+
+/// Adapt an existing erased physical expression without changing its evaluation semantics.
+pub struct AsyncExpressionAdapter {
+    expression: Box<dyn Expression>,
+}
+
+impl AsyncExpressionAdapter {
+    pub fn new(expression: Box<dyn Expression>) -> Self {
+        Self { expression }
+    }
+}
+
+impl AsyncExpression for AsyncExpressionAdapter {
+    fn evaluate_async<'a>(&'a self, inputs: &'a [ColumnViewImpl<'a>]) -> BatchFuture<'a> {
+        Box::pin(async move { self.expression.evaluate(inputs) })
     }
 }
 
