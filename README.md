@@ -5,7 +5,7 @@ The starter contains one owned scalar enum and no trait relationships. A separat
 contains the maintained solution and canonical tests; an `xtask` copies each selected test into
 the starter when the learner is ready to validate a chapter.
 
-The current review boundary contains seven chapters:
+The course contains eight chapters:
 
 1. connect `i32`, `String`, their borrowed forms, and their physical arrays with traits and generic
    associated types;
@@ -15,10 +15,10 @@ The current review boundary contains seven chapters:
 5. bind logical signatures to physical expressions;
 6. select and measure all-valid primitive loops while preserving every general fallback; and
 7. strengthen iterator, lifetime, trait-object, and thread-safety boundaries without changing
-   expression results.
+   expression results; and
+8. add static and erased batch-level futures while keeping each row evaluation synchronous.
 
-The final planned chapter adds a batch-level async adapter. The course is not forced into a fixed
-calendar.
+The course is a dependency order rather than a fixed calendar.
 
 ## Start Here
 
@@ -44,8 +44,9 @@ Read the mdBook source in [`course`](./course), beginning with the
 [Chapter 3](./course/src/chapter-3-vectorize-scalar.md),
 [Chapter 4](./course/src/chapter-4-expression-erasure.md),
 [Chapter 5](./course/src/chapter-5-logical-binding.md),
-[Chapter 6](./course/src/chapter-6-primitive-loops.md), and
-[Chapter 7](./course/src/chapter-7-rust-boundaries.md).
+[Chapter 6](./course/src/chapter-6-primitive-loops.md),
+[Chapter 7](./course/src/chapter-7-rust-boundaries.md), and
+[Chapter 8](./course/src/chapter-8-async-boundary.md).
 
 Copy a chapter's canonical test into the starter with the same workflow used by Mini-LSM:
 
@@ -90,6 +91,8 @@ cargo x copy-test --chapter 6
 cargo test -p type-exercise-starter chapter_6 --locked
 cargo x copy-test --chapter 7
 cargo test -p type-exercise-starter chapter_7 --locked
+cargo x copy-test --chapter 8
+cargo test -p type-exercise-starter chapter_8 --locked
 ```
 
 ## Community

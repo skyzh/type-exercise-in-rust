@@ -42,5 +42,6 @@ jobs:
           cargo x copy-test --chapter 5
           cargo x copy-test --chapter 6
           cargo x copy-test --chapter 7
+          cargo x copy-test --chapter 8
       - name: Test course
         run: mdbook test course
