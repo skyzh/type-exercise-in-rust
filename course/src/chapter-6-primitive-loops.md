@@ -9,8 +9,9 @@ all-valid i32 array + all-valid i32 array
                     -> select one dense loop -> I32Array
 ```
 
-This chapter adds four all-valid loop shapes without changing the binder, scalar rule, null
-semantics, or checked error boundaries.
+This chapter adds four all-valid loop shapes without changing the logical registry, scalar rule,
+null semantics, or checked error boundaries. It does extend the erased and bound expression APIs
+so tests can observe which loop one batch selected.
 
 ## Starting Point and Result
 
@@ -26,7 +27,9 @@ After this chapter, add these public pieces:
 - dense primitive storage with a validity vector and cached null count;
 - `NonNullPrimitiveArray`, a checked view that proves all values are valid;
 - `PrimitiveBinaryExpression`, the specialized adapter for `i32, i32 -> i32`; and
-- `PrimitiveLoop`, which makes the selected loop observable in tests.
+- `PrimitiveLoop`, which names the selected loop; and
+- `Expression::evaluate_with_loop` plus a `BoundExpression` forwarding method, which expose that
+  observation through the erased catalog and logical binder.
 
 Keep `BinaryExpression` as the general adapter. The builtin catalog should construct the
 specialized adapter only for `i32_add`; `string_concat` stays on the generic path.
@@ -75,10 +78,12 @@ Choose the shape before iterating. Each dense loop reads plain `i32` values, app
 Do not turn this into a per-row representation match. If the chosen loop still asks whether an
 input is an array or constant for every row, it has not moved dispatch out of the hot loop.
 
-Expose an `evaluate_with_loop` helper returning both the erased output and `PrimitiveLoop`.
-`Expression::evaluate` delegates to it and discards the observation. This keeps production callers
-on the object-safe interface while supplied tests prove that every eligible shape is actually
-selected.
+Extend `Expression` with an object-safe `evaluate_with_loop` observer that returns the erased output
+and `PrimitiveLoop`. Its default implementation calls the expression's ordinary `evaluate` method
+and reports `General`. `PrimitiveBinaryExpression` overrides the observer; its ordinary `evaluate`
+method calls the specialized observer and discards the loop label. Add the same forwarding method
+to `BoundExpression` so supplied tests can prove that binding and catalog lookup selected the
+primitive adapter without downcasting the trait object.
 
 ## Preserve the General Fallback
 
@@ -121,27 +126,35 @@ the catalog entries so each entry supplies its constructed expression:
 "string_concat" => BinaryExpression::new("string_concat", StringConcat),
 ```
 
-The logical registry does not change. Chapter 5 still binds `+` to the physical name `i32_add`;
-the catalog now chooses its optimized adapter behind the same `Box<dyn Expression>` boundary.
+The logical registry and accepted signatures do not change. Chapter 5 still binds `+` to the
+physical name `i32_add`; the catalog now chooses its optimized adapter behind the same
+`Box<dyn Expression>` boundary. Only the bound expression's observer forwarding method is new.
 
 ## Measure Without Timing Setup
 
-Run the maintained comparison after the tests pass:
+The repository also contains a maintainer benchmark for the completed reference solution:
 
 ```console
 cargo bench -p type-exercise --bench expression
 ```
+
+This command targets `type-exercise`, not the learner's `type-exercise-starter` crate. It is
+reference-only evidence and is not part of the learner completion contract.
 
 The benchmark covers the four dense shapes plus nullable-array, null-constant, and dictionary
 fallbacks. Every case uses deterministic inputs and compares three implementations:
 
 - the general `BinaryExpression`;
 - the specialized `PrimitiveBinaryExpression`; and
-- a direct handwritten loop over the same column views.
+- a handwritten lower-bound kernel.
 
-All three must materialize the same `I32Array`, and the harness checks equality before timing.
-Construct and validate dictionary keys outside the timed closure. Otherwise an `O(n)` setup scan
-can be mistaken for expression work and distort the comparison.
+The general and specialized adapters receive the same `ColumnViewImpl` inputs. For dense cases,
+the handwritten kernel receives preclassified slices or constant metadata outside timing; it is a
+lower bound on loop work, not a peer adapter performing representation selection. Fallback
+handwritten cases use the general typed-view loop. All three paths materialize the same `I32Array`,
+and the harness checks equality before timing. Construct and validate dictionary keys outside the
+timed closure. Otherwise an `O(n)` setup scan can be mistaken for expression work and distort the
+comparison.
 
 Treat Criterion output as an observation for that machine, toolchain, and load. The course does
 not impose a portable percentage threshold. Dense specialization should be evaluated by semantic
@@ -155,7 +168,7 @@ equivalence, loop selection, and reproducible methodology first; performance num
 4. Implement all four preselected dense loops with the existing scalar function.
 5. Delegate nullable, null-constant, and dictionary inputs to the general evaluator.
 6. Keep string concatenation on `BinaryExpression` and binding unchanged.
-7. Run the benchmark only after output equality is checked outside timing.
+7. Keep the maintainer benchmark reference-only and check output equality outside timing.
 
 ## Review Your Chapter Result
 
@@ -164,7 +177,6 @@ Run:
 ```console
 cargo test -p type-exercise-starter chapter_6 --locked
 cargo test -p type-exercise-starter --lib --locked
-cargo bench -p type-exercise --bench expression
 ```
 
 The Chapter 6 contract contains seven tests. They cover primitive null-count proofs, all four
@@ -177,7 +189,8 @@ Before continuing, explain:
 - why dictionary decoding remains in the general loop;
 - why representation selection belongs before the row loop;
 - why fast-path errors must match the general adapter's order; and
-- why an equality-checked, setup-free benchmark is more useful than a fixed speed threshold.
+- why the reference-only benchmark treats a preclassified handwritten kernel as a lower bound
+  instead of a portable speed threshold.
 
 Chapter 7 will keep these runtime semantics and strengthen Rust's API boundaries around iteration,
 variance, trait upcasting, and thread-safety.

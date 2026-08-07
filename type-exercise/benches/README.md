@@ -1,14 +1,17 @@
 # Chapter 6 benchmark method
 
-Run the maintained Criterion comparison with:
+This benchmark measures the maintained `type-exercise` reference solution, not learner code in
+`type-exercise-starter`. Run it with:
 
 ```console
 cargo bench -p type-exercise --bench expression
 ```
 
-Every case uses 65,536 deterministic rows and materializes an `I32Array`. The harness compares the
-general adapter, the primitive-specialized adapter, and a direct handwritten loop over the same
-borrowed column views. It checks identical outputs before timing.
+Every case uses 65,536 deterministic rows and materializes an `I32Array`. The general and
+primitive-specialized adapters receive the same borrowed column views. The dense handwritten
+baseline receives preclassified slices or constant metadata outside timing, so it is a lower-bound
+kernel rather than a peer adapter that performs representation selection. Fallback handwritten
+cases use the general typed-view loop. The harness checks identical outputs before timing.
 
 The four dense cases cover array/array, array/constant, constant/array, and constant/constant.
 Three fallback cases cover a nullable array, a null constant, and a dictionary. Dictionary keys
