@@ -26,6 +26,17 @@ for the deliberately hidden iterator type, and add or strengthen these boundarie
 - the concrete `ColumnViewImpl<'a>` representation remains covariant over `'a`; and
 - the concrete array iterator becomes an implementation detail rather than a public return type.
 
+Copy the Chapter 7 tests before implementing:
+
+```console
+cargo x copy-test --chapter 7
+cargo test -p type-exercise-starter chapter_7 --locked
+```
+
+That first focused run should fail to compile because the starter does not yet satisfy the new
+type boundaries. A successful run reporting zero matched tests means the Chapter 7 contract was
+not copied. After the implementation is complete, the same focused command passes six tests.
+
 The rolling stable toolchain selected by this repository supports return-position `impl Trait` in
 traits and direct trait-object upcasting. The repository still declares no older minimum supported
 Rust version.
@@ -49,6 +60,18 @@ borrow. Hiding the iterator does not erase item lifetimes.
 types. Returning an opaque iterator therefore does not remove an existing `dyn Array` use. It
 narrows the public contract to the behavior callers need: an iterator over nullable borrowed
 values.
+
+Make the hidden concrete type part of the learner-owned compile-time contract. Add a compile-fail
+doctest beside `Array::iter` in the starter crate:
+
+````rust,ignore
+/// ```compile_fail
+/// use type_exercise_starter::ArrayIterator;
+/// ```
+````
+
+The doctest names the starter crate intentionally. It passes only when callers cannot import the
+concrete iterator; `cargo test -p type-exercise-starter --doc --locked` runs this privacy check.
 
 Verify both ends of the behavior. An empty array ends immediately, while nullable integer and
 string arrays yield their values and nulls in order. For strings, collect `Option<&str>` rather
@@ -91,8 +114,8 @@ adapters.
 
 The logical registry stores boxed factory closures. Add `Send + Sync + 'static` to both the erased
 factory type and the closure accepted by `register_binary`. `Fn` remains the correct call trait:
-one registered factory can bind many batches through `&self`. `FnMut` would require exclusive or
-internally synchronized mutation, while `FnOnce` could be called only once.
+one registered factory can serve many binding requests through `&self`. `FnMut` would require
+exclusive or internally synchronized mutation, while `FnOnce` could be called only once.
 
 A closure may still capture state. An `Arc<AtomicUsize>`, for example, is compatible because the
 capture is itself thread-safe. A closure that captures `Rc` should fail at registration rather
@@ -123,7 +146,7 @@ compiler already proves the allowed direction.
 Preserve these rules:
 
 1. Opaque array iteration yields the same nullable rows as indexed access, including borrowed
-   strings and empty arrays.
+   strings and empty arrays, without exposing the concrete iterator type.
 2. Direct `dyn Expression` to `dyn Any` upcasting is followed by a checked downcast.
 3. `Box<dyn Expression>` and `FunctionRegistry` are both `Send + Sync`.
 4. Scalar-function values and registered factories satisfy the same worker boundary.
@@ -134,7 +157,8 @@ Preserve these rules:
 ## Implementation Checkpoints
 
 1. Change `Array::iter` to return `impl Iterator` with an explicit borrow lifetime.
-2. Stop exporting the concrete array iterator as part of the public API.
+2. Stop exporting the concrete array iterator as part of the public API and add its compile-fail
+   doctest beside `Array::iter`.
 3. Add `Any + Send + Sync` to `Expression` and close the generic function lifetime boundary.
 4. Require stored logical factories and registration closures to be `Send + Sync + 'static`.
 5. Exercise matching and mismatching checked expression downcasts.
@@ -148,11 +172,14 @@ Run:
 ```console
 cargo test -p type-exercise-starter chapter_7 --locked
 cargo test -p type-exercise-starter --lib --locked
+cargo test -p type-exercise-starter --doc --locked
 ```
 
-The Chapter 7 contract contains six tests. They cover empty and nullable opaque iteration,
-borrowed string items, direct trait-object upcasting with checked recovery, worker-safe erased
-expressions, thread-safe captured factory state, and concrete column-view covariance.
+The Chapter 7 contract contains six supplied tests plus one compile-fail doctest. The supplied
+tests cover empty and nullable opaque iteration, borrowed string items, direct trait-object
+upcasting with checked recovery, worker-safe erased expressions, thread-safe captured factory
+state, and concrete column-view covariance. The doctest separately proves that the concrete
+iterator cannot be named through the public API.
 
 Before continuing, explain:
 
