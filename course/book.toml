@@ -1,5 +1,6 @@
 [book]
 authors = ["Alex Chi"]
+description = "An eight-chapter Rust course that builds a vectorized database expression framework"
 language = "en"
 src = "src"
 title = "Build a Database Expression Framework in Rust"

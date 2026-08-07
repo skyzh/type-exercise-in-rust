@@ -122,7 +122,8 @@ fn preserves_strict_nulls_through_the_erased_adapter() {
 
 #[test]
 fn rejects_arity_before_indexing_or_converting_inputs() {
-    let expression = build_builtin_expression("i32_add").unwrap();
+    let expression: Box<dyn Expression> =
+        Box::new(BinaryExpression::new("string_length_add", StringLengthAdd));
     assert_eq!(
         expression.evaluate(&[]),
         Err(ExpressionError::InputArityMismatch {
