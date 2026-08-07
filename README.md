@@ -13,7 +13,7 @@ The course contains eight chapters:
 3. vectorize a typed scalar function over nullable inputs;
 4. erase typed expressions behind runtime metadata and generate a builtin catalog;
 5. bind logical signatures to physical expressions;
-6. select and measure all-valid primitive loops while preserving every general fallback; and
+6. select and measure all-valid primitive loops while preserving every general fallback;
 7. strengthen iterator, lifetime, trait-object, and thread-safety boundaries without changing
    expression results; and
 8. add static and erased batch-level futures while keeping each row evaluation synchronous.
@@ -74,26 +74,9 @@ cargo check -p type-exercise-starter --lib --locked
 mdbook test course
 ```
 
-To validate a completed learner checkpoint, copy and run its test:
-
-```console
-cargo x copy-test --chapter 1
-cargo test -p type-exercise-starter chapter_1 --locked
-cargo x copy-test --chapter 2
-cargo test -p type-exercise-starter chapter_2 --locked
-cargo x copy-test --chapter 3
-cargo test -p type-exercise-starter chapter_3 --locked
-cargo x copy-test --chapter 4
-cargo test -p type-exercise-starter chapter_4 --locked
-cargo x copy-test --chapter 5
-cargo test -p type-exercise-starter chapter_5 --locked
-cargo x copy-test --chapter 6
-cargo test -p type-exercise-starter chapter_6 --locked
-cargo x copy-test --chapter 7
-cargo test -p type-exercise-starter chapter_7 --locked
-cargo x copy-test --chapter 8
-cargo test -p type-exercise-starter chapter_8 --locked
-```
+To validate a completed learner checkpoint, repeat the copy-and-test pair from
+**Start Here** with that chapter's number. Each chapter also gives its focused
+command and expected result.
 
 ## Community
 
