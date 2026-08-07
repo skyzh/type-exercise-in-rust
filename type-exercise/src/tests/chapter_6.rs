@@ -20,11 +20,8 @@ fn proves_when_primitive_storage_has_no_nulls() {
 
     let built_dense = I32Array::from_slice(&[Some(4), Some(5)]);
     assert_eq!(built_dense.as_non_null().unwrap().values(), &[4, 5]);
-    assert!(I32Array::from_values(Vec::new())
-        .as_non_null()
-        .unwrap()
-        .values()
-        .is_empty());
+    let empty = I32Array::from_values(Vec::new());
+    assert!(empty.as_non_null().unwrap().values().is_empty());
 }
 
 #[test]
