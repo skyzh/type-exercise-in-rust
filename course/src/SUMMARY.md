@@ -9,3 +9,4 @@
 - [Erase and Generate Expressions](./chapter-4-expression-erasure.md)
 - [Bind Logical Expressions](./chapter-5-logical-binding.md)
 - [Specialize Primitive Loops](./chapter-6-primitive-loops.md)
+- [Strengthen Rust Type Boundaries](./chapter-7-rust-boundaries.md)
