@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
@@ -54,7 +55,7 @@ pub enum PrimitiveLoop {
 }
 
 /// A runtime-erased expression with discoverable physical metadata.
-pub trait Expression {
+pub trait Expression: Any + Send + Sync {
     fn name(&self) -> &'static str;
     fn input_types(&self) -> &[PhysicalType];
     fn arity(&self) -> usize {
@@ -72,7 +73,7 @@ pub trait Expression {
 }
 
 /// One typed binary scalar function that can be lifted over nullable columns.
-pub trait BinaryScalarFunction {
+pub trait BinaryScalarFunction: Send + Sync + 'static {
     type Left: Scalar;
     type Right: Scalar;
     type Output: Scalar;

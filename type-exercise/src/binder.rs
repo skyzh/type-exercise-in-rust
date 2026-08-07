@@ -122,7 +122,8 @@ impl BoundExpression {
     }
 }
 
-type BinaryFactory = dyn Fn(DataType, DataType) -> Result<BoundExpression, BindError> + 'static;
+type BinaryFactory =
+    dyn Fn(DataType, DataType) -> Result<BoundExpression, BindError> + Send + Sync + 'static;
 
 /// Planning-time registry for logical binary functions.
 #[derive(Default)]
@@ -141,7 +142,10 @@ impl FunctionRegistry {
     pub fn register_binary(
         &mut self,
         name: impl Into<String>,
-        factory: impl Fn(DataType, DataType) -> Result<BoundExpression, BindError> + 'static,
+        factory: impl Fn(DataType, DataType) -> Result<BoundExpression, BindError>
+        + Send
+        + Sync
+        + 'static,
     ) {
         self.binary.insert(name.into(), Box::new(factory));
     }

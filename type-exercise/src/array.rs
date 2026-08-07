@@ -2,7 +2,7 @@ mod iterator;
 mod primitive_array;
 mod string_array;
 
-pub use iterator::ArrayIterator;
+use iterator::ArrayIterator;
 pub use primitive_array::{
     I32Array, I32ArrayBuilder, NonNullPrimitiveArray, PrimitiveArray, PrimitiveArrayBuilder,
 };
@@ -29,7 +29,12 @@ where
         self.len() == 0
     }
 
-    fn iter(&self) -> ArrayIterator<'_, Self> {
+    /// Iterate without exposing the concrete iterator type.
+    ///
+    /// ```compile_fail
+    /// use type_exercise::ArrayIterator;
+    /// ```
+    fn iter<'a>(&'a self) -> impl Iterator<Item = Option<Self::RefItem<'a>>> + 'a {
         ArrayIterator::new(self)
     }
 
