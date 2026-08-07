@@ -1,8 +1,9 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
+use crate::column::NonNullI32Column;
 use crate::{
-    Array, ArrayBuilder, ArrayImpl, ColumnView, ColumnViewImpl, PhysicalType, Scalar,
+    Array, ArrayBuilder, ArrayImpl, ColumnView, ColumnViewImpl, I32Array, PhysicalType, Scalar,
     ScalarRefImpl, TypeMismatch,
 };
 
@@ -42,6 +43,16 @@ impl From<TypeMismatch> for ExpressionError {
     }
 }
 
+/// The loop selected for one binary evaluation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PrimitiveLoop {
+    General,
+    ArrayArray,
+    ArrayConstant,
+    ConstantArray,
+    ConstantConstant,
+}
+
 /// A runtime-erased expression with discoverable physical metadata.
 pub trait Expression {
     fn name(&self) -> &'static str;
@@ -51,6 +62,13 @@ pub trait Expression {
     }
     fn output_type(&self) -> PhysicalType;
     fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError>;
+    fn evaluate_with_loop(
+        &self,
+        inputs: &[ColumnViewImpl<'_>],
+    ) -> Result<(ArrayImpl, PrimitiveLoop), ExpressionError> {
+        self.evaluate(inputs)
+            .map(|output| (output, PrimitiveLoop::General))
+    }
 }
 
 /// One typed binary scalar function that can be lifted over nullable columns.
@@ -114,6 +132,17 @@ where
 {
     let left = ColumnView::<F::Left>::try_from(left)?;
     let right = ColumnView::<F::Right>::try_from(right)?;
+    evaluate_typed_binary(function, left, right)
+}
+
+fn evaluate_typed_binary<'a, F>(
+    function: &F,
+    left: ColumnView<'a, F::Left>,
+    right: ColumnView<'a, F::Right>,
+) -> Result<ArrayImpl, ExpressionError>
+where
+    F: BinaryScalarFunction,
+{
     if left.len() != right.len() {
         return Err(ExpressionError::InputLengthMismatch {
             left: left.len(),
@@ -131,6 +160,137 @@ where
         output.push(value.as_ref().map(Scalar::as_scalar_ref));
     }
     Ok(output.finish().into())
+}
+
+/// An `i32` binary adapter with checked all-valid fast paths.
+pub struct PrimitiveBinaryExpression<F> {
+    name: &'static str,
+    input_types: [PhysicalType; 2],
+    function: F,
+}
+
+impl<F> PrimitiveBinaryExpression<F>
+where
+    F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32>,
+{
+    pub fn new(name: &'static str, function: F) -> Self {
+        Self {
+            name,
+            input_types: [PhysicalType::Int32, PhysicalType::Int32],
+            function,
+        }
+    }
+
+    pub fn evaluate_with_loop(
+        &self,
+        inputs: &[ColumnViewImpl<'_>],
+    ) -> Result<(ArrayImpl, PrimitiveLoop), ExpressionError> {
+        if inputs.len() != self.input_types.len() {
+            return Err(ExpressionError::InputArityMismatch {
+                expected: self.input_types.len(),
+                actual: inputs.len(),
+            });
+        }
+
+        for (input, expected) in inputs.iter().zip(self.input_types) {
+            if input.physical_type() != expected {
+                return Err(TypeMismatch {
+                    expected,
+                    actual: input.physical_type(),
+                }
+                .into());
+            }
+        }
+
+        if inputs[0].len() != inputs[1].len() {
+            return Err(ExpressionError::InputLengthMismatch {
+                left: inputs[0].len(),
+                right: inputs[1].len(),
+            });
+        }
+
+        let Some(left) = inputs[0].as_non_null_i32() else {
+            return Ok((
+                evaluate_binary(&self.function, inputs[0], inputs[1])?,
+                PrimitiveLoop::General,
+            ));
+        };
+        let Some(right) = inputs[1].as_non_null_i32() else {
+            return Ok((
+                evaluate_binary(&self.function, inputs[0], inputs[1])?,
+                PrimitiveLoop::General,
+            ));
+        };
+        debug_assert_eq!(left.len(), right.len());
+
+        let (values, selected_loop) = match (left, right) {
+            (NonNullI32Column::Array(left), NonNullI32Column::Array(right)) => (
+                left.values()
+                    .iter()
+                    .copied()
+                    .zip(right.values().iter().copied())
+                    .map(|(left, right)| self.function.evaluate(left, right))
+                    .collect(),
+                PrimitiveLoop::ArrayArray,
+            ),
+            (NonNullI32Column::Array(left), NonNullI32Column::Constant { value: right, .. }) => (
+                left.values()
+                    .iter()
+                    .copied()
+                    .map(|left| self.function.evaluate(left, right))
+                    .collect(),
+                PrimitiveLoop::ArrayConstant,
+            ),
+            (NonNullI32Column::Constant { value: left, .. }, NonNullI32Column::Array(right)) => (
+                right
+                    .values()
+                    .iter()
+                    .copied()
+                    .map(|right| self.function.evaluate(left, right))
+                    .collect(),
+                PrimitiveLoop::ConstantArray,
+            ),
+            (
+                NonNullI32Column::Constant { value: left, len },
+                NonNullI32Column::Constant { value: right, .. },
+            ) => (
+                (0..len)
+                    .map(|_| self.function.evaluate(left, right))
+                    .collect(),
+                PrimitiveLoop::ConstantConstant,
+            ),
+        };
+
+        Ok((I32Array::from_values(values).into(), selected_loop))
+    }
+}
+
+impl<F> Expression for PrimitiveBinaryExpression<F>
+where
+    F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32>,
+{
+    fn name(&self) -> &'static str {
+        self.name
+    }
+
+    fn input_types(&self) -> &[PhysicalType] {
+        &self.input_types
+    }
+
+    fn output_type(&self) -> PhysicalType {
+        PhysicalType::Int32
+    }
+
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+        self.evaluate_with_loop(inputs).map(|(output, _)| output)
+    }
+
+    fn evaluate_with_loop(
+        &self,
+        inputs: &[ColumnViewImpl<'_>],
+    ) -> Result<(ArrayImpl, PrimitiveLoop), ExpressionError> {
+        PrimitiveBinaryExpression::evaluate_with_loop(self, inputs)
+    }
 }
 
 /// Adapt one typed binary scalar function to the runtime expression interface.
@@ -184,13 +344,13 @@ where
 }
 
 macro_rules! define_builtin_expressions {
-    ($( $name:literal => $function:expr ),+ $(,)?) => {
+    ($( $name:literal => $expression:expr ),+ $(,)?) => {
         pub const BUILTIN_EXPRESSION_NAMES: &[&str] = &[$($name),+];
 
         pub fn build_builtin_expression(name: &str) -> Option<Box<dyn Expression>> {
             match name {
                 $(
-                    $name => Some(Box::new(BinaryExpression::new($name, $function))),
+                    $name => Some(Box::new($expression)),
                 )+
                 _ => None,
             }
@@ -199,6 +359,6 @@ macro_rules! define_builtin_expressions {
 }
 
 define_builtin_expressions! {
-    "i32_add" => I32Add,
-    "string_concat" => StringConcat,
+    "i32_add" => PrimitiveBinaryExpression::new("i32_add", I32Add),
+    "string_concat" => BinaryExpression::new("string_concat", StringConcat),
 }

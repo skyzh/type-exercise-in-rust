@@ -3,7 +3,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 
 use crate::{
-    ArrayImpl, ColumnViewImpl, DataType, Expression, ExpressionError, PhysicalType,
+    ArrayImpl, ColumnViewImpl, DataType, Expression, ExpressionError, PhysicalType, PrimitiveLoop,
     build_builtin_expression,
 };
 
@@ -112,6 +112,13 @@ impl BoundExpression {
 
     pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
         self.expression.evaluate(inputs)
+    }
+
+    pub fn evaluate_with_loop(
+        &self,
+        inputs: &[ColumnViewImpl<'_>],
+    ) -> Result<(ArrayImpl, PrimitiveLoop), ExpressionError> {
+        self.expression.evaluate_with_loop(inputs)
     }
 }
 

@@ -1,7 +1,9 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
-use crate::{Array, ArrayImpl, PhysicalType, Scalar, ScalarRefImpl, TypeMismatch};
+use crate::{
+    Array, ArrayImpl, NonNullPrimitiveArray, PhysicalType, Scalar, ScalarRefImpl, TypeMismatch,
+};
 
 /// A borrowed column whose scalar and array types are known only at runtime.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -21,6 +23,21 @@ enum ColumnViewImplKind<'a> {
         indices: &'a [Option<usize>],
         values: &'a ArrayImpl,
     },
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum NonNullI32Column<'a> {
+    Array(NonNullPrimitiveArray<'a, i32>),
+    Constant { value: i32, len: usize },
+}
+
+impl NonNullI32Column<'_> {
+    pub(crate) fn len(self) -> usize {
+        match self {
+            Self::Array(array) => array.values().len(),
+            Self::Constant { len, .. } => len,
+        }
+    }
 }
 
 /// A dictionary key selected a value outside the dictionary-values array.
@@ -110,6 +127,22 @@ impl<'a> ColumnViewImpl<'a> {
             ColumnViewImplKind::Array(array) => array.physical_type(),
             ColumnViewImplKind::Constant { physical_type, .. } => *physical_type,
             ColumnViewImplKind::Dictionary { values, .. } => values.physical_type(),
+        }
+    }
+
+    pub(crate) fn as_non_null_i32(self) -> Option<NonNullI32Column<'a>> {
+        match self.kind {
+            ColumnViewImplKind::Array(ArrayImpl::Int32(array)) => {
+                array.as_non_null().map(NonNullI32Column::Array)
+            }
+            ColumnViewImplKind::Constant {
+                value: Some(ScalarRefImpl::Int32(value)),
+                len,
+                ..
+            } => Some(NonNullI32Column::Constant { value, len }),
+            ColumnViewImplKind::Array(ArrayImpl::String(_))
+            | ColumnViewImplKind::Constant { .. }
+            | ColumnViewImplKind::Dictionary { .. } => None,
         }
     }
 }

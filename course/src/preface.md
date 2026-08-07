@@ -31,14 +31,15 @@ The course has eight chapters. This is a dependency order, not an eight-day sche
 | Vectorize a Scalar Function | Apply one typed scalar function to nullable column views. | Available |
 | Erase and Generate Expressions | Support runtime arity and generate the repetitive typed adapters. | Available |
 | Bind Logical Expressions | Reject invalid logical signatures and select a concrete kernel. | Available |
-| Specialize Primitive Loops | Add and measure all-valid primitive fast paths. | Planned |
+| Specialize Primitive Loops | Add and measure all-valid primitive fast paths. | Available |
 | Strengthen Rust Type Boundaries | Exercise opaque iterators, variance, upcasting, and thread-safety contracts. | Planned |
 | Add a Batch Async Boundary | Adapt whole batches without making each row evaluation asynchronous. | Planned |
 
-You begin with two representative types and implement every connection explicitly. The first five
-chapters keep type-family construction, column representation, typed evaluation, runtime
-erasure, and logical binding separate so that each chapter has one testable abstraction boundary.
-Macro expansion and the broader type set come only after those boundaries are visible.
+You begin with two representative types and implement every connection explicitly. The first six
+chapters keep type-family construction, column representation, typed evaluation, runtime erasure,
+logical binding, and primitive specialization separate so that each chapter has one testable
+abstraction boundary. Macro expansion and the broader type set come only after those boundaries
+are visible.
 
 ## What You Need to Know
 
