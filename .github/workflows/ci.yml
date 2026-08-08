@@ -45,3 +45,7 @@ jobs:
           cargo x copy-test --chapter 8
       - name: Test course
         run: mdbook test course
+      - name: Install sitemap generator
+        run: npm install --global static-sitemap-cli@2.2.8
+      - name: Check sitemap
+        run: course/sitemap.sh --check

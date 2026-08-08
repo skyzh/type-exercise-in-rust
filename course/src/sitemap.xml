@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+        <loc>https://skyzh.github.io/type-exercise-in-rust</loc>
+    </url>
+    <url>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/chapter-1-type-connections</loc>
+    </url>
+    <url>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/chapter-2-column-views</loc>
+    </url>
+    <url>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/chapter-3-vectorize-scalar</loc>
+    </url>
+    <url>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/chapter-4-expression-erasure</loc>
+    </url>
+    <url>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/chapter-5-logical-binding</loc>
+    </url>
+    <url>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/chapter-6-primitive-loops</loc>
+    </url>
+    <url>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/chapter-7-rust-boundaries</loc>
+    </url>
+    <url>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/chapter-8-async-boundary</loc>
+    </url>
+    <url>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/preface</loc>
+    </url>
+    <url>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/setup</loc>
+    </url>
+</urlset>

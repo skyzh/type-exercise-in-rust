@@ -1,0 +1,11 @@
+https://skyzh.github.io/type-exercise-in-rust
+https://skyzh.github.io/type-exercise-in-rust/chapter-1-type-connections
+https://skyzh.github.io/type-exercise-in-rust/chapter-2-column-views
+https://skyzh.github.io/type-exercise-in-rust/chapter-3-vectorize-scalar
+https://skyzh.github.io/type-exercise-in-rust/chapter-4-expression-erasure
+https://skyzh.github.io/type-exercise-in-rust/chapter-5-logical-binding
+https://skyzh.github.io/type-exercise-in-rust/chapter-6-primitive-loops
+https://skyzh.github.io/type-exercise-in-rust/chapter-7-rust-boundaries
+https://skyzh.github.io/type-exercise-in-rust/chapter-8-async-boundary
+https://skyzh.github.io/type-exercise-in-rust/preface
+https://skyzh.github.io/type-exercise-in-rust/setup

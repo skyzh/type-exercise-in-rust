@@ -20,6 +20,17 @@ The course contains eight chapters:
 
 The course is a dependency order rather than a fixed calendar.
 
+## Book
+
+Read the published mdBook at
+[Build a Database Expression Framework in Rust](https://skyzh.github.io/type-exercise-in-rust/).
+
+To preview the book locally:
+
+```console
+mdbook serve course --open
+```
+
 ## Start Here
 
 The learner workspace is [`type-exercise-starter`](./type-exercise-starter). Begin from `main`,
