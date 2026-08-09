@@ -415,6 +415,17 @@ fn boundary_validation_fails_closed_for_two_four_and_five_inputs() {
             actual: 1
         })
     );
+    assert_eq!(
+        add.evaluate(&[
+            ColumnViewImpl::constant(ScalarRefImpl::Int16(1), 3),
+            ColumnViewImpl::constant(ScalarRefImpl::Int16(2), 1),
+        ]),
+        Err(ExpressionError::InputLengthMismatch {
+            expected: 3,
+            actual: 1,
+            input_index: 1,
+        })
+    );
 
     let columns = [
         ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 2),
