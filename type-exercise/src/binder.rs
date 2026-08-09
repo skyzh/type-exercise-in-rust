@@ -3,8 +3,12 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 
 use crate::{
-    ArrayImpl, AsyncExpression, BatchFuture, ColumnViewImpl, DataType, Expression, ExpressionError,
-    PhysicalType, PrimitiveLoop, build_builtin_expression,
+    ArithmeticOperator, ArrayImpl, AsyncExpression, BatchFuture, ColumnViewImpl,
+    ComparisonOperator, DataType, Expression, ExpressionError, PhysicalType, PrimitiveLoop,
+    build_bool_comparison_expression, build_builtin_expression, build_numeric_binary_expression,
+    build_numeric_clamp_expression, build_numeric_comparison_expression,
+    build_numeric_neg_expression, build_string_comparison_expression,
+    build_string_contains_expression, promote_numeric,
 };
 
 /// A checked failure while selecting one physical expression.
@@ -149,7 +153,31 @@ pub struct FunctionRegistry {
 impl FunctionRegistry {
     pub fn with_builtins() -> Self {
         let mut registry = Self::default();
-        registry.register_binary("+", bind_add);
+        for (name, operator) in [
+            ("+", ArithmeticOperator::Add),
+            ("-", ArithmeticOperator::Subtract),
+            ("*", ArithmeticOperator::Multiply),
+            ("/", ArithmeticOperator::Divide),
+        ] {
+            registry.register_binary(name, move |left, right| {
+                bind_arithmetic(name, operator, left, right)
+            });
+        }
+        registry.register_unary("neg", bind_neg);
+        registry.register_ternary("clamp", bind_clamp);
+        for (name, operator) in [
+            ("<", ComparisonOperator::Less),
+            ("<=", ComparisonOperator::LessOrEqual),
+            (">", ComparisonOperator::Greater),
+            (">=", ComparisonOperator::GreaterOrEqual),
+            ("=", ComparisonOperator::Equal),
+            ("!=", ComparisonOperator::NotEqual),
+        ] {
+            registry.register_binary(name, move |left, right| {
+                bind_comparison(name, operator, left, right)
+            });
+        }
+        registry.register_binary("contains", bind_contains);
         registry.register_binary("concat", bind_concat);
         registry
     }
@@ -185,6 +213,47 @@ impl FunctionRegistry {
         });
     }
 
+    pub fn register_unary(
+        &mut self,
+        name: impl Into<String>,
+        factory: impl Fn(DataType) -> Result<BoundExpression, BindError> + Send + Sync + 'static,
+    ) {
+        let name = name.into();
+        let error_name = name.clone();
+        self.register(name, move |inputs| {
+            let [input] = inputs else {
+                return Err(BindError::InputArityMismatch {
+                    name: error_name.clone(),
+                    expected: 1,
+                    actual: inputs.len(),
+                });
+            };
+            factory(*input)
+        });
+    }
+
+    pub fn register_ternary(
+        &mut self,
+        name: impl Into<String>,
+        factory: impl Fn(DataType, DataType, DataType) -> Result<BoundExpression, BindError>
+        + Send
+        + Sync
+        + 'static,
+    ) {
+        let name = name.into();
+        let error_name = name.clone();
+        self.register(name, move |inputs| {
+            let [first, second, third] = inputs else {
+                return Err(BindError::InputArityMismatch {
+                    name: error_name.clone(),
+                    expected: 3,
+                    actual: inputs.len(),
+                });
+            };
+            factory(*first, *second, *third)
+        });
+    }
+
     pub fn bind(&self, name: &str, inputs: &[DataType]) -> Result<BoundExpression, BindError> {
         self.functions
             .get(name)
@@ -208,14 +277,135 @@ fn build_physical(name: &'static str) -> Result<Box<dyn Expression>, BindError> 
     build_builtin_expression(name).ok_or(BindError::MissingPhysicalExpression { name })
 }
 
-fn bind_add(left: DataType, right: DataType) -> Result<BoundExpression, BindError> {
-    if (left, right) != (DataType::Integer, DataType::Integer) {
-        return Err(BindError::UnsupportedArguments {
-            name: "+".to_owned(),
-            inputs: vec![left, right],
-        });
+fn unsupported(name: &str, inputs: impl IntoIterator<Item = DataType>) -> BindError {
+    BindError::UnsupportedArguments {
+        name: name.to_owned(),
+        inputs: inputs.into_iter().collect(),
     }
-    BoundExpression::new(build_physical("i32_add")?, [left, right], DataType::Integer)
+}
+
+fn bind_arithmetic(
+    name: &'static str,
+    operator: ArithmeticOperator,
+    left: DataType,
+    right: DataType,
+) -> Result<BoundExpression, BindError> {
+    let output = promote_numeric(left, right).ok_or_else(|| unsupported(name, [left, right]))?;
+    let expression = if operator == ArithmeticOperator::Add
+        && (left, right) == (DataType::Integer, DataType::Integer)
+    {
+        build_physical("i32_add")?
+    } else {
+        build_numeric_binary_expression(
+            match operator {
+                ArithmeticOperator::Add => "numeric_add",
+                ArithmeticOperator::Subtract => "numeric_subtract",
+                ArithmeticOperator::Multiply => "numeric_multiply",
+                ArithmeticOperator::Divide => "numeric_divide",
+            },
+            operator,
+            left.physical_type(),
+            right.physical_type(),
+            output.physical_type(),
+        )
+    };
+    BoundExpression::new(expression, [left, right], output)
+}
+
+fn bind_neg(input: DataType) -> Result<BoundExpression, BindError> {
+    promote_numeric(input, input).ok_or_else(|| unsupported("neg", [input]))?;
+    BoundExpression::new(
+        build_numeric_neg_expression("numeric_neg", input.physical_type()),
+        [input],
+        input,
+    )
+}
+
+fn bind_clamp(
+    value: DataType,
+    lower: DataType,
+    upper: DataType,
+) -> Result<BoundExpression, BindError> {
+    let pair =
+        promote_numeric(value, lower).ok_or_else(|| unsupported("clamp", [value, lower, upper]))?;
+    let output =
+        promote_numeric(pair, upper).ok_or_else(|| unsupported("clamp", [value, lower, upper]))?;
+    BoundExpression::new(
+        build_numeric_clamp_expression(
+            "numeric_clamp",
+            [
+                value.physical_type(),
+                lower.physical_type(),
+                upper.physical_type(),
+            ],
+            output.physical_type(),
+        ),
+        [value, lower, upper],
+        output,
+    )
+}
+
+fn bind_comparison(
+    name: &'static str,
+    operator: ComparisonOperator,
+    left: DataType,
+    right: DataType,
+) -> Result<BoundExpression, BindError> {
+    let expression = if let Some(common) = promote_numeric(left, right) {
+        build_numeric_comparison_expression(
+            match operator {
+                ComparisonOperator::Less => "numeric_less",
+                ComparisonOperator::LessOrEqual => "numeric_less_or_equal",
+                ComparisonOperator::Greater => "numeric_greater",
+                ComparisonOperator::GreaterOrEqual => "numeric_greater_or_equal",
+                ComparisonOperator::Equal => "numeric_equal",
+                ComparisonOperator::NotEqual => "numeric_not_equal",
+            },
+            operator,
+            left.physical_type(),
+            right.physical_type(),
+            common.physical_type(),
+        )
+    } else if left.is_string() && right.is_string() {
+        build_string_comparison_expression(
+            match operator {
+                ComparisonOperator::Less => "string_less",
+                ComparisonOperator::LessOrEqual => "string_less_or_equal",
+                ComparisonOperator::Greater => "string_greater",
+                ComparisonOperator::GreaterOrEqual => "string_greater_or_equal",
+                ComparisonOperator::Equal => "string_equal",
+                ComparisonOperator::NotEqual => "string_not_equal",
+            },
+            operator,
+        )
+    } else if matches!(
+        operator,
+        ComparisonOperator::Equal | ComparisonOperator::NotEqual
+    ) && (left, right) == (DataType::Boolean, DataType::Boolean)
+    {
+        build_bool_comparison_expression(
+            match operator {
+                ComparisonOperator::Equal => "bool_equal",
+                ComparisonOperator::NotEqual => "bool_not_equal",
+                _ => unreachable!("ordered boolean comparison is rejected"),
+            },
+            operator,
+        )
+    } else {
+        return Err(unsupported(name, [left, right]));
+    };
+    BoundExpression::new(expression, [left, right], DataType::Boolean)
+}
+
+fn bind_contains(left: DataType, right: DataType) -> Result<BoundExpression, BindError> {
+    if !left.is_string() || !right.is_string() {
+        return Err(unsupported("contains", [left, right]));
+    }
+    BoundExpression::new(
+        build_string_contains_expression("string_contains"),
+        [left, right],
+        DataType::Boolean,
+    )
 }
 
 fn bind_concat(left: DataType, right: DataType) -> Result<BoundExpression, BindError> {
