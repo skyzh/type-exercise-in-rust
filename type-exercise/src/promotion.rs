@@ -10,9 +10,10 @@ pub struct NumericPromotion {
 
 /// The complete implicit numeric-promotion policy.
 ///
-/// Both operand orders are listed deliberately. In particular, there is no
-/// `Integer`/`Real` or `BigInt`/floating-point row: those conversions lose
-/// integer values and therefore require an explicit cast outside this layer.
+/// Both operand orders are listed deliberately. `Integer`/`Real` widens to
+/// `Double`; narrowing `Integer` to `Real` is not allowed. Every
+/// `BigInt`/floating-point pair is rejected because the floating-point type
+/// cannot represent every `BigInt` value.
 pub const NUMERIC_PROMOTIONS: &[NumericPromotion] = &[
     NumericPromotion {
         left: DataType::SmallInt,

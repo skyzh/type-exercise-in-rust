@@ -1,9 +1,90 @@
+use std::collections::HashSet;
+
 use crate::{
     Array, ArrayImpl, BindError, BoolArray, BoundExpression, ColumnViewImpl, DataType,
     ExpressionError, F32Array, F64Array, FunctionRegistry, I16Array, I32Array, I64Array,
-    NUMERIC_PROMOTIONS, PhysicalType, ScalarError, ScalarRefImpl, StringArray, TypeMismatch,
-    promote_numeric, validate_expression_inputs,
+    NUMERIC_PROMOTIONS, NumericPromotion, PhysicalType, ScalarError, ScalarRefImpl, StringArray,
+    TypeMismatch, promote_numeric, validate_expression_inputs,
 };
+
+const EXPECTED_NUMERIC_PROMOTION_MATRIX: &[(DataType, DataType, Option<DataType>)] = &[
+    (
+        DataType::SmallInt,
+        DataType::SmallInt,
+        Some(DataType::SmallInt),
+    ),
+    (
+        DataType::SmallInt,
+        DataType::Integer,
+        Some(DataType::Integer),
+    ),
+    (DataType::SmallInt, DataType::BigInt, Some(DataType::BigInt)),
+    (DataType::SmallInt, DataType::Real, Some(DataType::Real)),
+    (DataType::SmallInt, DataType::Double, Some(DataType::Double)),
+    (
+        DataType::Integer,
+        DataType::SmallInt,
+        Some(DataType::Integer),
+    ),
+    (
+        DataType::Integer,
+        DataType::Integer,
+        Some(DataType::Integer),
+    ),
+    (DataType::Integer, DataType::BigInt, Some(DataType::BigInt)),
+    (DataType::Integer, DataType::Real, Some(DataType::Double)),
+    (DataType::Integer, DataType::Double, Some(DataType::Double)),
+    (DataType::BigInt, DataType::SmallInt, Some(DataType::BigInt)),
+    (DataType::BigInt, DataType::Integer, Some(DataType::BigInt)),
+    (DataType::BigInt, DataType::BigInt, Some(DataType::BigInt)),
+    (DataType::BigInt, DataType::Real, None),
+    (DataType::BigInt, DataType::Double, None),
+    (DataType::Real, DataType::SmallInt, Some(DataType::Real)),
+    (DataType::Real, DataType::Integer, Some(DataType::Double)),
+    (DataType::Real, DataType::BigInt, None),
+    (DataType::Real, DataType::Real, Some(DataType::Real)),
+    (DataType::Real, DataType::Double, Some(DataType::Double)),
+    (DataType::Double, DataType::SmallInt, Some(DataType::Double)),
+    (DataType::Double, DataType::Integer, Some(DataType::Double)),
+    (DataType::Double, DataType::BigInt, None),
+    (DataType::Double, DataType::Real, Some(DataType::Double)),
+    (DataType::Double, DataType::Double, Some(DataType::Double)),
+];
+
+fn assert_promotion_catalog_matches_matrix(catalog: &[NumericPromotion]) {
+    let mut expected_keys = HashSet::new();
+    for &(left, right, _) in EXPECTED_NUMERIC_PROMOTION_MATRIX {
+        assert!(
+            expected_keys.insert((left, right)),
+            "duplicate expected promotion key: {left:?}/{right:?}"
+        );
+    }
+    assert_eq!(expected_keys.len(), 25);
+
+    let mut catalog_keys = HashSet::new();
+    for entry in catalog {
+        assert!(
+            catalog_keys.insert((entry.left, entry.right)),
+            "duplicate numeric promotion key: {:?}/{:?}",
+            entry.left,
+            entry.right
+        );
+    }
+
+    for &(left, right, expected) in EXPECTED_NUMERIC_PROMOTION_MATRIX {
+        let actual = catalog
+            .iter()
+            .find(|entry| entry.left == left && entry.right == right)
+            .map(|entry| entry.output);
+        assert_eq!(actual, expected, "promotion for {left:?}/{right:?}");
+    }
+
+    let expected_present = EXPECTED_NUMERIC_PROMOTION_MATRIX
+        .iter()
+        .filter(|(_, _, output)| output.is_some())
+        .count();
+    assert_eq!(catalog_keys.len(), expected_present);
+}
 
 fn expect_bind_error(result: Result<BoundExpression, BindError>) -> BindError {
     match result {
@@ -13,22 +94,11 @@ fn expect_bind_error(result: Result<BoundExpression, BindError>) -> BindError {
 }
 
 #[test]
-fn promotion_catalog_is_explicit_symmetric_and_lossless() {
-    assert_eq!(NUMERIC_PROMOTIONS.len(), 21);
-    for entry in NUMERIC_PROMOTIONS {
-        assert_eq!(promote_numeric(entry.left, entry.right), Some(entry.output));
-        assert_eq!(promote_numeric(entry.right, entry.left), Some(entry.output));
+fn promotion_catalog_matches_canonical_ordered_matrix() {
+    assert_promotion_catalog_matches_matrix(NUMERIC_PROMOTIONS);
+    for &(left, right, expected) in EXPECTED_NUMERIC_PROMOTION_MATRIX {
+        assert_eq!(promote_numeric(left, right), expected);
     }
-    assert_eq!(
-        promote_numeric(DataType::Integer, DataType::Real),
-        Some(DataType::Double)
-    );
-    assert_eq!(
-        promote_numeric(DataType::Real, DataType::Integer),
-        Some(DataType::Double)
-    );
-    assert_eq!(promote_numeric(DataType::BigInt, DataType::Double), None);
-    assert_eq!(promote_numeric(DataType::Double, DataType::BigInt), None);
     assert_eq!(
         promote_numeric(
             DataType::Decimal {
@@ -39,6 +109,29 @@ fn promotion_catalog_is_explicit_symmetric_and_lossless() {
         ),
         None
     );
+}
+
+#[test]
+#[should_panic(expected = "duplicate numeric promotion key: SmallInt/Integer")]
+fn promotion_catalog_regression_rejects_duplicate_row_substitution() {
+    let mut mutated = NUMERIC_PROMOTIONS.to_vec();
+    for entry in &mut mutated {
+        if (entry.left, entry.right) == (DataType::SmallInt, DataType::BigInt) {
+            *entry = NumericPromotion {
+                left: DataType::SmallInt,
+                right: DataType::Integer,
+                output: DataType::Integer,
+            };
+        } else if (entry.left, entry.right) == (DataType::BigInt, DataType::SmallInt) {
+            *entry = NumericPromotion {
+                left: DataType::Integer,
+                right: DataType::SmallInt,
+                output: DataType::Integer,
+            };
+        }
+    }
+
+    assert_promotion_catalog_matches_matrix(&mutated);
 }
 
 #[test]
