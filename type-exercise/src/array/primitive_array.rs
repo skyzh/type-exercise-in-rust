@@ -1,11 +1,12 @@
 use crate::variant_catalog::for_each_physical_family;
 use crate::{Array, ArrayBuilder, Decimal};
+use bitvec::vec::BitVec;
 
 /// A compact teaching representation for nullable fixed-width values.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PrimitiveArray<T> {
     values: Vec<T>,
-    validity: Vec<bool>,
+    validity: BitVec,
     null_count: usize,
 }
 
@@ -19,7 +20,7 @@ pub struct NonNullPrimitiveArray<'a, T> {
 #[derive(Debug)]
 pub struct PrimitiveArrayBuilder<T> {
     values: Vec<T>,
-    validity: Vec<bool>,
+    validity: BitVec,
     null_count: usize,
 }
 
@@ -42,10 +43,20 @@ for_each_physical_family!(define_primitive_aliases);
 impl<T> PrimitiveArray<T> {
     pub fn from_values(values: Vec<T>) -> Self {
         Self {
-            validity: vec![true; values.len()],
+            validity: BitVec::repeat(true, values.len()),
             values,
             null_count: 0,
         }
+    }
+
+    /// The contiguous fixed-width value buffer.
+    pub fn values(&self) -> &[T] {
+        &self.values
+    }
+
+    /// The packed row-validity bitmap.
+    pub fn validity(&self) -> &BitVec {
+        &self.validity
     }
 
     pub fn null_count(&self) -> usize {
@@ -91,7 +102,7 @@ macro_rules! implement_primitive_family {
             fn with_capacity(capacity: usize) -> Self {
                 Self {
                     values: Vec::with_capacity(capacity),
-                    validity: Vec::with_capacity(capacity),
+                    validity: BitVec::with_capacity(capacity),
                     null_count: 0,
                 }
             }
@@ -123,3 +134,27 @@ macro_rules! implement_primitive_family {
 }
 
 for_each_physical_family!(implement_primitive_families);
+
+#[cfg(test)]
+mod tests {
+    use bitvec::vec::BitVec;
+
+    use super::PrimitiveArray;
+    use crate::{Array, I32Array};
+
+    #[test]
+    fn fixed_width_values_and_validity_have_arrow_like_storage() {
+        let array = I32Array::from_slice(&[Some(10), None, Some(30)]);
+        let validity: &BitVec = array.validity();
+
+        assert_eq!(array.values(), &[10, 0, 30]);
+        assert_eq!(
+            validity.iter().by_vals().collect::<Vec<_>>(),
+            [true, false, true]
+        );
+        assert_eq!(array.values().len(), validity.len());
+
+        let many = PrimitiveArray::from_values((0_i32..130).collect());
+        assert!(std::mem::size_of_val(many.validity().as_raw_slice()) < many.len());
+    }
+}

@@ -55,13 +55,19 @@ integer implementation may ignore that lifetime; the string implementation canno
   `type-exercise-starter/src/array/primitive_array.rs::{PrimitiveArray, PrimitiveArrayBuilder}`, and
   `type-exercise-starter/src/array/string_array.rs::{StringArray, StringArrayBuilder}`.
 - **Change:** implement `get`, `len`, `iter`, `from_slice`, builder `push`, and `finish` for the two
-  families.
-- **Preserve:** row count and null positions; returned strings must borrow array storage.
+  families. Expose read-only `values`/`validity` accessors on `PrimitiveArray` and
+  `data`/`offsets`/`validity` accessors on `StringArray` so the buffer contract is visible.
+- **Preserve:** row count and null positions; returned strings must borrow array storage; offsets
+  count UTF-8 bytes rather than characters.
 - **Run:** the same focused test.
 - **Passing means:** normal, null, and empty arrays read through one generic contract.
 
-The buffer layout is your decision. The observable contract is not: a null row returns `None`, and
-building a string array must own enough storage for later `&str` reads.
+Use the Arrow-like layout required by the supplied test. A fixed-width array stores one flat
+`Vec<T>` with exactly one slot per row. A string array stores all UTF-8 bytes in one flat `Vec<u8>`
+and uses `rows + 1` monotone offsets: the first is zero, the last is the byte-buffer length, and a
+null or empty row repeats an offset. Both arrays store row validity in the packed
+`bitvec::vec::BitVec` already declared in the starter. A null row returns `None`, but it is never an
+`Option<T>` payload slot; strings are not stored as one owned `String` per row.
 
 ## Checkpoint 3: erase and recover values
 

@@ -1,3 +1,5 @@
+use bitvec::vec::BitVec;
+
 use crate::{
     Array, ArrayBuilder, ArrayImpl, I32Array, PhysicalType, Scalar, ScalarImpl, ScalarRef,
     ScalarRefImpl, StringArray, StringArrayBuilder, TypeMismatch,
@@ -50,6 +52,73 @@ fn builds_nullable_integer_and_string_arrays() {
     builder.push(Some(source.as_str()));
     drop(source);
     assert_eq!(builder.finish().get(0), Some("owned by the array"));
+}
+
+#[test]
+fn stores_arrow_like_contiguous_buffers_and_packed_validity() {
+    let integers = I32Array::from_slice(&[Some(10), None, Some(30)]);
+    let integer_validity: &BitVec = integers.validity();
+    assert_eq!(integers.values(), &[10, 0, 30]);
+    assert_eq!(
+        integer_validity.iter().by_vals().collect::<Vec<_>>(),
+        [true, false, true]
+    );
+    assert_eq!(integers.values().len(), integer_validity.len());
+
+    let packed = I32Array::from_slice(&vec![Some(1); 130]);
+    assert!(std::mem::size_of_val(packed.validity().as_raw_slice()) < packed.len());
+
+    let strings = StringArray::from_slice(&[Some("a"), None, Some("é"), Some("")]);
+    let string_validity: &BitVec = strings.validity();
+    assert_eq!(strings.data(), "aé".as_bytes());
+    assert_eq!(strings.offsets(), &[0, 1, 1, 3, 3]);
+    assert_eq!(
+        string_validity.iter().by_vals().collect::<Vec<_>>(),
+        [true, false, true, true]
+    );
+    assert_eq!(strings.offsets().len(), string_validity.len() + 1);
+    assert!(strings.offsets().windows(2).all(|pair| pair[0] <= pair[1]));
+    assert_eq!(
+        strings.offsets().last().copied(),
+        Some(strings.data().len())
+    );
+
+    let borrowed = strings.get(2).unwrap();
+    assert_eq!(
+        borrowed.as_ptr() as usize,
+        strings.data().as_ptr() as usize + strings.offsets()[2]
+    );
+}
+
+#[test]
+fn preserves_empty_and_all_null_arrow_like_layouts() {
+    let empty_integers = I32Array::from_slice(&[]);
+    assert!(empty_integers.values().is_empty());
+    assert!(empty_integers.validity().is_empty());
+
+    let null_integers = I32Array::from_slice(&[None, None, None]);
+    assert_eq!(null_integers.values(), &[0, 0, 0]);
+    assert_eq!(
+        null_integers
+            .validity()
+            .iter()
+            .by_vals()
+            .collect::<Vec<_>>(),
+        [false, false, false]
+    );
+
+    let empty_strings = StringArray::from_slice(&[]);
+    assert!(empty_strings.data().is_empty());
+    assert_eq!(empty_strings.offsets(), &[0]);
+    assert!(empty_strings.validity().is_empty());
+
+    let null_strings = StringArray::from_slice(&[None, None, None]);
+    assert!(null_strings.data().is_empty());
+    assert_eq!(null_strings.offsets(), &[0, 0, 0, 0]);
+    assert_eq!(
+        null_strings.validity().iter().by_vals().collect::<Vec<_>>(),
+        [false, false, false]
+    );
 }
 
 #[test]

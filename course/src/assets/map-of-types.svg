@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="920" viewBox="0 0 1200 920" role="img" aria-labelledby="title desc">
   <title id="title">Map of the typed expression engine</title>
-  <desc id="desc">Logical types map to physical scalar and array families. Erased values cross checked conversion boundaries. Column views normalize arrays, constants, dictionaries, and typed nulls before one selected typed row loop. A one-level List stores offsets and independent outer and child validity.</desc>
+  <desc id="desc">Logical types map to physical scalar and array families. Fixed-width arrays use contiguous values, strings use contiguous UTF-8 bytes and offsets, and both use packed validity. Erased values cross checked conversion boundaries. Column views normalize arrays, constants, dictionaries, and typed nulls before one selected typed row loop. A one-level List stores offsets and independent outer and child validity.</desc>
   <defs>
     <style>
       .bg { fill: #f8fafc; }
@@ -37,7 +37,8 @@
   <text class="text" x="370" y="148">Scalar ↔ ScalarRef&lt;'a&gt; (GAT)</text>
   <text class="text" x="370" y="180">↕</text>
   <text class="text" x="410" y="180">Array ↔ ArrayBuilder</text>
-  <text class="small" x="370" y="210">i16 · i32 · i64 · bool · f32 · f64 · String · Decimal</text>
+  <text class="small" x="370" y="204">i16 · i32 · i64 · bool · f32 · f64 · String · Decimal</text>
+  <text class="small" x="370" y="224">flat values · UTF-8 bytes + offsets · packed validity</text>
 
   <rect class="box erased" x="910" y="80" width="250" height="150"/>
   <text class="head" x="930" y="112">Runtime-erased enums</text>
