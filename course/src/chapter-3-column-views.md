@@ -101,5 +101,6 @@ bounds, and remains an array with a key-type parameter, slicing, and builders? W
 course's borrowed indices plus ordinary `ArrayImpl` teach checked indirection without becoming a
 persistable, interchangeable dictionary encoding?
 
+Next: [Chapter 4 exposes what unary and binary loops repeat](./chapter-4-concrete-loops.md).
 
 {{#include copyright.md}}
