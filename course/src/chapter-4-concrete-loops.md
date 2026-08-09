@@ -87,5 +87,6 @@ cargo test -p type-exercise-starter chapter_4 --locked
 cargo test -p type-exercise-starter --lib --locked
 ```
 
+Next: [Chapter 5 makes numeric operation selection generic](./chapter-5-generic-arithmetic.md).
 
 {{#include copyright.md}}

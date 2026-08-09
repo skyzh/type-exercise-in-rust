@@ -7,3 +7,4 @@
 - [Scale the Physical Type Family](./chapter-2-type-catalog.md)
 - [Read Nullable Columns Without Materializing Them](./chapter-3-column-views.md)
 - [Expose the Cost of Concrete Loops](./chapter-4-concrete-loops.md)
+- [Make Numeric Evaluation Generic](./chapter-5-generic-arithmetic.md)
