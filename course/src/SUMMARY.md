@@ -8,3 +8,4 @@
 - [Read Nullable Columns Without Materializing Them](./chapter-3-column-views.md)
 - [Expose the Cost of Concrete Loops](./chapter-4-concrete-loops.md)
 - [Make Numeric Evaluation Generic](./chapter-5-generic-arithmetic.md)
+- [Make Arity Systematic](./chapter-6-systematic-arity.md)
