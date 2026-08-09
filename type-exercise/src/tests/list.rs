@@ -187,11 +187,28 @@ fn erased_list_columns_cover_array_constant_null_and_dictionary() {
         ColumnViewImpl::array(&array)
             .try_as_list(PhysicalType::String)
             .unwrap_err(),
-        TypeMismatch {
+        ListError::TypeMismatch(TypeMismatch {
             expected: PhysicalType::List(Box::new(PhysicalType::String)),
             actual: PhysicalType::List(Box::new(PhysicalType::Int32)),
-        }
+        })
     );
+}
+
+#[test]
+fn checked_list_column_rejects_nested_typed_nulls() {
+    let nested_element = PhysicalType::List(Box::new(PhysicalType::Int32));
+    let nested = ColumnViewImpl::null(PhysicalType::List(Box::new(nested_element.clone())), 2);
+    assert_eq!(nested.len(), 2);
+    assert_eq!(
+        nested.try_as_list(nested_element).unwrap_err(),
+        ListError::NestedList
+    );
+
+    let one_level = ColumnViewImpl::null(PhysicalType::List(Box::new(PhysicalType::Int32)), 2)
+        .try_as_list(PhysicalType::Int32)
+        .unwrap();
+    assert_eq!(one_level.get(0).unwrap(), None);
+    assert_eq!(one_level.get(1).unwrap(), None);
 }
 
 #[test]

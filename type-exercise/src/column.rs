@@ -160,14 +160,14 @@ impl<'a> ColumnViewImpl<'a> {
         }
     }
 
-    pub fn try_as_list(
-        self,
-        element_type: PhysicalType,
-    ) -> Result<ListColumnView<'a>, TypeMismatch> {
+    pub fn try_as_list(self, element_type: PhysicalType) -> Result<ListColumnView<'a>, ListError> {
+        if matches!(element_type, PhysicalType::List(_)) {
+            return Err(ListError::NestedList);
+        }
         let expected = PhysicalType::List(Box::new(element_type));
         let actual = self.physical_type();
         if actual != expected {
-            return Err(TypeMismatch { expected, actual });
+            return Err(TypeMismatch { expected, actual }.into());
         }
         match self.kind {
             ColumnViewImplKind::Array(ArrayImpl::List(array)) => Ok(ListColumnView {
@@ -181,7 +181,8 @@ impl<'a> ColumnViewImpl<'a> {
                         return Err(TypeMismatch {
                             expected,
                             actual: other.physical_type(),
-                        });
+                        }
+                        .into());
                     }
                 };
                 Ok(ListColumnView {
@@ -197,11 +198,13 @@ impl<'a> ColumnViewImpl<'a> {
             ColumnViewImplKind::Array(array) => Err(TypeMismatch {
                 expected,
                 actual: array.physical_type(),
-            }),
+            }
+            .into()),
             ColumnViewImplKind::Dictionary { values, .. } => Err(TypeMismatch {
                 expected,
                 actual: values.physical_type(),
-            }),
+            }
+            .into()),
         }
     }
 }
