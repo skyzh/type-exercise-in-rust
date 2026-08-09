@@ -1,55 +1,47 @@
-# Build a Database Expression Framework in Rust
+# Build a Typed Database Expression Engine in Rust
 
-A database expression framework evaluates operations such as `integer + integer` or
-`varchar contains varchar` over nullable batches. Its difficult boundary is not the scalar
-function itself. It is keeping the relationships among owned values, borrowed values, physical
-arrays, and runtime-erased inputs both correct and inexpensive.
+A hand-written loop for `i32 + i32` is easy:
 
-You will build those relationships instead of receiving them pre-connected. The supplied starter
-contains this enum:
-
-```rust
-pub enum ScalarImpl {
-    Int32(i32),
-    String(String),
+```rust,ignore
+for row in 0..left.len() {
+    output.push(match (left.get(row), right.get(row)) {
+        (Some(left), Some(right)) => Some(left.wrapping_add(right)),
+        _ => None,
+    });
 }
 ```
 
-The two variants are deliberately different. An integer can be copied out of an array. A string
-should be returned as an `&str` that borrows the array's storage. By making one generic interface
-work for both, you will encounter the reason this framework needs associated types, generic
-associated types, lifetimes, and checked runtime erasure.
+The design problem appears when the engine must also borrow strings without copying, read
+constants and dictionaries, promote mixed numeric types, reject bad arity and lengths, and choose
+a function from runtime names. Repeating those decisions in every loop makes each new function a
+new place for type drift, null bugs, and inconsistent errors.
 
-## Course Roadmap
+This course builds the connections that move those decisions out of the row loop. You will first
+write the small cases by hand. Only after their duplication is visible will you introduce the
+catalogs and generic adapters that remove it.
 
-The course has eight chapters. This is a dependency order, not an eight-day schedule:
+![Map of the typed expression engine](./assets/map-of-types.svg)
 
-| Chapter | Capability you add | Availability |
-| --- | --- | --- |
-| Connect Scalars, References, and Arrays | Build the reciprocal type families manually for integers and strings. | Available |
-| Read Arrays, Constants, and Dictionaries | Expose three borrowed encodings as the same nullable logical rows. | Available |
-| Vectorize a Scalar Function | Apply one typed scalar function to nullable column views. | Available |
-| Erase and Generate Expressions | Support runtime arity and generate the repetitive typed adapters. | Available |
-| Bind Logical Expressions | Reject invalid logical signatures and select a concrete kernel. | Available |
-| Specialize Primitive Loops | Add and measure all-valid primitive fast paths. | Available |
-| Strengthen Rust Type Boundaries | Exercise opaque iterators, variance, upcasting, and thread-safety contracts. | Available |
-| Add a Batch Async Boundary | Adapt whole batches without making each row evaluation asynchronous. | Available |
+The map has three reading directions:
 
-You begin with two representative types and implement every connection explicitly. The eight
-chapters keep type-family construction, column representation, typed evaluation, runtime erasure,
-logical binding, primitive specialization, Rust's compile-time boundary contracts, and the batch
-async adapter separate so that each chapter has one testable abstraction boundary. Macro expansion
-and the broader type set come only after those boundaries are visible.
+1. `DataType` tells the planner what a value means; `PhysicalType` selects storage.
+2. `Scalar`, `ScalarRef`, `Array`, and `ArrayBuilder` form one compile-time family, while erased
+   enums cross runtime boundaries through checked conversions.
+3. `ColumnViewImpl` normalizes array, constant, dictionary, and typed-null encodings before one
+   selected typed expression enters its row loop.
 
-## What You Need to Know
+Nullability is value state—`Option` or validity—not a `DataType::Nullable` variant. A one-level
+List adds offsets and independent outer/child validity; it does not add an aggregate engine.
 
-You should be comfortable with Rust enums, structs, references, `Option`, traits, and associated
-types. The first chapter introduces generic associated types in the concrete setting that needs
-them. Familiarity with SQL nulls and columnar execution is helpful but not required.
+## What you need to know
 
-Each implementation chapter ends with focused tests and a short explanation prompt. Passing the
-tests is necessary, but you should also be able to explain the type or data-flow invariant and one
-failure case in your own words.
+You should be comfortable with Rust enums, traits, references, `Option`, and ordinary Cargo use.
+The course introduces generic associated types, checked runtime erasure, and return-position
+`impl Trait` in the concrete places that need them.
+
+Every chapter names prerequisites, exact starter targets, required work, extensions, and a copied
+test. Passing the test is necessary; you should also be able to explain why the new boundary exists
+and which failure it prevents.
 
 Continue to [Environment Setup](./setup.md).
 
