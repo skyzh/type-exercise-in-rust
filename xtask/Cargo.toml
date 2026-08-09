@@ -5,6 +5,12 @@ edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[[bin]]
+name = "type-exercise-xtask"
+path = "src/main.rs"
+test = true
+bench = false
+
 [dependencies]
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }

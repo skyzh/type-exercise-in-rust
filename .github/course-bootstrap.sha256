@@ -1,0 +1,5 @@
+c80bf2a1107d5a216c2bd2b988a72edb5d33c43b501a01a319556b2fda805483  .cargo/config.toml
+12f948649a70d8df68ef2a4725f713e76bdbf5817abae46e8c66ca9eee80d075  .github/test-course-bootstrap.sh
+405cffbd9f6baa1558872ab57fb0e2efeb0ef89c2a62d3319c85f098daba4427  .github/workflows/ci.yml
+e519bdda4d9884dad1f2ae193688f3d27d3d84731204f5c712fc545e009c53d8  xtask/Cargo.toml
+2d13bbf0092c754b504554d1890806a7978602e675660b133f12646d8ddefc54  xtask/src/main.rs

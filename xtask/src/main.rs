@@ -55,8 +55,16 @@ const SVG_FINGERPRINT: Fingerprint = Fingerprint {
     fnv1a64: 0x8dfc_2ae6_1fea_6033,
 };
 const CI_FINGERPRINT: Fingerprint = Fingerprint {
-    bytes: 2100,
-    fnv1a64: 0x2d4c_db23_14f0_0aa4,
+    bytes: 3287,
+    fnv1a64: 0x95cc_9bcf_fce1_c50e,
+};
+const CARGO_CONFIG_FINGERPRINT: Fingerprint = Fingerprint {
+    bytes: 98,
+    fnv1a64: 0xae57_ed5a_ab2b_148a,
+};
+const XTASK_MANIFEST_FINGERPRINT: Fingerprint = Fingerprint {
+    bytes: 336,
+    fnv1a64: 0x9bb5_84b9_23f6_3f8b,
 };
 const TEST_REGISTRY_FINGERPRINT: Fingerprint = Fingerprint {
     bytes: 183,
@@ -668,6 +676,41 @@ fn sitemap_xml_locations(xml: &str) -> Result<Vec<&str>> {
 }
 
 fn check_course_contract(root: &Path) -> Result<()> {
+    let cargo_config_bytes =
+        fs::read(root.join(".cargo/config.toml")).context("failed to read Cargo configuration")?;
+    let cargo_config = std::str::from_utf8(&cargo_config_bytes)
+        .context("Cargo configuration is not valid UTF-8")?;
+    for fact in [
+        "[alias]",
+        "x = \"run --package type-exercise-xtask --\"",
+        "xtask = \"run --package type-exercise-xtask --\"",
+    ] {
+        require_once_normalized(cargo_config, fact, "Cargo command bootstrap")?;
+    }
+    require_fingerprint(
+        &cargo_config_bytes,
+        CARGO_CONFIG_FINGERPRINT,
+        "complete Cargo command bootstrap",
+    )?;
+
+    let xtask_manifest_bytes =
+        fs::read(root.join("xtask/Cargo.toml")).context("failed to read the xtask manifest")?;
+    let xtask_manifest = std::str::from_utf8(&xtask_manifest_bytes)
+        .context("xtask Cargo manifest is not valid UTF-8")?;
+    for fact in [
+        "[[bin]] name = \"type-exercise-xtask\" path = \"src/main.rs\" test = true bench = false",
+        "anyhow = \"1\"",
+        "clap = { version = \"4\", features = [\"derive\"] }",
+        "tempfile = \"3\"",
+    ] {
+        require_once_normalized(xtask_manifest, fact, "xtask execution bootstrap")?;
+    }
+    require_fingerprint(
+        &xtask_manifest_bytes,
+        XTASK_MANIFEST_FINGERPRINT,
+        "complete xtask manifest",
+    )?;
+
     let book_config_path = root.join("course/book.toml");
     let book_config_bytes =
         fs::read(&book_config_path).context("failed to read course/book.toml")?;
@@ -1098,11 +1141,14 @@ fn check_course_contract(root: &Path) -> Result<()> {
     )?;
 
     let workflow_markers = [
+        "sha256sum --check .github/course-bootstrap.sha256",
+        "bash .github/test-course-bootstrap.sh",
         "cargo fmt --all -- --check",
         "cargo fmt --manifest-path archived/type-exercise-ref/Cargo.toml --all -- --check",
         "cargo clippy --workspace --all-targets --locked -- -D warnings",
         "cargo clippy --manifest-path archived/type-exercise-ref/Cargo.toml --workspace --all-targets --all-features --locked -- -D warnings",
         "cargo test --workspace --locked",
+        "cargo test --color never -p type-exercise-xtask --locked -- --test-threads=1",
         "cargo test --manifest-path archived/type-exercise-ref/Cargo.toml --no-fail-fast --workspace --all-features --locked",
         "cargo check -p type-exercise-starter --lib --locked",
         "cargo x copy-test --chapter 12",
@@ -1214,6 +1260,7 @@ mod tests {
         let target = fixture.path();
 
         for relative in [
+            ".cargo/config.toml",
             "Cargo.toml",
             "README.md",
             ".github/workflows/ci.yml",
@@ -1221,6 +1268,7 @@ mod tests {
             "course/theme/head.hbs",
             "type-exercise/Cargo.toml",
             "type-exercise/src/tests.rs",
+            "xtask/Cargo.toml",
         ] {
             copy_file(&source, target, relative);
         }

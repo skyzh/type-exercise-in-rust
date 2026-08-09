@@ -14,6 +14,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Verify Cargo bootstrap integrity before Cargo
+        run: |
+          set -euo pipefail
+          sha256sum --check .github/course-bootstrap.sha256
+          bash .github/test-course-bootstrap.sh | tee "$RUNNER_TEMP/course-bootstrap.log"
+          test "$(grep -Fxc 'verified Cargo bootstrap integrity and 4/4 pre-Cargo mutation killers' "$RUNNER_TEMP/course-bootstrap.log")" -eq 1
       - name: Install latest stable Rust
         run: |
           rustup update stable
@@ -29,6 +35,11 @@ jobs:
         run: cargo clippy --manifest-path archived/type-exercise-ref/Cargo.toml --workspace --all-targets --all-features --locked -- -D warnings
       - name: Test current workspace and reference solution
         run: cargo test --workspace --locked
+      - name: Assert course guard regression inventory
+        run: |
+          set -euo pipefail
+          cargo test --color never -p type-exercise-xtask --locked -- --test-threads=1 2>&1 | tee "$RUNNER_TEMP/course-guard-tests.log"
+          test "$(grep -Fc 'test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out;' "$RUNNER_TEMP/course-guard-tests.log")" -eq 1
       - name: Test archived reference
         run: cargo test --manifest-path archived/type-exercise-ref/Cargo.toml --no-fail-fast --workspace --all-features --locked
       - name: Check minimal starter
@@ -48,7 +59,11 @@ jobs:
           cargo x copy-test --chapter 11
           cargo x copy-test --chapter 12
       - name: Check course contract synchronization
-        run: cargo x check-course
+        run: |
+          set -euo pipefail
+          cargo x check-course 2>&1 | tee "$RUNNER_TEMP/course-guard.log"
+          test "$(grep -Fxc 'verified the exact Chapters 1-12 course source, supplied tests, learner dependencies, README, SVG, SUMMARY, sitemaps, and CI' "$RUNNER_TEMP/course-guard.log")" -eq 1
+          test "$(grep -Fxc 'executed the exact real reference inventory: 76/76 tests' "$RUNNER_TEMP/course-guard.log")" -eq 1
       - name: Test course
         run: mdbook test course
       - name: Install sitemap generator
