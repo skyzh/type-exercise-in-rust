@@ -7,6 +7,36 @@ use crate::{
 };
 
 /// Validate an expression boundary completely before row access or output allocation.
+///
+/// Physical operator constructors are deliberately binder-internal:
+///
+/// ```compile_fail
+/// use type_exercise::build_numeric_binary_expression;
+/// ```
+///
+/// ```compile_fail
+/// use type_exercise::build_numeric_neg_expression;
+/// ```
+///
+/// ```compile_fail
+/// use type_exercise::build_numeric_clamp_expression;
+/// ```
+///
+/// ```compile_fail
+/// use type_exercise::build_numeric_comparison_expression;
+/// ```
+///
+/// ```compile_fail
+/// use type_exercise::build_string_comparison_expression;
+/// ```
+///
+/// ```compile_fail
+/// use type_exercise::build_string_contains_expression;
+/// ```
+///
+/// ```compile_fail
+/// use type_exercise::build_bool_comparison_expression;
+/// ```
 pub fn validate_expression_inputs(
     inputs: &[ColumnViewImpl<'_>],
     expected_types: &[PhysicalType],
@@ -426,7 +456,7 @@ macro_rules! dispatch_numeric_output {
     };
 }
 
-pub fn build_numeric_binary_expression(
+pub(crate) fn build_numeric_binary_expression(
     name: &'static str,
     operator: ArithmeticOperator,
     left: PhysicalType,
@@ -441,7 +471,7 @@ pub fn build_numeric_binary_expression(
     ))
 }
 
-pub fn build_numeric_neg_expression(
+pub(crate) fn build_numeric_neg_expression(
     name: &'static str,
     input: PhysicalType,
 ) -> Box<dyn Expression> {
@@ -452,7 +482,7 @@ pub fn build_numeric_neg_expression(
     ))
 }
 
-pub fn build_numeric_clamp_expression(
+pub(crate) fn build_numeric_clamp_expression(
     name: &'static str,
     inputs: [PhysicalType; 3],
     output: PhysicalType,
@@ -464,7 +494,7 @@ pub fn build_numeric_clamp_expression(
     ))
 }
 
-pub fn build_numeric_comparison_expression(
+pub(crate) fn build_numeric_comparison_expression(
     name: &'static str,
     operator: ComparisonOperator,
     left: PhysicalType,
@@ -479,7 +509,7 @@ pub fn build_numeric_comparison_expression(
     ))
 }
 
-pub fn build_string_comparison_expression(
+pub(crate) fn build_string_comparison_expression(
     name: &'static str,
     operator: ComparisonOperator,
 ) -> Box<dyn Expression> {
@@ -492,7 +522,7 @@ pub fn build_string_comparison_expression(
     ))
 }
 
-pub fn build_string_contains_expression(name: &'static str) -> Box<dyn Expression> {
+pub(crate) fn build_string_contains_expression(name: &'static str) -> Box<dyn Expression> {
     Box::new(CheckedBinaryExpression::new(
         name,
         [PhysicalType::String; 2],
@@ -502,7 +532,7 @@ pub fn build_string_contains_expression(name: &'static str) -> Box<dyn Expressio
     ))
 }
 
-pub fn build_bool_comparison_expression(
+pub(crate) fn build_bool_comparison_expression(
     name: &'static str,
     operator: ComparisonOperator,
 ) -> Box<dyn Expression> {
