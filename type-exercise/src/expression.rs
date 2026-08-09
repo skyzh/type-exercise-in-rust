@@ -23,6 +23,29 @@ pub enum ExpressionError {
         actual: usize,
         input_index: usize,
     },
+    ScalarEvaluation {
+        function: &'static str,
+        row: usize,
+        error: ScalarError,
+    },
+}
+
+/// A checked failure produced by one non-null scalar evaluation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ScalarError {
+    DivisionByZero,
+    DivisionOverflow,
+    InvalidClampBounds,
+}
+
+impl Display for ScalarError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DivisionByZero => formatter.write_str("division by zero"),
+            Self::DivisionOverflow => formatter.write_str("signed integer division overflow"),
+            Self::InvalidClampBounds => formatter.write_str("invalid clamp bounds"),
+        }
+    }
 }
 
 impl Display for ExpressionError {
@@ -45,6 +68,14 @@ impl Display for ExpressionError {
                     "input {input_index} length mismatch: expected {expected}, got {actual}"
                 )
             }
+            Self::ScalarEvaluation {
+                function,
+                row,
+                error,
+            } => write!(
+                formatter,
+                "function `{function}` failed at row {row}: {error}"
+            ),
         }
     }
 }

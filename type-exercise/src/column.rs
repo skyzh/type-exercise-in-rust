@@ -130,6 +130,18 @@ impl<'a> ColumnViewImpl<'a> {
         }
     }
 
+    /// Return one erased scalar after the caller has checked the row bound.
+    pub fn get(&self, row: usize) -> Option<ScalarRefImpl<'a>> {
+        assert!(row < self.len(), "column view row out of bounds");
+        match self.kind {
+            ColumnViewImplKind::Array(array) => array.get(row),
+            ColumnViewImplKind::Constant { value, .. } => value,
+            ColumnViewImplKind::Dictionary { indices, values } => {
+                indices[row].and_then(|key| values.get(key))
+            }
+        }
+    }
+
     pub(crate) fn as_non_null_i32(self) -> Option<NonNullI32Column<'a>> {
         match self.kind {
             ColumnViewImplKind::Array(ArrayImpl::Int32(array)) => {
