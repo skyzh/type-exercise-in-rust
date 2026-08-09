@@ -19,7 +19,7 @@ jobs:
           set -euo pipefail
           sha256sum --check .github/course-bootstrap.sha256
           bash .github/test-course-bootstrap.sh | tee "$RUNNER_TEMP/course-bootstrap.log"
-          test "$(grep -Fxc 'verified Cargo bootstrap integrity and 12/12 pre-Cargo mutation killers' "$RUNNER_TEMP/course-bootstrap.log")" -eq 1
+          test "$(grep -Fxc 'verified Cargo bootstrap integrity and 13/13 pre-Cargo mutation killers' "$RUNNER_TEMP/course-bootstrap.log")" -eq 1
           isolated_cargo_home="$RUNNER_TEMP/type-exercise-cargo-home"
           mkdir "$isolated_cargo_home"
           test -z "$(find "$isolated_cargo_home" -mindepth 1 -print -quit)"

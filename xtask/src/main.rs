@@ -56,7 +56,7 @@ const SVG_FINGERPRINT: Fingerprint = Fingerprint {
 };
 const CI_FINGERPRINT: Fingerprint = Fingerprint {
     bytes: 3549,
-    fnv1a64: 0x0a44_7a46_db96_d593,
+    fnv1a64: 0x7b4e_0be4_ebb4_8055,
 };
 const CARGO_CONFIG_FINGERPRINT: Fingerprint = Fingerprint {
     bytes: 98,

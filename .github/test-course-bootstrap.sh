@@ -54,8 +54,8 @@ verify_execution_environment() {
 
     while IFS='=' read -r name _; do
         case "$name" in
-            CARGO_TARGET_*_RUNNER | CARGO_BUILD_RUSTC | CARGO_BUILD_RUSTC_WRAPPER | CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER | RUSTC | RUSTC_WRAPPER | RUSTC_WORKSPACE_WRAPPER)
-                echo "runner-related Cargo environment override is not allowed: $name" >&2
+            CARGO_ALIAS_* | CARGO_TARGET_*_RUNNER | CARGO_BUILD_RUSTC | CARGO_BUILD_RUSTC_WRAPPER | CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER | RUSTC | RUSTC_WRAPPER | RUSTC_WORKSPACE_WRAPPER)
+                echo "Cargo execution environment override is not allowed: $name" >&2
                 return 1
                 ;;
         esac
@@ -216,4 +216,27 @@ if CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER=/usr/bin/true \
     exit 1
 fi
 
-echo "verified Cargo bootstrap integrity and 12/12 pre-Cargo mutation killers"
+alias_environment_fixture=$(make_fixture alias-environment-external-subcommand)
+mkdir -p "$alias_environment_fixture/type-exercise-starter/src"
+printf 'starter sentinel: no copied tests\n' > "$alias_environment_fixture/type-exercise-starter/src/tests.rs"
+external_subcommand="$alias_environment_fixture/cargo-environment-marker"
+printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    "touch '$alias_environment_fixture/external-subcommand-ran'" \
+    "echo 'test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out;'" \
+    "echo 'verified the exact Chapters 1-12 course source, supplied tests, learner dependencies, README, SVG, SUMMARY, sitemaps, and CI'" \
+    "echo 'executed the exact real reference inventory: 76/76 tests'" \
+    > "$external_subcommand"
+chmod +x "$external_subcommand"
+if PATH="$alias_environment_fixture:$PATH" CARGO_ALIAS_X=environment-marker \
+    verify_execution_environment "$alias_environment_fixture" >/dev/null 2>&1; then
+    echo "Cargo environment mutation unexpectedly passed: alias external subcommand" >&2
+    exit 1
+fi
+if [[ -e "$alias_environment_fixture/external-subcommand-ran" ]]; then
+    echo "rejected alias external subcommand must never execute" >&2
+    exit 1
+fi
+grep -Fqx 'starter sentinel: no copied tests' "$alias_environment_fixture/type-exercise-starter/src/tests.rs"
+
+echo "verified Cargo bootstrap integrity and 13/13 pre-Cargo mutation killers"
