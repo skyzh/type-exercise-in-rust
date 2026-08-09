@@ -57,6 +57,111 @@ const CI_FINGERPRINT: Fingerprint = Fingerprint {
     bytes: 2100,
     fnv1a64: 0x2d4c_db23_14f0_0aa4,
 };
+const TEST_REGISTRY_FINGERPRINT: Fingerprint = Fingerprint {
+    bytes: 183,
+    fnv1a64: 0xc950_20cd_3bc0_2a4c,
+};
+const PREFACE_FINGERPRINT: Fingerprint = Fingerprint {
+    bytes: 2146,
+    fnv1a64: 0x785d_ceee_0904_15cc,
+};
+const SETUP_FINGERPRINT: Fingerprint = Fingerprint {
+    bytes: 1857,
+    fnv1a64: 0x7ac4_8706_c71f_d7bf,
+};
+const FOOTER_FINGERPRINT: Fingerprint = Fingerprint {
+    bytes: 316,
+    fnv1a64: 0xf365_baba_94a8_0018,
+};
+const SUMMARY_FINGERPRINT: Fingerprint = Fingerprint {
+    bytes: 869,
+    fnv1a64: 0x436f_0bca_5e08_0197,
+};
+const SITEMAP_TEXT_FINGERPRINT: Fingerprint = Fingerprint {
+    bytes: 1001,
+    fnv1a64: 0xa541_8a74_77b9_48bd,
+};
+const SITEMAP_XML_FINGERPRINT: Fingerprint = Fingerprint {
+    bytes: 1711,
+    fnv1a64: 0x3c6a_aa25_2d72_83b8,
+};
+const SOCIAL_IMAGE_FINGERPRINT: Fingerprint = Fingerprint {
+    bytes: 1_043_209,
+    fnv1a64: 0x87c2_ac72_f34f_d91d,
+};
+
+const SUPPLIED_TEST_COUNTS: [usize; COURSE_CHAPTERS] = [4, 3, 5, 8, 5, 2, 7, 12, 7, 9, 6, 6];
+
+const COURSE_SOURCE_FILES: [&str; 20] = [
+    "SUMMARY.md",
+    "assets/map-of-types.svg",
+    "chapter-1-type-family.md",
+    "chapter-10-list.md",
+    "chapter-11-rust-boundaries.md",
+    "chapter-12-async-boundary.md",
+    "chapter-2-type-catalog.md",
+    "chapter-3-column-views.md",
+    "chapter-4-concrete-loops.md",
+    "chapter-5-generic-arithmetic.md",
+    "chapter-6-systematic-arity.md",
+    "chapter-7-runtime-erasure.md",
+    "chapter-8-binding-coercion.md",
+    "chapter-9-primitive-loops.md",
+    "copyright.md",
+    "preface.md",
+    "setup.md",
+    "sitemap.txt",
+    "sitemap.xml",
+    "type-exercise-social.png",
+];
+
+const SUPPLIED_TEST_FILES: [&str; COURSE_CHAPTERS] = [
+    "chapter_1.rs",
+    "chapter_10.rs",
+    "chapter_11.rs",
+    "chapter_12.rs",
+    "chapter_2.rs",
+    "chapter_3.rs",
+    "chapter_4.rs",
+    "chapter_5.rs",
+    "chapter_6.rs",
+    "chapter_7.rs",
+    "chapter_8.rs",
+    "chapter_9.rs",
+];
+
+const TEST_REGISTRY_LINES: [&str; COURSE_CHAPTERS] = [
+    "mod chapter_1;",
+    "mod chapter_10;",
+    "mod chapter_11;",
+    "mod chapter_12;",
+    "mod chapter_2;",
+    "mod chapter_3;",
+    "mod chapter_4;",
+    "mod chapter_5;",
+    "mod chapter_6;",
+    "mod chapter_7;",
+    "mod chapter_8;",
+    "mod chapter_9;",
+];
+
+const SITEMAP_URLS: [&str; 15] = [
+    "https://skyzh.github.io/type-exercise-in-rust",
+    "https://skyzh.github.io/type-exercise-in-rust/chapter-1-type-family",
+    "https://skyzh.github.io/type-exercise-in-rust/chapter-10-list",
+    "https://skyzh.github.io/type-exercise-in-rust/chapter-11-rust-boundaries",
+    "https://skyzh.github.io/type-exercise-in-rust/chapter-12-async-boundary",
+    "https://skyzh.github.io/type-exercise-in-rust/chapter-2-type-catalog",
+    "https://skyzh.github.io/type-exercise-in-rust/chapter-3-column-views",
+    "https://skyzh.github.io/type-exercise-in-rust/chapter-4-concrete-loops",
+    "https://skyzh.github.io/type-exercise-in-rust/chapter-5-generic-arithmetic",
+    "https://skyzh.github.io/type-exercise-in-rust/chapter-6-systematic-arity",
+    "https://skyzh.github.io/type-exercise-in-rust/chapter-7-runtime-erasure",
+    "https://skyzh.github.io/type-exercise-in-rust/chapter-8-binding-coercion",
+    "https://skyzh.github.io/type-exercise-in-rust/chapter-9-primitive-loops",
+    "https://skyzh.github.io/type-exercise-in-rust/preface",
+    "https://skyzh.github.io/type-exercise-in-rust/setup",
+];
 
 const CHAPTERS: [ChapterContract; COURSE_CHAPTERS] = [
     ChapterContract {
@@ -488,15 +593,87 @@ fn require_ordered_markers(haystack: &str, markers: &[String], label: &str) -> R
     Ok(())
 }
 
+fn relative_regular_files(root: &Path) -> Result<Vec<String>> {
+    fn walk(root: &Path, directory: &Path, files: &mut Vec<String>) -> Result<()> {
+        for entry in fs::read_dir(directory)
+            .with_context(|| format!("failed to list {}", directory.display()))?
+        {
+            let entry = entry?;
+            let file_type = entry.file_type()?;
+            let path = entry.path();
+            if file_type.is_symlink() {
+                bail!("publishable source cannot be a symlink: {}", path.display());
+            }
+            if file_type.is_dir() {
+                walk(root, &path, files)?;
+            } else if file_type.is_file() {
+                files.push(
+                    path.strip_prefix(root)
+                        .context("failed to make publication path relative")?
+                        .to_string_lossy()
+                        .replace('\\', "/"),
+                );
+            }
+        }
+        Ok(())
+    }
+
+    let mut files = Vec::new();
+    walk(root, root, &mut files)?;
+    files.sort();
+    Ok(files)
+}
+
+fn sitemap_xml_locations(xml: &str) -> Result<Vec<&str>> {
+    let mut remaining = xml;
+    let mut locations = Vec::new();
+    while let Some((_, after_open)) = remaining.split_once("<loc>") {
+        let (location, after_close) = after_open
+            .split_once("</loc>")
+            .context("sitemap.xml contains an unclosed <loc>")?;
+        locations.push(location.trim());
+        remaining = after_close;
+    }
+    Ok(locations)
+}
+
 fn check_course_contract(root: &Path) -> Result<()> {
-    let available = available_chapters(&root.join("type-exercise/src/tests"))?;
+    let supplied_test_dir = root.join("type-exercise/src/tests");
+    let supplied_test_files = relative_regular_files(&supplied_test_dir)?;
+    if supplied_test_files != SUPPLIED_TEST_FILES {
+        bail!(
+            "supplied-test file set must match the exact allowlist: expected {:?}, found {supplied_test_files:?}",
+            SUPPLIED_TEST_FILES
+        );
+    }
+
+    let available = available_chapters(&supplied_test_dir)?;
     let expected = (1..=COURSE_CHAPTERS).collect::<Vec<_>>();
     if available != expected {
         bail!("course test sequence must be Chapters 1-{COURSE_CHAPTERS}, found {available:?}");
     }
 
-    let modules = fs::read_to_string(root.join("type-exercise/src/tests.rs"))
-        .context("failed to read the reference test module list")?;
+    let registry_path = root.join("type-exercise/src/tests.rs");
+    let registry_bytes =
+        fs::read(&registry_path).context("failed to read the reference test module list")?;
+    let modules = std::str::from_utf8(&registry_bytes)
+        .context("reference test registry is not valid UTF-8")?;
+    let registry_lines = modules
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>();
+    if registry_lines != TEST_REGISTRY_LINES {
+        bail!(
+            "reference test registry must contain only the exact unconditional chapter modules: expected {:?}, found {registry_lines:?}",
+            TEST_REGISTRY_LINES
+        );
+    }
+    require_fingerprint(
+        &registry_bytes,
+        TEST_REGISTRY_FINGERPRINT,
+        "reference test registry",
+    )?;
     for chapter in &expected {
         let declaration = format!("mod chapter_{chapter};");
         if modules
@@ -518,6 +695,13 @@ fn check_course_contract(root: &Path) -> Result<()> {
     }
 
     let course_dir = root.join("course/src");
+    let course_source_files = relative_regular_files(&course_dir)?;
+    if course_source_files != COURSE_SOURCE_FILES {
+        bail!(
+            "course source file set must match the exact allowlist: expected {:?}, found {course_source_files:?}",
+            COURSE_SOURCE_FILES
+        );
+    }
     let mut pages = BTreeMap::new();
     for entry in fs::read_dir(&course_dir).context("failed to list course pages")? {
         let path = entry?.path();
@@ -563,6 +747,60 @@ fn check_course_contract(root: &Path) -> Result<()> {
     for entry in &summary_entries {
         require_once(&summary, entry, "SUMMARY.md chapter entry")?;
     }
+    let expected_summary_members = [
+        vec![
+            "[Preface](./preface.md)".to_string(),
+            "[Environment Setup](./setup.md)".to_string(),
+        ],
+        summary_entries.clone(),
+    ]
+    .concat();
+    let actual_summary_members = summary
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && *line != "# Summary")
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    if actual_summary_members != expected_summary_members {
+        bail!(
+            "SUMMARY.md members must match the exact allowlist: expected {expected_summary_members:?}, found {actual_summary_members:?}"
+        );
+    }
+    require_fingerprint(summary.as_bytes(), SUMMARY_FINGERPRINT, "SUMMARY.md")?;
+
+    let sitemap_text =
+        fs::read_to_string(course_dir.join("sitemap.txt")).context("failed to read sitemap.txt")?;
+    let sitemap_text_urls = sitemap_text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>();
+    if sitemap_text_urls != SITEMAP_URLS {
+        bail!(
+            "sitemap.txt members must match the exact allowlist: expected {:?}, found {sitemap_text_urls:?}",
+            SITEMAP_URLS
+        );
+    }
+    require_fingerprint(
+        sitemap_text.as_bytes(),
+        SITEMAP_TEXT_FINGERPRINT,
+        "sitemap.txt",
+    )?;
+
+    let sitemap_xml =
+        fs::read_to_string(course_dir.join("sitemap.xml")).context("failed to read sitemap.xml")?;
+    let sitemap_xml_urls = sitemap_xml_locations(&sitemap_xml)?;
+    if sitemap_xml_urls != SITEMAP_URLS {
+        bail!(
+            "sitemap.xml members must match the exact allowlist: expected {:?}, found {sitemap_xml_urls:?}",
+            SITEMAP_URLS
+        );
+    }
+    require_fingerprint(
+        sitemap_xml.as_bytes(),
+        SITEMAP_XML_FINGERPRINT,
+        "sitemap.xml",
+    )?;
 
     for chapter in &CHAPTERS {
         let page = &pages[&chapter.number];
@@ -575,6 +813,11 @@ fn check_course_contract(root: &Path) -> Result<()> {
             body,
             &heading,
             &format!("Chapter {} heading", chapter.number),
+        )?;
+        require_once(
+            body,
+            "{{#include copyright.md}}",
+            &format!("Chapter {} shared feedback footer", chapter.number),
         )?;
 
         let copy_command = format!("cargo x copy-test --chapter {}", chapter.number);
@@ -637,6 +880,18 @@ fn check_course_contract(root: &Path) -> Result<()> {
         ));
         let test_bytes = fs::read(&test_path)
             .with_context(|| format!("failed to read supplied tests {}", test_path.display()))?;
+        let supplied_test_count = std::str::from_utf8(&test_bytes)
+            .context("supplied test is not valid UTF-8")?
+            .lines()
+            .filter(|line| line.trim() == "#[test]")
+            .count();
+        let expected_test_count = SUPPLIED_TEST_COUNTS[chapter.number - 1];
+        if supplied_test_count != expected_test_count {
+            bail!(
+                "Chapter {} must expose exactly {expected_test_count} supplied tests, found {supplied_test_count}",
+                chapter.number
+            );
+        }
         require_fingerprint(
             &test_bytes,
             chapter.test_fingerprint,
@@ -657,6 +912,44 @@ fn check_course_contract(root: &Path) -> Result<()> {
     }
     require_fingerprint(&readme_bytes, README_FINGERPRINT, "README.md")?;
 
+    let preface_bytes =
+        fs::read(course_dir.join("preface.md")).context("failed to read course preface")?;
+    let preface = std::str::from_utf8(&preface_bytes).context("preface is not valid UTF-8")?;
+    for fact in [
+        "A hand-written loop for \u{60}i32 + i32\u{60} is easy:",
+        "Repeating those decisions in every loop makes each new function a new place for type drift, null bugs, and inconsistent errors.",
+        "Only after their duplication is visible will you introduce the catalogs and generic adapters that remove it.",
+        "{{#include copyright.md}}",
+    ] {
+        require_once_normalized(preface, fact, "preface learner contract")?;
+    }
+    require_fingerprint(&preface_bytes, PREFACE_FINGERPRINT, "course preface")?;
+
+    let setup_bytes =
+        fs::read(course_dir.join("setup.md")).context("failed to read environment setup")?;
+    let setup = std::str::from_utf8(&setup_bytes).context("setup is not valid UTF-8")?;
+    for fact in [
+        "Do not edit \u{60}src/tests.rs\u{60} or copied files under \u{60}src/tests/\u{60}.",
+        "The only permitted reference-to-starter operation is:",
+        "Its first focused run should be red until you implement the chapter.",
+        "{{#include copyright.md}}",
+    ] {
+        require_once_normalized(setup, fact, "setup learner boundary")?;
+    }
+    require_fingerprint(&setup_bytes, SETUP_FINGERPRINT, "environment setup")?;
+
+    let footer_bytes =
+        fs::read(course_dir.join("copyright.md")).context("failed to read shared course footer")?;
+    let footer =
+        std::str::from_utf8(&footer_bytes).context("shared course footer is not valid UTF-8")?;
+    for fact in [
+        "Join our [Discord Community](https://skyzh.dev/join/discord).",
+        "Found an issue? Create an [issue or pull request](https://github.com/skyzh/type-exercise-in-rust).",
+    ] {
+        require_once_normalized(footer, fact, "shared feedback footer")?;
+    }
+    require_fingerprint(&footer_bytes, FOOTER_FINGERPRINT, "shared course footer")?;
+
     let svg_path = course_dir.join("assets/map-of-types.svg");
     let svg_bytes = fs::read(&svg_path).context("failed to read the editable type map")?;
     let svg = std::str::from_utf8(&svg_bytes).context("type map is not valid UTF-8")?;
@@ -670,6 +963,14 @@ fn check_course_contract(root: &Path) -> Result<()> {
         require_once_normalized(svg, fact, "type-map fact")?;
     }
     require_fingerprint(&svg_bytes, SVG_FINGERPRINT, "editable type map")?;
+
+    let social_image = fs::read(course_dir.join("type-exercise-social.png"))
+        .context("failed to read the course social image")?;
+    require_fingerprint(
+        &social_image,
+        SOCIAL_IMAGE_FINGERPRINT,
+        "course social image",
+    )?;
 
     let workflow_markers = [
         "cargo fmt --all -- --check",
@@ -700,7 +1001,7 @@ fn check_course_contract(root: &Path) -> Result<()> {
     require_fingerprint(workflow.as_bytes(), CI_FINGERPRINT, "complete CI workflow")?;
 
     println!(
-        "verified the exact Chapters 1-{COURSE_CHAPTERS} course manifest, supplied tests, README, SVG, SUMMARY, and CI"
+        "verified the exact Chapters 1-{COURSE_CHAPTERS} course source, supplied tests, learner dependencies, README, SVG, SUMMARY, sitemaps, and CI"
     );
     Ok(())
 }
@@ -725,7 +1026,7 @@ mod tests {
 
     use tempfile::TempDir;
 
-    use super::{CHAPTERS, check_course_contract, copy_test};
+    use super::{CHAPTERS, COURSE_SOURCE_FILES, check_course_contract, copy_test};
 
     fn fixture() -> TempDir {
         let root = tempfile::tempdir().unwrap();
@@ -760,14 +1061,14 @@ mod tests {
         for relative in [
             "README.md",
             ".github/workflows/ci.yml",
-            "course/src/SUMMARY.md",
-            "course/src/assets/map-of-types.svg",
             "type-exercise/src/tests.rs",
         ] {
             copy_file(&source, target, relative);
         }
+        for relative in COURSE_SOURCE_FILES {
+            copy_file(&source, target, &format!("course/src/{relative}"));
+        }
         for chapter in CHAPTERS {
-            copy_file(&source, target, &format!("course/src/{}", chapter.page));
             copy_file(
                 &source,
                 target,
@@ -880,11 +1181,80 @@ mod tests {
                 "fn connects_the_explicit_integer_and_string_families()",
                 "fn connects_only_part_of_the_explicit_family()",
             ),
+            (
+                "conditionally disabled real Chapter 12 registry",
+                "type-exercise/src/tests.rs",
+                "mod chapter_12;",
+                "#[cfg(any())]\nmod chapter_12;",
+            ),
+            (
+                "missing real Chapter 12 registry",
+                "type-exercise/src/tests.rs",
+                "mod chapter_12;\n",
+                "",
+            ),
+            (
+                "removed hand-written-loop motivation",
+                "course/src/preface.md",
+                "Repeating those decisions in every loop",
+                "Loop duplication is not part of the course motivation",
+            ),
+            (
+                "reversed setup supplied-test ownership",
+                "course/src/setup.md",
+                "- Do not edit \u{60}src/tests.rs\u{60} or copied files under \u{60}src/tests/\u{60}.",
+                "- Edit \u{60}src/tests.rs\u{60} or copied files whenever an assertion blocks progress.",
+            ),
+            (
+                "removed shared feedback footer",
+                "course/src/copyright.md",
+                "Your feedback is greatly appreciated. Join our [Discord Community](https://skyzh.dev/join/discord).",
+                "No learner feedback channel is available.",
+            ),
         ];
 
         for (name, relative, from, to) in mutations {
             assert_contract_mutation_rejected(name, relative, from, to);
         }
+    }
+
+    #[test]
+    fn rejects_unmanifested_course_and_supplied_test_members() {
+        let aggregate = contract_fixture();
+        fs::write(
+            aggregate.path().join("course/src/aggregate.md"),
+            "# Required Aggregate Engine\n",
+        )
+        .unwrap();
+        let summary_path = aggregate.path().join("course/src/SUMMARY.md");
+        let mut summary = fs::read_to_string(&summary_path).unwrap();
+        summary.push_str("\n- [Required Aggregate Engine](./aggregate.md)\n");
+        fs::write(summary_path, summary).unwrap();
+        let sitemap_text_path = aggregate.path().join("course/src/sitemap.txt");
+        let mut sitemap_text = fs::read_to_string(&sitemap_text_path).unwrap();
+        sitemap_text.push_str("https://skyzh.github.io/type-exercise-in-rust/aggregate\n");
+        fs::write(sitemap_text_path, sitemap_text).unwrap();
+        let sitemap_xml_path = aggregate.path().join("course/src/sitemap.xml");
+        let sitemap_xml = fs::read_to_string(&sitemap_xml_path)
+            .unwrap()
+            .replace(
+                "</urlset>",
+                "    <url>\n        <loc>https://skyzh.github.io/type-exercise-in-rust/aggregate</loc>\n    </url>\n</urlset>",
+            );
+        fs::write(sitemap_xml_path, sitemap_xml).unwrap();
+        assert!(check_course_contract(aggregate.path()).is_err());
+
+        let bonus = contract_fixture();
+        fs::write(
+            bonus.path().join("type-exercise/src/tests/bonus.rs"),
+            "#[test]\nfn unmanifested_bonus() {}\n",
+        )
+        .unwrap();
+        let registry_path = bonus.path().join("type-exercise/src/tests.rs");
+        let mut registry = fs::read_to_string(&registry_path).unwrap();
+        registry.push_str("mod bonus;\n");
+        fs::write(registry_path, registry).unwrap();
+        assert!(check_course_contract(bonus.path()).is_err());
     }
 
     #[test]
