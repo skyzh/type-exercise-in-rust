@@ -1,20 +1,9 @@
 use crate::{
-    Array, ArrayImpl, BUILTIN_EXPRESSION_NAMES, BinaryExpression, BinaryScalarFunction,
-    ColumnViewImpl, Expression, ExpressionError, I32Array, PhysicalType, ScalarRefImpl,
-    StringArray, TypeMismatch, build_builtin_expression,
+    Array, ArrayImpl, BinaryScalarFunction, CheckedBinaryExpression, CheckedBinaryScalarFunction,
+    CheckedUnaryScalarFunction, ColumnViewImpl, Expression, ExpressionError, I32Add, I32Array,
+    PhysicalType, ScalarError, ScalarRefImpl, StringArray, TypeMismatch, UnaryExpression,
+    evaluate_binary,
 };
-
-struct PanicOnCall;
-
-impl BinaryScalarFunction for PanicOnCall {
-    type Left = i32;
-    type Right = i32;
-    type Output = String;
-
-    fn evaluate(&self, _left: i32, _right: i32) -> String {
-        panic!("strict expressions must not evaluate a null row")
-    }
-}
 
 struct StringLengthAdd;
 
@@ -28,143 +17,123 @@ impl BinaryScalarFunction for StringLengthAdd {
     }
 }
 
-#[test]
-fn evaluates_a_builtin_through_a_trait_object() {
-    let expression: Box<dyn Expression> = build_builtin_expression("i32_add").unwrap();
-    assert_eq!(expression.name(), "i32_add");
-    assert_eq!(expression.arity(), 2);
-    assert_eq!(
-        expression.input_types(),
-        &[PhysicalType::Int32, PhysicalType::Int32]
-    );
-    assert_eq!(expression.output_type(), PhysicalType::Int32);
+struct I32PairLabel;
 
+impl BinaryScalarFunction for I32PairLabel {
+    type Left = i32;
+    type Right = i32;
+    type Output = String;
+
+    fn evaluate(&self, left: i32, right: i32) -> String {
+        format!("{left}:{right}")
+    }
+}
+
+#[test]
+fn vectorizes_addition_over_arrays_constants_and_dictionaries() {
     let left: ArrayImpl = I32Array::from_slice(&[Some(10), None, Some(30)]).into();
-    let inputs = [
+    let result = evaluate_binary(
+        &I32Add,
         ColumnViewImpl::array(&left),
         ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 3),
-    ];
-    let result = expression.evaluate(&inputs).unwrap();
+    )
+    .unwrap();
     let result = <&I32Array>::try_from(&result).unwrap();
     assert_eq!(
         result.iter().collect::<Vec<_>>(),
         vec![Some(12), None, Some(32)]
     );
 
-    let expression: Box<dyn Expression> =
-        Box::new(BinaryExpression::new("string_length_add", StringLengthAdd));
-    assert_eq!(
-        expression.input_types(),
-        &[PhysicalType::String, PhysicalType::Int32]
-    );
-    assert_eq!(expression.output_type(), PhysicalType::Int32);
-
-    let strings: ArrayImpl = StringArray::from_slice(&[Some("rust"), None]).into();
-    let inputs = [
-        ColumnViewImpl::array(&strings),
-        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 2),
-    ];
-    let result = expression.evaluate(&inputs).unwrap();
-    let result = <&I32Array>::try_from(&result).unwrap();
-    assert_eq!(result.iter().collect::<Vec<_>>(), vec![Some(6), None]);
-}
-
-#[test]
-fn generates_the_complete_builtin_catalog() {
-    assert_eq!(BUILTIN_EXPRESSION_NAMES, &["i32_add", "string_concat"]);
-    for name in BUILTIN_EXPRESSION_NAMES {
-        assert_eq!(build_builtin_expression(name).unwrap().name(), *name);
-    }
-    assert!(build_builtin_expression("add").is_none());
-    assert!(build_builtin_expression("missing").is_none());
-}
-
-#[test]
-fn concatenates_borrowed_dictionary_and_constant_strings() {
-    let expression = build_builtin_expression("string_concat").unwrap();
-    assert_eq!(
-        expression.input_types(),
-        &[PhysicalType::String, PhysicalType::String]
-    );
-    assert_eq!(expression.output_type(), PhysicalType::String);
-
-    let values: ArrayImpl = StringArray::from_slice(&[Some("rust"), None, Some("data")]).into();
-    let keys = [Some(2), Some(0), None, Some(1)];
-    let inputs = [
+    let values: ArrayImpl = I32Array::from_slice(&[Some(1), Some(2)]).into();
+    let keys = [Some(1), Some(0), None];
+    let result = evaluate_binary(
+        &I32Add,
         ColumnViewImpl::dictionary(&keys, &values).unwrap(),
-        ColumnViewImpl::constant(ScalarRefImpl::String("base"), 4),
-    ];
-    let result = expression.evaluate(&inputs).unwrap();
-    let result = <&StringArray>::try_from(&result).unwrap();
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(10), 3),
+    )
+    .unwrap();
+    let result = <&I32Array>::try_from(&result).unwrap();
     assert_eq!(
         result.iter().collect::<Vec<_>>(),
-        vec![Some("database"), Some("rustbase"), None, None]
+        vec![Some(12), Some(11), None]
     );
 }
 
 #[test]
-fn preserves_strict_nulls_through_the_erased_adapter() {
-    let expression: Box<dyn Expression> =
-        Box::new(BinaryExpression::new("panic_on_call", PanicOnCall));
-    assert_eq!(
-        expression.input_types(),
-        &[PhysicalType::Int32, PhysicalType::Int32]
-    );
-    assert_eq!(expression.output_type(), PhysicalType::String);
-    let inputs = [
-        ColumnViewImpl::null(PhysicalType::Int32, 2),
-        ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 2),
-    ];
-    let result = expression.evaluate(&inputs).unwrap();
-    let result = <&StringArray>::try_from(&result).unwrap();
+fn propagates_nulls_without_calling_the_scalar_function() {
+    let left = ColumnViewImpl::null(PhysicalType::Int32, 2);
+    let right = ColumnViewImpl::constant(ScalarRefImpl::Int32(i32::MAX), 2);
+    let result = evaluate_binary(&I32Add, left, right).unwrap();
+    let result = <&I32Array>::try_from(&result).unwrap();
     assert_eq!(result.iter().collect::<Vec<_>>(), vec![None, None]);
 }
 
 #[test]
-fn rejects_arity_before_indexing_or_converting_inputs() {
-    let expression: Box<dyn Expression> =
-        Box::new(BinaryExpression::new("string_length_add", StringLengthAdd));
+fn vectorizes_a_borrowed_mixed_family_function() {
+    let strings: ArrayImpl = StringArray::from_slice(&[Some("rust"), None, Some("db")]).into();
+    let result = evaluate_binary(
+        &StringLengthAdd,
+        ColumnViewImpl::array(&strings),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 3),
+    )
+    .unwrap();
+    let result = <&I32Array>::try_from(&result).unwrap();
     assert_eq!(
-        expression.evaluate(&[]),
-        Err(ExpressionError::InputArityMismatch {
-            expected: 2,
-            actual: 0,
-        })
+        result.iter().collect::<Vec<_>>(),
+        vec![Some(6), None, Some(4)]
     );
+}
 
-    let inputs = [ColumnViewImpl::null(PhysicalType::String, 1)];
-    assert_eq!(
-        expression.evaluate(&inputs),
-        Err(ExpressionError::InputArityMismatch {
-            expected: 2,
-            actual: 1,
-        })
-    );
+#[test]
+fn builds_the_associated_output_array_family() {
+    let left: ArrayImpl = I32Array::from_slice(&[Some(4), None]).into();
+    let result = evaluate_binary(
+        &I32PairLabel,
+        ColumnViewImpl::array(&left),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 2),
+    )
+    .unwrap();
+    let result = <&StringArray>::try_from(&result).unwrap();
+    assert_eq!(result.iter().collect::<Vec<_>>(), vec![Some("4:2"), None]);
+}
 
-    let inputs = [
+#[test]
+fn addition_uses_explicit_wrapping_overflow() {
+    let result = evaluate_binary(
+        &I32Add,
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(i32::MAX), 1),
         ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
-        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 1),
-        ColumnViewImpl::null(PhysicalType::String, 1),
-    ];
+    )
+    .unwrap();
+    let result = <&I32Array>::try_from(&result).unwrap();
+    assert_eq!(result.get(0), Some(i32::MIN));
+}
+
+#[test]
+fn rejects_input_lengths_before_evaluating_rows() {
     assert_eq!(
-        expression.evaluate(&inputs),
-        Err(ExpressionError::InputArityMismatch {
+        evaluate_binary(
+            &I32Add,
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 2),
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 3),
+        ),
+        Err(ExpressionError::InputLengthMismatch {
             expected: 2,
             actual: 3,
+            input_index: 1,
         })
     );
 }
 
 #[test]
-fn delegates_physical_type_errors_to_the_typed_boundary() {
-    let expression = build_builtin_expression("i32_add").unwrap();
+fn rejects_physical_types_before_evaluating_rows() {
     let strings: ArrayImpl = StringArray::from_slice(&[Some("wrong")]).into();
-    let inputs = [
-        ColumnViewImpl::array(&strings),
-        ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
-    ];
     assert_eq!(
-        expression.evaluate(&inputs),
+        evaluate_binary(
+            &I32Add,
+            ColumnViewImpl::array(&strings),
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
+        ),
         Err(ExpressionError::TypeMismatch(TypeMismatch {
             expected: PhysicalType::Int32,
             actual: PhysicalType::String,
@@ -172,19 +141,66 @@ fn delegates_physical_type_errors_to_the_typed_boundary() {
     );
 }
 
+struct CheckedNeg;
+
+impl CheckedUnaryScalarFunction for CheckedNeg {
+    type Output = i32;
+
+    fn evaluate(&self, input: ScalarRefImpl<'_>) -> Result<i32, ScalarError> {
+        let ScalarRefImpl::Int32(input) = input else {
+            unreachable!("the expression validates its physical input")
+        };
+        Ok(input.wrapping_neg())
+    }
+}
+
+struct CheckedAdd;
+
+impl CheckedBinaryScalarFunction for CheckedAdd {
+    type Output = i32;
+
+    fn evaluate(
+        &self,
+        left: ScalarRefImpl<'_>,
+        right: ScalarRefImpl<'_>,
+    ) -> Result<i32, ScalarError> {
+        let (ScalarRefImpl::Int32(left), ScalarRefImpl::Int32(right)) = (left, right) else {
+            unreachable!("the expression validates both physical inputs")
+        };
+        Ok(left.wrapping_add(right))
+    }
+}
+
 #[test]
-fn delegates_length_errors_to_the_typed_boundary() {
-    let expression = build_builtin_expression("i32_add").unwrap();
-    let inputs = [
-        ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
-        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 2),
-    ];
+fn concrete_unary_and_binary_shells_repeat_the_same_strict_contract() {
+    let unary = UnaryExpression::new("checked_neg", [PhysicalType::Int32], CheckedNeg);
+    let unary_output = unary
+        .evaluate(&[ColumnViewImpl::constant(ScalarRefImpl::Int32(7), 2)])
+        .unwrap();
     assert_eq!(
-        expression.evaluate(&inputs),
-        Err(ExpressionError::InputLengthMismatch {
-            expected: 1,
-            actual: 2,
-            input_index: 1,
-        })
+        <&I32Array>::try_from(&unary_output)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![Some(-7), Some(-7)]
+    );
+
+    let binary = CheckedBinaryExpression::new(
+        "checked_add",
+        [PhysicalType::Int32, PhysicalType::Int32],
+        CheckedAdd,
+    );
+    let binary_output = binary
+        .evaluate(&[
+            ColumnViewImpl::null(PhysicalType::Int32, 2),
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(i32::MAX), 2),
+        ])
+        .unwrap();
+    assert_eq!(
+        <&I32Array>::try_from(&binary_output)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![None, None]
     );
 }

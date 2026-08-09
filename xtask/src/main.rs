@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -19,7 +20,11 @@ enum Action {
         #[arg(long)]
         chapter: usize,
     },
+    /// Verify that course chapters, supplied tests, navigation, and CI stay synchronized.
+    CheckCourse,
 }
+
+const COURSE_CHAPTERS: usize = 12;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct CopyReport {
@@ -144,6 +149,106 @@ fn copy_test(root: &Path, chapter: usize) -> Result<CopyReport> {
     Ok(CopyReport { changed_files })
 }
 
+fn course_chapter_number(path: &Path) -> Option<usize> {
+    let name = path.file_name()?.to_str()?;
+    let suffix = name.strip_prefix("chapter-")?;
+    let (number, _) = suffix.split_once('-')?;
+    number.parse().ok()
+}
+
+fn check_course_contract(root: &Path) -> Result<()> {
+    let available = available_chapters(&root.join("type-exercise/src/tests"))?;
+    let expected = (1..=COURSE_CHAPTERS).collect::<Vec<_>>();
+    if available != expected {
+        bail!("course test sequence must be Chapters 1-{COURSE_CHAPTERS}, found {available:?}");
+    }
+
+    let modules = fs::read_to_string(root.join("type-exercise/src/tests.rs"))
+        .context("failed to read the reference test module list")?;
+    for chapter in &expected {
+        let declaration = format!("mod chapter_{chapter};");
+        if modules
+            .lines()
+            .filter(|line| line.trim() == declaration)
+            .count()
+            != 1
+        {
+            bail!("reference test module list must contain exactly one {declaration}");
+        }
+    }
+    if modules
+        .lines()
+        .filter(|line| line.trim().starts_with("mod chapter_"))
+        .count()
+        != COURSE_CHAPTERS
+    {
+        bail!("reference test module list contains an unexpected chapter module");
+    }
+
+    let course_dir = root.join("course/src");
+    let mut pages = BTreeMap::new();
+    for entry in fs::read_dir(&course_dir).context("failed to list course pages")? {
+        let path = entry?.path();
+        let Some(chapter) = course_chapter_number(&path) else {
+            continue;
+        };
+        if pages.insert(chapter, path).is_some() {
+            bail!("course contains more than one page for Chapter {chapter}");
+        }
+    }
+    if pages.keys().copied().collect::<Vec<_>>() != expected {
+        bail!("course page sequence must be Chapters 1-{COURSE_CHAPTERS}");
+    }
+
+    let summary = fs::read_to_string(course_dir.join("SUMMARY.md"))
+        .context("failed to read the course summary")?;
+    let workflow = fs::read_to_string(root.join(".github/workflows/ci.yml"))
+        .context("failed to read the CI workflow")?;
+    let summary_pages = summary
+        .lines()
+        .filter_map(|line| line.split_once("](./chapter-").map(|(_, suffix)| suffix))
+        .filter_map(|suffix| suffix.strip_suffix(')'))
+        .map(|suffix| format!("chapter-{suffix}"))
+        .collect::<Vec<_>>();
+    let expected_pages = pages
+        .values()
+        .map(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .map(str::to_owned)
+                .context("course page name is not valid UTF-8")
+        })
+        .collect::<Result<Vec<_>>>()?;
+    if summary_pages != expected_pages {
+        bail!("SUMMARY.md chapter links must match the ordered Chapter 1-{COURSE_CHAPTERS} pages");
+    }
+    for chapter in expected {
+        let page = &pages[&chapter];
+        let body = fs::read_to_string(page)
+            .with_context(|| format!("failed to read {}", page.display()))?;
+        let copy_command = format!("cargo x copy-test --chapter {chapter}");
+        let focused_command =
+            format!("cargo test -p type-exercise-starter chapter_{chapter} --locked");
+        if !body.contains(&copy_command) || !body.contains(&focused_command) {
+            bail!("Chapter {chapter} must contain its copy command and focused starter test");
+        }
+
+        if workflow
+            .lines()
+            .filter(|line| line.trim() == copy_command)
+            .count()
+            != 1
+        {
+            bail!("CI must copy Chapter {chapter} exactly once");
+        }
+    }
+
+    println!(
+        "verified Chapters 1-{COURSE_CHAPTERS} across course pages, supplied tests, SUMMARY, and CI"
+    );
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let args = Args::parse();
     let root = workspace_root()?;
@@ -151,6 +256,7 @@ fn main() -> Result<()> {
         Action::CopyTest { chapter } => {
             copy_test(&root, chapter)?;
         }
+        Action::CheckCourse => check_course_contract(&root)?,
     }
     Ok(())
 }

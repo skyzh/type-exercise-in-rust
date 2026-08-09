@@ -1,140 +1,129 @@
 use crate::{
-    Array, ArrayImpl, BinaryScalarFunction, ColumnViewImpl, ExpressionError, I32Add, I32Array,
-    PhysicalType, ScalarRefImpl, StringArray, TypeMismatch, evaluate_binary,
+    Array, ArrayImpl, BoolArray, ColumnView, ColumnViewImpl, F64Array, I16Array, I32Array,
+    InvalidDictionaryKey, PhysicalType, ScalarRefImpl, StringArray, TypeMismatch,
 };
 
-struct StringLengthAdd;
-
-impl BinaryScalarFunction for StringLengthAdd {
-    type Left = String;
-    type Right = i32;
-    type Output = i32;
-
-    fn evaluate(&self, left: &str, right: i32) -> i32 {
-        i32::try_from(left.len()).unwrap().wrapping_add(right)
-    }
-}
-
-struct I32PairLabel;
-
-impl BinaryScalarFunction for I32PairLabel {
-    type Left = i32;
-    type Right = i32;
-    type Output = String;
-
-    fn evaluate(&self, left: i32, right: i32) -> String {
-        format!("{left}:{right}")
-    }
-}
-
 #[test]
-fn vectorizes_addition_over_arrays_constants_and_dictionaries() {
-    let left: ArrayImpl = I32Array::from_slice(&[Some(10), None, Some(30)]).into();
-    let result = evaluate_binary(
-        &I32Add,
-        ColumnViewImpl::array(&left),
-        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 3),
-    )
-    .unwrap();
-    let result = <&I32Array>::try_from(&result).unwrap();
+fn reads_arrays_constants_and_dictionaries_as_logical_rows() {
+    let array: ArrayImpl = I32Array::from_slice(&[Some(10), None, Some(30)]).into();
+    let array_view = ColumnView::<i32>::try_from(ColumnViewImpl::array(&array)).unwrap();
+    assert_eq!(array_view.len(), 3);
+    assert_eq!(array_view.get(0), Some(10));
+    assert_eq!(array_view.get(1), None);
+
+    let erased_constant = ColumnViewImpl::constant(ScalarRefImpl::String("a"), 3);
+    assert_eq!(erased_constant.physical_type(), PhysicalType::String);
+    let constant = ColumnView::<String>::try_from(erased_constant).unwrap();
     assert_eq!(
-        result.iter().collect::<Vec<_>>(),
-        vec![Some(12), None, Some(32)]
+        (0..constant.len())
+            .map(|row| constant.get(row))
+            .collect::<Vec<_>>(),
+        vec![Some("a"), Some("a"), Some("a")]
     );
 
-    let values: ArrayImpl = I32Array::from_slice(&[Some(1), Some(2)]).into();
-    let keys = [Some(1), Some(0), None];
-    let result = evaluate_binary(
-        &I32Add,
-        ColumnViewImpl::dictionary(&keys, &values).unwrap(),
-        ColumnViewImpl::constant(ScalarRefImpl::Int32(10), 3),
-    )
-    .unwrap();
-    let result = <&I32Array>::try_from(&result).unwrap();
+    let values: ArrayImpl = StringArray::from_slice(&[Some("red"), None, Some("green")]).into();
+    let keys = [Some(2), None, Some(1), Some(0)];
+    let dictionary =
+        ColumnView::<String>::try_from(ColumnViewImpl::dictionary(&keys, &values).unwrap())
+            .unwrap();
     assert_eq!(
-        result.iter().collect::<Vec<_>>(),
-        vec![Some(12), Some(11), None]
+        (0..dictionary.len())
+            .map(|row| dictionary.get(row))
+            .collect::<Vec<_>>(),
+        vec![Some("green"), None, None, Some("red")]
     );
 }
 
 #[test]
-fn propagates_nulls_without_calling_the_scalar_function() {
-    let left = ColumnViewImpl::null(PhysicalType::Int32, 2);
-    let right = ColumnViewImpl::constant(ScalarRefImpl::Int32(i32::MAX), 2);
-    let result = evaluate_binary(&I32Add, left, right).unwrap();
-    let result = <&I32Array>::try_from(&result).unwrap();
-    assert_eq!(result.iter().collect::<Vec<_>>(), vec![None, None]);
-}
-
-#[test]
-fn vectorizes_a_borrowed_mixed_family_function() {
-    let strings: ArrayImpl = StringArray::from_slice(&[Some("rust"), None, Some("db")]).into();
-    let result = evaluate_binary(
-        &StringLengthAdd,
-        ColumnViewImpl::array(&strings),
-        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 3),
-    )
-    .unwrap();
-    let result = <&I32Array>::try_from(&result).unwrap();
+fn reads_expanded_families_through_array_constant_and_dictionary_views() {
+    let doubles: ArrayImpl = F64Array::from_slice(&[Some(-0.0), None, Some(f64::INFINITY)]).into();
+    let double_keys = [Some(2), Some(0), None];
+    let double_dictionary =
+        ColumnView::<f64>::try_from(ColumnViewImpl::dictionary(&double_keys, &doubles).unwrap())
+            .unwrap();
+    assert_eq!(double_dictionary.get(0), Some(f64::INFINITY));
     assert_eq!(
-        result.iter().collect::<Vec<_>>(),
-        vec![Some(6), None, Some(4)]
+        double_dictionary.get(1).unwrap().to_bits(),
+        (-0.0_f64).to_bits()
     );
+    assert_eq!(double_dictionary.get(2), None);
+
+    let boolean =
+        ColumnView::<bool>::try_from(ColumnViewImpl::constant(ScalarRefImpl::Bool(true), 2))
+            .unwrap();
+    assert_eq!(boolean.get(0), Some(true));
+    assert_eq!(boolean.get(1), Some(true));
+
+    let smallints: ArrayImpl = I16Array::from_slice(&[Some(-1), None]).into();
+    let smallints = ColumnView::<i16>::try_from(ColumnViewImpl::array(&smallints)).unwrap();
+    assert_eq!(smallints.get(0), Some(-1));
+    assert_eq!(smallints.get(1), None);
+
+    let null = ColumnView::<f64>::try_from(ColumnViewImpl::null(PhysicalType::Float64, 2)).unwrap();
+    assert_eq!(null.get(0), None);
+    assert_eq!(null.get(1), None);
+
+    let booleans: ArrayImpl = BoolArray::from_slice(&[Some(false)]).into();
+    assert_eq!(booleans.physical_type(), PhysicalType::Bool);
 }
 
 #[test]
-fn builds_the_associated_output_array_family() {
-    let left: ArrayImpl = I32Array::from_slice(&[Some(4), None]).into();
-    let result = evaluate_binary(
-        &I32PairLabel,
-        ColumnViewImpl::array(&left),
-        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 2),
-    )
-    .unwrap();
-    let result = <&StringArray>::try_from(&result).unwrap();
-    assert_eq!(result.iter().collect::<Vec<_>>(), vec![Some("4:2"), None]);
+fn preserves_the_type_and_length_of_null_and_empty_views() {
+    let null =
+        ColumnView::<String>::try_from(ColumnViewImpl::null(PhysicalType::String, 2)).unwrap();
+    assert_eq!(null.len(), 2);
+    assert_eq!(null.get(0), None);
+    assert_eq!(null.get(1), None);
+
+    let empty = ColumnViewImpl::null(PhysicalType::Int32, 0);
+    assert!(empty.is_empty());
+    assert_eq!(empty.physical_type(), PhysicalType::Int32);
+
+    let values: ArrayImpl = I32Array::from_slice(&[Some(1)]).into();
+    let no_keys: [Option<usize>; 0] = [];
+    let dictionary = ColumnViewImpl::dictionary(&no_keys, &values).unwrap();
+    assert!(dictionary.is_empty());
 }
 
 #[test]
-fn addition_uses_explicit_wrapping_overflow() {
-    let result = evaluate_binary(
-        &I32Add,
-        ColumnViewImpl::constant(ScalarRefImpl::Int32(i32::MAX), 1),
-        ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
-    )
-    .unwrap();
-    let result = <&I32Array>::try_from(&result).unwrap();
-    assert_eq!(result.get(0), Some(i32::MIN));
-}
-
-#[test]
-fn rejects_input_lengths_before_evaluating_rows() {
+fn rejects_every_invalid_dictionary_key_with_a_precise_error() {
+    let values: ArrayImpl = I32Array::from_slice(&[Some(1)]).into();
     assert_eq!(
-        evaluate_binary(
-            &I32Add,
-            ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 2),
-            ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 3),
-        ),
-        Err(ExpressionError::InputLengthMismatch {
-            expected: 2,
-            actual: 3,
-            input_index: 1,
+        ColumnViewImpl::dictionary(&[Some(0), Some(1)], &values),
+        Err(InvalidDictionaryKey {
+            row: 1,
+            key: 1,
+            dictionary_len: 1,
+        })
+    );
+
+    let empty_values: ArrayImpl = I32Array::from_slice(&[]).into();
+    assert_eq!(
+        ColumnViewImpl::dictionary(&[Some(0)], &empty_values),
+        Err(InvalidDictionaryKey {
+            row: 0,
+            key: 0,
+            dictionary_len: 0,
         })
     );
 }
 
 #[test]
-fn rejects_physical_types_before_evaluating_rows() {
-    let strings: ArrayImpl = StringArray::from_slice(&[Some("wrong")]).into();
+fn rejects_a_physical_type_mismatch_before_reading_rows() {
+    let integers: ArrayImpl = I32Array::from_slice(&[Some(1)]).into();
     assert_eq!(
-        evaluate_binary(
-            &I32Add,
-            ColumnViewImpl::array(&strings),
-            ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
-        ),
-        Err(ExpressionError::TypeMismatch(TypeMismatch {
-            expected: PhysicalType::Int32,
-            actual: PhysicalType::String,
-        }))
+        ColumnView::<String>::try_from(ColumnViewImpl::array(&integers)).unwrap_err(),
+        TypeMismatch {
+            expected: PhysicalType::String,
+            actual: PhysicalType::Int32,
+        }
+    );
+
+    assert_eq!(
+        ColumnView::<String>::try_from(ColumnViewImpl::null(PhysicalType::Int32, 1)).unwrap_err(),
+        TypeMismatch {
+            expected: PhysicalType::String,
+            actual: PhysicalType::Int32,
+        }
     );
 }

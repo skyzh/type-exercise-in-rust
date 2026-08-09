@@ -1,202 +1,383 @@
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::task::{Context, Poll, Waker};
-
 use crate::{
-    Array, ArrayImpl, AsyncExpression, AsyncExpressionAdapter, BatchFuture, ColumnViewImpl,
-    DataType, Expression, ExpressionError, FunctionRegistry, I32Array, PhysicalType, ScalarRefImpl,
-    StringArray, TypeMismatch, build_builtin_expression, evaluate_static,
+    Array, ArrayImpl, BindError, BoundExpression, ColumnViewImpl, DataType, Expression,
+    ExpressionError, FunctionRegistry, I32Array, PhysicalType, ScalarRefImpl, StringArray,
+    TypeMismatch, build_builtin_expression,
 };
 
-fn poll_ready<F: Future + ?Sized>(mut future: Pin<&mut F>) -> F::Output {
-    let mut context = Context::from_waker(Waker::noop());
-    match future.as_mut().poll(&mut context) {
-        Poll::Ready(output) => output,
-        Poll::Pending => panic!("the no-I/O batch future must complete on its first poll"),
-    }
+use crate::BoolArray;
+
+struct MetadataExpression {
+    input_types: Vec<PhysicalType>,
 }
 
-fn assert_send<T: Send>(_: &T) {}
-
-fn assert_send_sync<T: Send + Sync>() {}
-
-fn borrowed_static_future<'a>(
-    expression: &'a dyn Expression,
-    inputs: &'a [ColumnViewImpl<'a>],
-) -> impl Future<Output = Result<ArrayImpl, ExpressionError>> + Send + 'a {
-    evaluate_static(expression, inputs)
-}
-
-fn borrowed_erased_future<'a>(
-    expression: &'a dyn AsyncExpression,
-    inputs: &'a [ColumnViewImpl<'a>],
-) -> BatchFuture<'a> {
-    expression.evaluate_async(inputs)
-}
-
-#[test]
-fn static_future_preserves_the_synchronous_batch_result() {
-    let values: ArrayImpl = I32Array::from_slice(&[Some(10), None, Some(30)]).into();
-    let keys = [Some(2), Some(0), None];
-    let inputs = [
-        ColumnViewImpl::dictionary(&keys, &values).unwrap(),
-        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 3),
-    ];
-    let expression = build_builtin_expression("i32_add").unwrap();
-    let expected = expression.evaluate(&inputs).unwrap();
-
-    let mut future = std::pin::pin!(evaluate_static(expression.as_ref(), &inputs));
-    assert_send(&future);
-    assert_eq!(poll_ready(future.as_mut()).unwrap(), expected);
-}
-
-#[test]
-fn erased_future_matches_the_static_future() {
-    assert_send_sync::<Box<dyn AsyncExpression>>();
-
-    let left: ArrayImpl = I32Array::from_values(vec![1, 2, 3]).into();
-    let inputs = [
-        ColumnViewImpl::array(&left),
-        ColumnViewImpl::constant(ScalarRefImpl::Int32(4), 3),
-    ];
-
-    let static_expression = build_builtin_expression("i32_add").unwrap();
-    let static_output = {
-        let mut future =
-            std::pin::pin!(borrowed_static_future(static_expression.as_ref(), &inputs,));
-        poll_ready(future.as_mut()).unwrap()
-    };
-
-    let expression: Box<dyn AsyncExpression> = Box::new(AsyncExpressionAdapter::new(
-        build_builtin_expression("i32_add").unwrap(),
-    ));
-    let mut future = borrowed_erased_future(expression.as_ref(), &inputs);
-    assert_send(&future);
-    assert_eq!(poll_ready(future.as_mut()).unwrap(), static_output);
-}
-
-#[test]
-fn bound_expression_forwards_the_same_typed_result() {
-    let expression = FunctionRegistry::with_builtins()
-        .bind_binary("concat", DataType::Varchar, DataType::Varchar)
-        .unwrap();
-    let strings: ArrayImpl = StringArray::from_slice(&[Some("data"), None, Some("rust")]).into();
-    let inputs = [
-        ColumnViewImpl::array(&strings),
-        ColumnViewImpl::constant(ScalarRefImpl::String("base"), 3),
-    ];
-    let expected = expression.evaluate(&inputs).unwrap();
-
-    let mut future = expression.evaluate_async(&inputs);
-    assert_eq!(poll_ready(future.as_mut()).unwrap(), expected);
-}
-
-struct CountingExpression {
-    calls: Arc<AtomicUsize>,
-    inner: Box<dyn Expression>,
-}
-
-impl Expression for CountingExpression {
+impl Expression for MetadataExpression {
     fn name(&self) -> &'static str {
-        self.inner.name()
+        "metadata_only"
     }
 
     fn input_types(&self) -> &[PhysicalType] {
-        self.inner.input_types()
+        &self.input_types
     }
 
     fn output_type(&self) -> PhysicalType {
-        self.inner.output_type()
+        PhysicalType::Int32
     }
 
     fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
-        self.calls.fetch_add(1, Ordering::SeqCst);
-        self.inner.evaluate(inputs)
+        if inputs.len() != self.input_types.len() {
+            return Err(ExpressionError::InputArityMismatch {
+                expected: self.input_types.len(),
+                actual: inputs.len(),
+            });
+        }
+        Ok(I32Array::from_slice(&[]).into())
+    }
+}
+
+fn expect_bind_error(result: Result<BoundExpression, BindError>) -> BindError {
+    match result {
+        Ok(_) => panic!("binding unexpectedly succeeded"),
+        Err(error) => error,
     }
 }
 
 #[test]
-fn one_ready_future_invokes_synchronous_evaluation_once() {
-    let calls = Arc::new(AtomicUsize::new(0));
-    let expression = AsyncExpressionAdapter::new(Box::new(CountingExpression {
-        calls: Arc::clone(&calls),
-        inner: build_builtin_expression("i32_add").unwrap(),
-    }));
-    let inputs = [
-        ColumnViewImpl::constant(ScalarRefImpl::Int32(3), 2),
-        ColumnViewImpl::constant(ScalarRefImpl::Int32(4), 2),
-    ];
-
-    let mut future = expression.evaluate_async(&inputs);
-    assert_eq!(calls.load(Ordering::SeqCst), 0);
-    let output = poll_ready(future.as_mut()).unwrap();
-    assert_eq!(calls.load(Ordering::SeqCst), 1);
+fn binds_integer_addition_before_execution() {
+    let registry = FunctionRegistry::with_builtins();
+    let expression = registry
+        .bind_binary("+", DataType::Integer, DataType::Integer)
+        .unwrap();
     assert_eq!(
-        <&I32Array>::try_from(&output)
-            .unwrap()
-            .iter()
-            .collect::<Vec<_>>(),
-        vec![Some(7), Some(7)]
+        expression.input_types(),
+        &[DataType::Integer, DataType::Integer]
+    );
+    assert_eq!(expression.output_type(), DataType::Integer);
+    assert_eq!(expression.physical_name(), "i32_add");
+
+    let left: ArrayImpl = I32Array::from_slice(&[Some(10), None, Some(30)]).into();
+    let inputs = [
+        ColumnViewImpl::array(&left),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 3),
+    ];
+    let result = expression.evaluate(&inputs).unwrap();
+    let result = <&I32Array>::try_from(&result).unwrap();
+    assert_eq!(
+        result.iter().collect::<Vec<_>>(),
+        vec![Some(12), None, Some(32)]
     );
 }
 
 #[test]
-fn async_boundary_preserves_arity_type_and_length_errors() {
-    let expression = AsyncExpressionAdapter::new(build_builtin_expression("i32_add").unwrap());
-    let empty = [];
-    let mut future = expression.evaluate_async(&empty);
+fn binds_unary_and_real_ternary_functions() {
+    let registry = FunctionRegistry::with_builtins();
+
+    let neg = registry.bind("neg", &[DataType::BigInt]).unwrap();
+    assert_eq!(neg.input_types(), &[DataType::BigInt]);
+    assert_eq!(neg.output_type(), DataType::BigInt);
+    assert_eq!(neg.physical_name(), "numeric_neg");
+
+    let clamp = registry
+        .bind(
+            "clamp",
+            &[DataType::SmallInt, DataType::Integer, DataType::BigInt],
+        )
+        .unwrap();
     assert_eq!(
-        poll_ready(future.as_mut()),
-        Err(ExpressionError::InputArityMismatch {
-            expected: 2,
-            actual: 0,
-        })
+        clamp.input_types(),
+        &[DataType::SmallInt, DataType::Integer, DataType::BigInt]
+    );
+    assert_eq!(clamp.output_type(), DataType::BigInt);
+    assert_eq!(clamp.physical_name(), "numeric_clamp");
+}
+
+#[test]
+fn preserves_distinct_logical_string_types() {
+    let registry = FunctionRegistry::with_builtins();
+    let char = DataType::Char { width: 4 };
+    for (left, right) in [
+        (DataType::Varchar, DataType::Varchar),
+        (DataType::Varchar, char.clone()),
+        (char.clone(), DataType::Varchar),
+        (char.clone(), char.clone()),
+    ] {
+        let expression = registry
+            .bind_binary("concat", left.clone(), right.clone())
+            .unwrap();
+        assert_eq!(expression.input_types(), &[left, right]);
+        assert_eq!(expression.output_type(), DataType::Varchar);
+        assert_eq!(expression.physical_name(), "string_concat");
+    }
+
+    let expression = registry
+        .bind_binary("concat", char, DataType::Varchar)
+        .unwrap();
+
+    let values: ArrayImpl = StringArray::from_slice(&[Some("data"), Some("rust")]).into();
+    let keys = [Some(0), None, Some(1)];
+    let inputs = [
+        ColumnViewImpl::dictionary(&keys, &values).unwrap(),
+        ColumnViewImpl::constant(ScalarRefImpl::String("base"), 3),
+    ];
+    let result = expression.evaluate(&inputs).unwrap();
+    let result = <&StringArray>::try_from(&result).unwrap();
+    assert_eq!(
+        result.iter().collect::<Vec<_>>(),
+        vec![Some("database"), None, Some("rustbase")]
+    );
+}
+
+#[test]
+fn rejects_an_unknown_logical_function() {
+    let registry = FunctionRegistry::with_builtins();
+    assert_eq!(
+        expect_bind_error(registry.bind_binary("missing", DataType::Integer, DataType::Integer,)),
+        BindError::UnknownFunction {
+            name: "missing".to_owned(),
+        }
+    );
+}
+
+#[test]
+fn rejects_unsupported_logical_signatures() {
+    let registry = FunctionRegistry::with_builtins();
+    assert_eq!(
+        expect_bind_error(registry.bind_binary("+", DataType::Varchar, DataType::Integer,)),
+        BindError::UnsupportedArguments {
+            name: "+".to_owned(),
+            inputs: vec![DataType::Varchar, DataType::Integer],
+        }
+    );
+    assert_eq!(
+        expect_bind_error(registry.bind_binary("+", DataType::Integer, DataType::Varchar,)),
+        BindError::UnsupportedArguments {
+            name: "+".to_owned(),
+            inputs: vec![DataType::Integer, DataType::Varchar],
+        }
+    );
+    assert_eq!(
+        expect_bind_error(registry.bind_binary("concat", DataType::Integer, DataType::Varchar,)),
+        BindError::UnsupportedArguments {
+            name: "concat".to_owned(),
+            inputs: vec![DataType::Integer, DataType::Varchar],
+        }
+    );
+    assert_eq!(
+        expect_bind_error(registry.bind_binary("concat", DataType::Varchar, DataType::Integer,)),
+        BindError::UnsupportedArguments {
+            name: "concat".to_owned(),
+            inputs: vec![DataType::Varchar, DataType::Integer],
+        }
+    );
+}
+
+#[test]
+fn rejects_a_factory_with_inconsistent_physical_metadata() {
+    let input_error = expect_bind_error(BoundExpression::new(
+        build_builtin_expression("string_concat").unwrap(),
+        [DataType::Integer, DataType::Integer],
+        DataType::Varchar,
+    ));
+    assert_eq!(
+        input_error,
+        BindError::PhysicalSignatureMismatch {
+            name: "string_concat",
+            expected_inputs: vec![PhysicalType::Int32, PhysicalType::Int32],
+            actual_inputs: vec![PhysicalType::String, PhysicalType::String],
+            expected_output: PhysicalType::String,
+            actual_output: PhysicalType::String,
+        }
     );
 
-    let strings: ArrayImpl = StringArray::from_slice(&[Some("wrong"), Some("type")]).into();
-    let wrong_type = [
+    let output_error = expect_bind_error(BoundExpression::new(
+        build_builtin_expression("string_concat").unwrap(),
+        [DataType::Varchar, DataType::Varchar],
+        DataType::Integer,
+    ));
+    assert_eq!(
+        output_error,
+        BindError::PhysicalSignatureMismatch {
+            name: "string_concat",
+            expected_inputs: vec![PhysicalType::String, PhysicalType::String],
+            actual_inputs: vec![PhysicalType::String, PhysicalType::String],
+            expected_output: PhysicalType::Int32,
+            actual_output: PhysicalType::String,
+        }
+    );
+}
+
+#[test]
+fn preserves_checked_execution_errors_after_binding() {
+    let registry = FunctionRegistry::with_builtins();
+    let expression = registry
+        .bind_binary("+", DataType::Integer, DataType::Integer)
+        .unwrap();
+    let strings: ArrayImpl = StringArray::from_slice(&[Some("wrong")]).into();
+    let inputs = [
         ColumnViewImpl::array(&strings),
         ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
     ];
-    let mut future = expression.evaluate_async(&wrong_type);
     assert_eq!(
-        poll_ready(future.as_mut()),
+        expression.evaluate(&inputs),
         Err(ExpressionError::TypeMismatch(TypeMismatch {
             expected: PhysicalType::Int32,
             actual: PhysicalType::String,
         }))
     );
 
-    let integers: ArrayImpl = I32Array::from_values(vec![1, 2]).into();
-    let wrong_length = [
-        ColumnViewImpl::array(&integers),
-        ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
-    ];
-    let mut future = expression.evaluate_async(&wrong_length);
     assert_eq!(
-        poll_ready(future.as_mut()),
-        Err(ExpressionError::InputLengthMismatch {
+        expression.evaluate(&inputs[..1]),
+        Err(ExpressionError::InputArityMismatch {
             expected: 2,
             actual: 1,
-            input_index: 1,
         })
     );
 }
 
 #[test]
-fn future_lifetime_covers_the_expression_views_and_arrays() {
-    let values: ArrayImpl = I32Array::from_values(vec![5]).into();
-    let inputs = [
-        ColumnViewImpl::array(&values),
-        ColumnViewImpl::constant(ScalarRefImpl::Int32(6), 1),
-    ];
-    let expression = AsyncExpressionAdapter::new(build_builtin_expression("i32_add").unwrap());
+fn registers_a_custom_logical_name() {
+    let mut registry = FunctionRegistry::default();
+    registry.register_binary("wrapping_add", |left, right| {
+        if left != DataType::Integer || right != DataType::Integer {
+            return Err(BindError::UnsupportedArguments {
+                name: "wrapping_add".to_owned(),
+                inputs: vec![left, right],
+            });
+        }
+        BoundExpression::new(
+            build_builtin_expression("i32_add")
+                .ok_or(BindError::MissingPhysicalExpression { name: "i32_add" })?,
+            [left, right],
+            DataType::Integer,
+        )
+    });
 
-    let mut future = borrowed_erased_future(&expression, &inputs);
+    let expression = registry
+        .bind_binary("wrapping_add", DataType::Integer, DataType::Integer)
+        .unwrap();
+    assert_eq!(expression.physical_name(), "i32_add");
+}
+
+#[test]
+fn stores_and_validates_slice_metadata_for_any_arity() {
+    for input_types in [
+        vec![],
+        vec![DataType::Integer],
+        vec![DataType::Integer; 3],
+        vec![DataType::Integer; 5],
+    ] {
+        let expression = BoundExpression::new(
+            Box::new(MetadataExpression {
+                input_types: vec![PhysicalType::Int32; input_types.len()],
+            }),
+            input_types.clone(),
+            DataType::Integer,
+        )
+        .unwrap();
+        assert_eq!(expression.input_types(), input_types);
+    }
+}
+
+#[test]
+fn comparison_names_and_nan_semantics_are_not_swappable() {
+    let registry = FunctionRegistry::with_builtins();
+    for (name, physical_name, expected) in [
+        ("<", "numeric_less", true),
+        ("<=", "numeric_less_or_equal", true),
+        (">", "numeric_greater", false),
+        (">=", "numeric_greater_or_equal", false),
+        ("=", "numeric_equal", false),
+        ("!=", "numeric_not_equal", true),
+    ] {
+        let expression = registry
+            .bind_binary(name, DataType::Integer, DataType::BigInt)
+            .unwrap();
+        assert_eq!(expression.physical_name(), physical_name);
+        let output = expression
+            .evaluate(&[
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 1),
+                ColumnViewImpl::constant(ScalarRefImpl::Int64(3), 1),
+            ])
+            .unwrap();
+        assert_eq!(
+            <&BoolArray>::try_from(&output).unwrap().get(0),
+            Some(expected)
+        );
+    }
+
+    for (name, expected) in [
+        ("<", false),
+        ("<=", false),
+        (">", false),
+        (">=", false),
+        ("=", false),
+        ("!=", true),
+    ] {
+        let expression = registry
+            .bind_binary(name, DataType::Double, DataType::Double)
+            .unwrap();
+        let output = expression
+            .evaluate(&[
+                ColumnViewImpl::constant(ScalarRefImpl::Float64(f64::NAN), 1),
+                ColumnViewImpl::constant(ScalarRefImpl::Float64(1.0), 1),
+            ])
+            .unwrap();
+        assert_eq!(
+            <&BoolArray>::try_from(&output).unwrap().get(0),
+            Some(expected)
+        );
+    }
+}
+
+#[test]
+fn strings_compare_and_contains_with_strict_nulls() {
+    let registry = FunctionRegistry::with_builtins();
+    let contains = registry
+        .bind_binary("contains", DataType::Char { width: 8 }, DataType::Varchar)
+        .unwrap();
+    let haystacks: ArrayImpl =
+        StringArray::from_slice(&[Some("database"), None, Some("rust")]).into();
+    let output = contains
+        .evaluate(&[
+            ColumnViewImpl::array(&haystacks),
+            ColumnViewImpl::constant(ScalarRefImpl::String("base"), 3),
+        ])
+        .unwrap();
     assert_eq!(
-        poll_ready(future.as_mut()).unwrap().get(0),
-        Some(ScalarRefImpl::Int32(11))
+        <&BoolArray>::try_from(&output)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![Some(true), None, Some(false)]
     );
+
+    let less = registry
+        .bind_binary("<", DataType::Varchar, DataType::Char { width: 4 })
+        .unwrap();
+    let output = less
+        .evaluate(&[
+            ColumnViewImpl::constant(ScalarRefImpl::String("alpha"), 1),
+            ColumnViewImpl::constant(ScalarRefImpl::String("beta"), 1),
+        ])
+        .unwrap();
+    assert_eq!(<&BoolArray>::try_from(&output).unwrap().get(0), Some(true));
+}
+
+#[test]
+fn slice_registry_rejects_wrong_arity_before_a_binary_factory_can_index() {
+    let registry = FunctionRegistry::with_builtins();
+    for inputs in [
+        vec![],
+        vec![DataType::Integer],
+        vec![DataType::Integer; 3],
+        vec![DataType::Integer; 5],
+    ] {
+        assert_eq!(
+            expect_bind_error(registry.bind("+", &inputs)),
+            BindError::InputArityMismatch {
+                name: "+".to_owned(),
+                expected: 2,
+                actual: inputs.len(),
+            }
+        );
+    }
 }

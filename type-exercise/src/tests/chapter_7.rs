@@ -1,121 +1,190 @@
-use std::any::Any;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::thread;
-
 use crate::{
-    Array, ArrayImpl, BinaryExpression, BoundExpression, ColumnViewImpl, DataType, Expression,
-    FunctionRegistry, I32Add, I32Array, PrimitiveBinaryExpression, ScalarRefImpl, StringArray,
-    StringConcat, build_builtin_expression,
+    Array, ArrayImpl, BUILTIN_EXPRESSION_NAMES, BinaryExpression, BinaryScalarFunction,
+    ColumnViewImpl, Expression, ExpressionError, I32Array, PhysicalType, ScalarRefImpl,
+    StringArray, TypeMismatch, build_builtin_expression,
 };
 
-fn assert_send_sync<T: Send + Sync>() {}
+struct PanicOnCall;
 
-fn shorten_view<'short, 'long: 'short>(view: ColumnViewImpl<'long>) -> ColumnViewImpl<'short> {
-    view
+impl BinaryScalarFunction for PanicOnCall {
+    type Left = i32;
+    type Right = i32;
+    type Output = String;
+
+    fn evaluate(&self, _left: i32, _right: i32) -> String {
+        panic!("strict expressions must not evaluate a null row")
+    }
+}
+
+struct StringLengthAdd;
+
+impl BinaryScalarFunction for StringLengthAdd {
+    type Left = String;
+    type Right = i32;
+    type Output = i32;
+
+    fn evaluate(&self, left: &str, right: i32) -> i32 {
+        i32::try_from(left.len()).unwrap().wrapping_add(right)
+    }
 }
 
 #[test]
-fn opaque_iterator_preserves_empty_and_nullable_integer_rows() {
-    let empty = I32Array::from_slice(&[]);
-    assert_eq!(empty.iter().next(), None);
-
-    let nullable = I32Array::from_slice(&[Some(1), None, Some(3)]);
+fn evaluates_a_builtin_through_a_trait_object() {
+    let expression: Box<dyn Expression> = build_builtin_expression("i32_add").unwrap();
+    assert_eq!(expression.name(), "i32_add");
+    assert_eq!(expression.arity(), 2);
     assert_eq!(
-        nullable.iter().collect::<Vec<_>>(),
-        vec![Some(1), None, Some(3)]
+        expression.input_types(),
+        &[PhysicalType::Int32, PhysicalType::Int32]
     );
-}
+    assert_eq!(expression.output_type(), PhysicalType::Int32);
 
-#[test]
-fn opaque_iterator_keeps_string_items_borrowed_from_the_array() {
-    let strings = StringArray::from_slice(&[Some("rust"), None, Some("database")]);
-    let values: Vec<Option<&str>> = strings.iter().collect();
-    assert_eq!(values, vec![Some("rust"), None, Some("database")]);
-}
-
-#[test]
-fn expression_trait_objects_upcast_directly_for_checked_recovery() {
-    let add = build_builtin_expression("i32_add").unwrap();
-    let erased: &dyn Any = add.as_ref();
-    assert!(
-        erased
-            .downcast_ref::<PrimitiveBinaryExpression<I32Add>>()
-            .is_some()
-    );
-    assert!(
-        erased
-            .downcast_ref::<BinaryExpression<StringConcat>>()
-            .is_none()
-    );
-
-    let concat = build_builtin_expression("string_concat").unwrap();
-    let erased: &dyn Any = concat.as_ref();
-    assert!(
-        erased
-            .downcast_ref::<BinaryExpression<StringConcat>>()
-            .is_some()
-    );
-}
-
-#[test]
-fn erased_expressions_are_safe_to_share_with_worker_threads() {
-    assert_send_sync::<Box<dyn Expression>>();
-
-    let expression: Arc<dyn Expression> = Arc::from(build_builtin_expression("i32_add").unwrap());
-    let worker_expression = Arc::clone(&expression);
-    let output = thread::spawn(move || {
-        let values: ArrayImpl = I32Array::from_slice(&[Some(1), None, Some(3)]).into();
-        worker_expression
-            .evaluate(&[
-                ColumnViewImpl::array(&values),
-                ColumnViewImpl::constant(ScalarRefImpl::Int32(10), 3),
-            ])
-            .unwrap()
-    })
-    .join()
-    .unwrap();
-
-    let output = <&I32Array>::try_from(&output).unwrap();
+    let left: ArrayImpl = I32Array::from_slice(&[Some(10), None, Some(30)]).into();
+    let inputs = [
+        ColumnViewImpl::array(&left),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 3),
+    ];
+    let result = expression.evaluate(&inputs).unwrap();
+    let result = <&I32Array>::try_from(&result).unwrap();
     assert_eq!(
-        output.iter().collect::<Vec<_>>(),
-        vec![Some(11), None, Some(13)]
+        result.iter().collect::<Vec<_>>(),
+        vec![Some(12), None, Some(32)]
+    );
+
+    let expression: Box<dyn Expression> =
+        Box::new(BinaryExpression::new("string_length_add", StringLengthAdd));
+    assert_eq!(
+        expression.input_types(),
+        &[PhysicalType::String, PhysicalType::Int32]
+    );
+    assert_eq!(expression.output_type(), PhysicalType::Int32);
+
+    let strings: ArrayImpl = StringArray::from_slice(&[Some("rust"), None]).into();
+    let inputs = [
+        ColumnViewImpl::array(&strings),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 2),
+    ];
+    let result = expression.evaluate(&inputs).unwrap();
+    let result = <&I32Array>::try_from(&result).unwrap();
+    assert_eq!(result.iter().collect::<Vec<_>>(), vec![Some(6), None]);
+}
+
+#[test]
+fn generates_the_complete_builtin_catalog() {
+    assert_eq!(BUILTIN_EXPRESSION_NAMES, &["i32_add", "string_concat"]);
+    for name in BUILTIN_EXPRESSION_NAMES {
+        assert_eq!(build_builtin_expression(name).unwrap().name(), *name);
+    }
+    assert!(build_builtin_expression("add").is_none());
+    assert!(build_builtin_expression("missing").is_none());
+}
+
+#[test]
+fn concatenates_borrowed_dictionary_and_constant_strings() {
+    let expression = build_builtin_expression("string_concat").unwrap();
+    assert_eq!(
+        expression.input_types(),
+        &[PhysicalType::String, PhysicalType::String]
+    );
+    assert_eq!(expression.output_type(), PhysicalType::String);
+
+    let values: ArrayImpl = StringArray::from_slice(&[Some("rust"), None, Some("data")]).into();
+    let keys = [Some(2), Some(0), None, Some(1)];
+    let inputs = [
+        ColumnViewImpl::dictionary(&keys, &values).unwrap(),
+        ColumnViewImpl::constant(ScalarRefImpl::String("base"), 4),
+    ];
+    let result = expression.evaluate(&inputs).unwrap();
+    let result = <&StringArray>::try_from(&result).unwrap();
+    assert_eq!(
+        result.iter().collect::<Vec<_>>(),
+        vec![Some("database"), Some("rustbase"), None, None]
     );
 }
 
 #[test]
-fn logical_factories_can_capture_thread_safe_shared_state() {
-    assert_send_sync::<FunctionRegistry>();
-
-    let calls = Arc::new(AtomicUsize::new(0));
-    let factory_calls = Arc::clone(&calls);
-    let mut registry = FunctionRegistry::default();
-    registry.register_binary("counted_add", move |left, right| {
-        factory_calls.fetch_add(1, Ordering::SeqCst);
-        BoundExpression::new(
-            build_builtin_expression("i32_add").unwrap(),
-            [left, right],
-            DataType::Integer,
-        )
-    });
-
-    let registry = Arc::new(registry);
-    let worker_registry = Arc::clone(&registry);
-    let expression = thread::spawn(move || {
-        worker_registry.bind_binary("counted_add", DataType::Integer, DataType::Integer)
-    })
-    .join()
-    .unwrap()
-    .unwrap();
-
-    assert_eq!(calls.load(Ordering::SeqCst), 1);
-    assert_eq!(expression.physical_name(), "i32_add");
+fn preserves_strict_nulls_through_the_erased_adapter() {
+    let expression: Box<dyn Expression> =
+        Box::new(BinaryExpression::new("panic_on_call", PanicOnCall));
+    assert_eq!(
+        expression.input_types(),
+        &[PhysicalType::Int32, PhysicalType::Int32]
+    );
+    assert_eq!(expression.output_type(), PhysicalType::String);
+    let inputs = [
+        ColumnViewImpl::null(PhysicalType::Int32, 2),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 2),
+    ];
+    let result = expression.evaluate(&inputs).unwrap();
+    let result = <&StringArray>::try_from(&result).unwrap();
+    assert_eq!(result.iter().collect::<Vec<_>>(), vec![None, None]);
 }
 
 #[test]
-fn erased_column_views_can_shorten_their_borrow() {
-    let values: ArrayImpl = I32Array::from_slice(&[Some(7), None]).into();
-    let shortened = shorten_view(ColumnViewImpl::array(&values));
-    assert_eq!(shortened.len(), 2);
-    assert_eq!(shortened.physical_type(), values.physical_type());
+fn rejects_arity_before_indexing_or_converting_inputs() {
+    let expression: Box<dyn Expression> =
+        Box::new(BinaryExpression::new("string_length_add", StringLengthAdd));
+    assert_eq!(
+        expression.evaluate(&[]),
+        Err(ExpressionError::InputArityMismatch {
+            expected: 2,
+            actual: 0,
+        })
+    );
+
+    let inputs = [ColumnViewImpl::null(PhysicalType::String, 1)];
+    assert_eq!(
+        expression.evaluate(&inputs),
+        Err(ExpressionError::InputArityMismatch {
+            expected: 2,
+            actual: 1,
+        })
+    );
+
+    let inputs = [
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 1),
+        ColumnViewImpl::null(PhysicalType::String, 1),
+    ];
+    assert_eq!(
+        expression.evaluate(&inputs),
+        Err(ExpressionError::InputArityMismatch {
+            expected: 2,
+            actual: 3,
+        })
+    );
+}
+
+#[test]
+fn delegates_physical_type_errors_to_the_typed_boundary() {
+    let expression = build_builtin_expression("i32_add").unwrap();
+    let strings: ArrayImpl = StringArray::from_slice(&[Some("wrong")]).into();
+    let inputs = [
+        ColumnViewImpl::array(&strings),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
+    ];
+    assert_eq!(
+        expression.evaluate(&inputs),
+        Err(ExpressionError::TypeMismatch(TypeMismatch {
+            expected: PhysicalType::Int32,
+            actual: PhysicalType::String,
+        }))
+    );
+}
+
+#[test]
+fn delegates_length_errors_to_the_typed_boundary() {
+    let expression = build_builtin_expression("i32_add").unwrap();
+    let inputs = [
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 2),
+    ];
+    assert_eq!(
+        expression.evaluate(&inputs),
+        Err(ExpressionError::InputLengthMismatch {
+            expected: 1,
+            actual: 2,
+            input_index: 1,
+        })
+    );
 }

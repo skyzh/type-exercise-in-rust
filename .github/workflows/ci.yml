@@ -43,6 +43,12 @@ jobs:
           cargo x copy-test --chapter 6
           cargo x copy-test --chapter 7
           cargo x copy-test --chapter 8
+          cargo x copy-test --chapter 9
+          cargo x copy-test --chapter 10
+          cargo x copy-test --chapter 11
+          cargo x copy-test --chapter 12
+      - name: Check course contract synchronization
+        run: cargo x check-course
       - name: Test course
         run: mdbook test course
       - name: Install sitemap generator

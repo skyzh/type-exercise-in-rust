@@ -1,273 +1,365 @@
+use std::collections::HashSet;
+
 use crate::{
-    Array, ArrayImpl, BindError, BoundExpression, ColumnViewImpl, DataType, Expression,
-    ExpressionError, FunctionRegistry, I32Array, PhysicalType, ScalarRefImpl, StringArray,
-    TypeMismatch, build_builtin_expression,
+    ArithmeticOperator, Array, ArrayImpl, ColumnViewImpl, DataType, Expression, ExpressionError,
+    F32Array, F64Array, I16Array, I32Array, I64Array, NUMERIC_PROMOTIONS, NumericPromotion,
+    PhysicalType, ScalarError, ScalarRefImpl, promote_numeric,
 };
 
-struct MetadataExpression {
-    input_types: Vec<PhysicalType>,
-}
+use crate::operators::build_numeric_binary_expression;
 
-impl Expression for MetadataExpression {
-    fn name(&self) -> &'static str {
-        "metadata_only"
-    }
-
-    fn input_types(&self) -> &[PhysicalType] {
-        &self.input_types
-    }
-
-    fn output_type(&self) -> PhysicalType {
-        PhysicalType::Int32
-    }
-
-    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
-        if inputs.len() != self.input_types.len() {
-            return Err(ExpressionError::InputArityMismatch {
-                expected: self.input_types.len(),
-                actual: inputs.len(),
-            });
-        }
-        Ok(I32Array::from_slice(&[]).into())
-    }
-}
-
-fn expect_bind_error(result: Result<BoundExpression, BindError>) -> BindError {
-    match result {
-        Ok(_) => panic!("binding unexpectedly succeeded"),
-        Err(error) => error,
-    }
-}
-
-#[test]
-fn binds_integer_addition_before_execution() {
-    let registry = FunctionRegistry::with_builtins();
-    let expression = registry
-        .bind_binary("+", DataType::Integer, DataType::Integer)
-        .unwrap();
-    assert_eq!(
-        expression.input_types(),
-        &[DataType::Integer, DataType::Integer]
-    );
-    assert_eq!(expression.output_type(), DataType::Integer);
-    assert_eq!(expression.physical_name(), "i32_add");
-
-    let left: ArrayImpl = I32Array::from_slice(&[Some(10), None, Some(30)]).into();
-    let inputs = [
-        ColumnViewImpl::array(&left),
-        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 3),
-    ];
-    let result = expression.evaluate(&inputs).unwrap();
-    let result = <&I32Array>::try_from(&result).unwrap();
-    assert_eq!(
-        result.iter().collect::<Vec<_>>(),
-        vec![Some(12), None, Some(32)]
-    );
-}
-
-#[test]
-fn preserves_distinct_logical_string_types() {
-    let registry = FunctionRegistry::with_builtins();
-    let char = DataType::Char { width: 4 };
-    for (left, right) in [
-        (DataType::Varchar, DataType::Varchar),
-        (DataType::Varchar, char.clone()),
-        (char.clone(), DataType::Varchar),
-        (char.clone(), char.clone()),
-    ] {
-        let expression = registry
-            .bind_binary("concat", left.clone(), right.clone())
-            .unwrap();
-        assert_eq!(expression.input_types(), &[left, right]);
-        assert_eq!(expression.output_type(), DataType::Varchar);
-        assert_eq!(expression.physical_name(), "string_concat");
-    }
-
-    let expression = registry
-        .bind_binary("concat", char, DataType::Varchar)
-        .unwrap();
-
-    let values: ArrayImpl = StringArray::from_slice(&[Some("data"), Some("rust")]).into();
-    let keys = [Some(0), None, Some(1)];
-    let inputs = [
-        ColumnViewImpl::dictionary(&keys, &values).unwrap(),
-        ColumnViewImpl::constant(ScalarRefImpl::String("base"), 3),
-    ];
-    let result = expression.evaluate(&inputs).unwrap();
-    let result = <&StringArray>::try_from(&result).unwrap();
-    assert_eq!(
-        result.iter().collect::<Vec<_>>(),
-        vec![Some("database"), None, Some("rustbase")]
-    );
-}
-
-#[test]
-fn rejects_an_unknown_logical_function() {
-    let registry = FunctionRegistry::with_builtins();
-    assert_eq!(
-        expect_bind_error(registry.bind_binary("missing", DataType::Integer, DataType::Integer,)),
-        BindError::UnknownFunction {
-            name: "missing".to_owned(),
-        }
-    );
-}
-
-#[test]
-fn rejects_unsupported_logical_signatures() {
-    let registry = FunctionRegistry::with_builtins();
-    assert_eq!(
-        expect_bind_error(registry.bind_binary("+", DataType::Varchar, DataType::Integer,)),
-        BindError::UnsupportedArguments {
-            name: "+".to_owned(),
-            inputs: vec![DataType::Varchar, DataType::Integer],
-        }
-    );
-    assert_eq!(
-        expect_bind_error(registry.bind_binary("+", DataType::Integer, DataType::Varchar,)),
-        BindError::UnsupportedArguments {
-            name: "+".to_owned(),
-            inputs: vec![DataType::Integer, DataType::Varchar],
-        }
-    );
-    assert_eq!(
-        expect_bind_error(registry.bind_binary("concat", DataType::Integer, DataType::Varchar,)),
-        BindError::UnsupportedArguments {
-            name: "concat".to_owned(),
-            inputs: vec![DataType::Integer, DataType::Varchar],
-        }
-    );
-    assert_eq!(
-        expect_bind_error(registry.bind_binary("concat", DataType::Varchar, DataType::Integer,)),
-        BindError::UnsupportedArguments {
-            name: "concat".to_owned(),
-            inputs: vec![DataType::Varchar, DataType::Integer],
-        }
-    );
-}
-
-#[test]
-fn rejects_a_factory_with_inconsistent_physical_metadata() {
-    let input_error = expect_bind_error(BoundExpression::new(
-        build_builtin_expression("string_concat").unwrap(),
-        [DataType::Integer, DataType::Integer],
-        DataType::Varchar,
-    ));
-    assert_eq!(
-        input_error,
-        BindError::PhysicalSignatureMismatch {
-            name: "string_concat",
-            expected_inputs: vec![PhysicalType::Int32, PhysicalType::Int32],
-            actual_inputs: vec![PhysicalType::String, PhysicalType::String],
-            expected_output: PhysicalType::String,
-            actual_output: PhysicalType::String,
-        }
-    );
-
-    let output_error = expect_bind_error(BoundExpression::new(
-        build_builtin_expression("string_concat").unwrap(),
-        [DataType::Varchar, DataType::Varchar],
+const EXPECTED_NUMERIC_PROMOTION_MATRIX: &[(DataType, DataType, Option<DataType>)] = &[
+    (
+        DataType::SmallInt,
+        DataType::SmallInt,
+        Some(DataType::SmallInt),
+    ),
+    (
+        DataType::SmallInt,
         DataType::Integer,
-    ));
+        Some(DataType::Integer),
+    ),
+    (DataType::SmallInt, DataType::BigInt, Some(DataType::BigInt)),
+    (DataType::SmallInt, DataType::Real, Some(DataType::Real)),
+    (DataType::SmallInt, DataType::Double, Some(DataType::Double)),
+    (
+        DataType::Integer,
+        DataType::SmallInt,
+        Some(DataType::Integer),
+    ),
+    (
+        DataType::Integer,
+        DataType::Integer,
+        Some(DataType::Integer),
+    ),
+    (DataType::Integer, DataType::BigInt, Some(DataType::BigInt)),
+    (DataType::Integer, DataType::Real, Some(DataType::Double)),
+    (DataType::Integer, DataType::Double, Some(DataType::Double)),
+    (DataType::BigInt, DataType::SmallInt, Some(DataType::BigInt)),
+    (DataType::BigInt, DataType::Integer, Some(DataType::BigInt)),
+    (DataType::BigInt, DataType::BigInt, Some(DataType::BigInt)),
+    (DataType::BigInt, DataType::Real, None),
+    (DataType::BigInt, DataType::Double, None),
+    (DataType::Real, DataType::SmallInt, Some(DataType::Real)),
+    (DataType::Real, DataType::Integer, Some(DataType::Double)),
+    (DataType::Real, DataType::BigInt, None),
+    (DataType::Real, DataType::Real, Some(DataType::Real)),
+    (DataType::Real, DataType::Double, Some(DataType::Double)),
+    (DataType::Double, DataType::SmallInt, Some(DataType::Double)),
+    (DataType::Double, DataType::Integer, Some(DataType::Double)),
+    (DataType::Double, DataType::BigInt, None),
+    (DataType::Double, DataType::Real, Some(DataType::Double)),
+    (DataType::Double, DataType::Double, Some(DataType::Double)),
+];
+
+fn assert_promotion_catalog_matches_matrix(catalog: &[NumericPromotion]) {
+    let mut expected_keys = HashSet::new();
+    for (left, right, _) in EXPECTED_NUMERIC_PROMOTION_MATRIX {
+        assert!(
+            expected_keys.insert((left.clone(), right.clone())),
+            "duplicate expected promotion key: {left:?}/{right:?}"
+        );
+    }
+    assert_eq!(expected_keys.len(), 25);
+
+    let mut catalog_keys = HashSet::new();
+    for entry in catalog {
+        assert!(
+            catalog_keys.insert((entry.left.clone(), entry.right.clone())),
+            "duplicate numeric promotion key: {:?}/{:?}",
+            entry.left,
+            entry.right
+        );
+    }
+
+    for (left, right, expected) in EXPECTED_NUMERIC_PROMOTION_MATRIX {
+        let actual = catalog
+            .iter()
+            .find(|entry| &entry.left == left && &entry.right == right)
+            .map(|entry| entry.output.clone());
+        assert_eq!(actual, expected.clone(), "promotion for {left:?}/{right:?}");
+    }
+
+    let expected_present = EXPECTED_NUMERIC_PROMOTION_MATRIX
+        .iter()
+        .filter(|(_, _, output)| output.is_some())
+        .count();
+    assert_eq!(catalog_keys.len(), expected_present);
+}
+
+fn numeric_expression(
+    name: &'static str,
+    operator: ArithmeticOperator,
+    left: &DataType,
+    right: &DataType,
+) -> Option<Box<dyn Expression>> {
+    let output = promote_numeric(left, right)?;
+    Some(build_numeric_binary_expression(
+        name,
+        operator,
+        left.physical_type(),
+        right.physical_type(),
+        output.physical_type(),
+    ))
+}
+
+#[test]
+fn promotion_catalog_matches_canonical_ordered_matrix() {
+    assert_promotion_catalog_matches_matrix(NUMERIC_PROMOTIONS);
+    for (left, right, expected) in EXPECTED_NUMERIC_PROMOTION_MATRIX {
+        assert_eq!(promote_numeric(left, right), expected.clone());
+    }
     assert_eq!(
-        output_error,
-        BindError::PhysicalSignatureMismatch {
-            name: "string_concat",
-            expected_inputs: vec![PhysicalType::String, PhysicalType::String],
-            actual_inputs: vec![PhysicalType::String, PhysicalType::String],
-            expected_output: PhysicalType::Int32,
-            actual_output: PhysicalType::String,
-        }
+        promote_numeric(
+            DataType::Decimal {
+                scale: 2,
+                precision: 8,
+            },
+            DataType::Integer,
+        ),
+        None
     );
 }
 
 #[test]
-fn preserves_checked_execution_errors_after_binding() {
-    let registry = FunctionRegistry::with_builtins();
-    let expression = registry
-        .bind_binary("+", DataType::Integer, DataType::Integer)
+#[should_panic(expected = "duplicate numeric promotion key: SmallInt/Integer")]
+fn promotion_catalog_regression_rejects_duplicate_row_substitution() {
+    let mut mutated = NUMERIC_PROMOTIONS.to_vec();
+    for entry in &mut mutated {
+        if entry.left == DataType::SmallInt && entry.right == DataType::BigInt {
+            *entry = NumericPromotion {
+                left: DataType::SmallInt,
+                right: DataType::Integer,
+                output: DataType::Integer,
+            };
+        } else if entry.left == DataType::BigInt && entry.right == DataType::SmallInt {
+            *entry = NumericPromotion {
+                left: DataType::Integer,
+                right: DataType::SmallInt,
+                output: DataType::Integer,
+            };
+        }
+    }
+
+    assert_promotion_catalog_matches_matrix(&mutated);
+}
+
+#[test]
+fn arithmetic_promotes_both_operand_orders_and_rejects_lossy_pairs() {
+    for (left_type, right_type, left, right) in [
+        (
+            DataType::SmallInt,
+            DataType::Double,
+            ScalarRefImpl::Int16(2),
+            ScalarRefImpl::Float64(0.5),
+        ),
+        (
+            DataType::Double,
+            DataType::SmallInt,
+            ScalarRefImpl::Float64(0.5),
+            ScalarRefImpl::Int16(2),
+        ),
+        (
+            DataType::Integer,
+            DataType::Double,
+            ScalarRefImpl::Int32(2),
+            ScalarRefImpl::Float64(0.5),
+        ),
+        (
+            DataType::Double,
+            DataType::Integer,
+            ScalarRefImpl::Float64(0.5),
+            ScalarRefImpl::Int32(2),
+        ),
+        (
+            DataType::Integer,
+            DataType::Real,
+            ScalarRefImpl::Int32(2),
+            ScalarRefImpl::Float32(0.5),
+        ),
+        (
+            DataType::Real,
+            DataType::Integer,
+            ScalarRefImpl::Float32(0.5),
+            ScalarRefImpl::Int32(2),
+        ),
+    ] {
+        let expression = numeric_expression(
+            "numeric_add",
+            ArithmeticOperator::Add,
+            &left_type,
+            &right_type,
+        )
         .unwrap();
-    let strings: ArrayImpl = StringArray::from_slice(&[Some("wrong")]).into();
-    let inputs = [
-        ColumnViewImpl::array(&strings),
-        ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
-    ];
+        assert_eq!(expression.output_type(), PhysicalType::Float64);
+        let output = expression
+            .evaluate(&[
+                ColumnViewImpl::constant(left, 1),
+                ColumnViewImpl::constant(right, 1),
+            ])
+            .unwrap();
+        assert_eq!(<&F64Array>::try_from(&output).unwrap().get(0), Some(2.5));
+    }
+
+    for (left, right) in [
+        (DataType::BigInt, DataType::Double),
+        (DataType::Double, DataType::BigInt),
+    ] {
+        assert!(
+            numeric_expression(
+                "numeric_multiply",
+                ArithmeticOperator::Multiply,
+                &left,
+                &right
+            )
+            .is_none()
+        );
+    }
+}
+
+#[test]
+fn signed_arithmetic_wraps_and_division_reports_the_exact_row() {
+    for (name, operator, expected) in [
+        ("numeric_add", ArithmeticOperator::Add, 13),
+        ("numeric_subtract", ArithmeticOperator::Subtract, 5),
+        ("numeric_multiply", ArithmeticOperator::Multiply, 36),
+        ("numeric_divide", ArithmeticOperator::Divide, 2),
+    ] {
+        let expression =
+            numeric_expression(name, operator, &DataType::Integer, &DataType::Integer).unwrap();
+        let output = expression
+            .evaluate(&[
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(9), 1),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(4), 1),
+            ])
+            .unwrap();
+        assert_eq!(
+            <&I32Array>::try_from(&output).unwrap().get(0),
+            Some(expected),
+            "{name}"
+        );
+    }
+
+    let add = numeric_expression(
+        "numeric_add",
+        ArithmeticOperator::Add,
+        &DataType::SmallInt,
+        &DataType::SmallInt,
+    )
+    .unwrap();
+    let added = add
+        .evaluate(&[
+            ColumnViewImpl::constant(ScalarRefImpl::Int16(i16::MAX), 1),
+            ColumnViewImpl::constant(ScalarRefImpl::Int16(1), 1),
+        ])
+        .unwrap();
     assert_eq!(
-        expression.evaluate(&inputs),
-        Err(ExpressionError::TypeMismatch(TypeMismatch {
-            expected: PhysicalType::Int32,
-            actual: PhysicalType::String,
-        }))
+        <&I16Array>::try_from(&added).unwrap().get(0),
+        Some(i16::MIN)
     );
 
+    let multiply = numeric_expression(
+        "numeric_multiply",
+        ArithmeticOperator::Multiply,
+        &DataType::BigInt,
+        &DataType::BigInt,
+    )
+    .unwrap();
+    let multiplied = multiply
+        .evaluate(&[
+            ColumnViewImpl::constant(ScalarRefImpl::Int64(i64::MAX), 1),
+            ColumnViewImpl::constant(ScalarRefImpl::Int64(2), 1),
+        ])
+        .unwrap();
+    assert_eq!(<&I64Array>::try_from(&multiplied).unwrap().get(0), Some(-2));
+
+    let divide = numeric_expression(
+        "numeric_divide",
+        ArithmeticOperator::Divide,
+        &DataType::Integer,
+        &DataType::Integer,
+    )
+    .unwrap();
+    let numerators: ArrayImpl = I32Array::from_values(vec![8, 9, 10]).into();
+    let divisors: ArrayImpl = I32Array::from_values(vec![2, 0, 5]).into();
     assert_eq!(
-        expression.evaluate(&inputs[..1]),
-        Err(ExpressionError::InputArityMismatch {
-            expected: 2,
-            actual: 1,
+        divide.evaluate(&[
+            ColumnViewImpl::array(&numerators),
+            ColumnViewImpl::array(&divisors)
+        ]),
+        Err(ExpressionError::ScalarEvaluation {
+            function: "numeric_divide",
+            row: 1,
+            error: ScalarError::DivisionByZero,
+        })
+    );
+    assert_eq!(
+        divide.evaluate(&[
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(i32::MIN), 1),
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(-1), 1),
+        ]),
+        Err(ExpressionError::ScalarEvaluation {
+            function: "numeric_divide",
+            row: 0,
+            error: ScalarError::DivisionOverflow,
         })
     );
 }
 
 #[test]
-fn registers_a_custom_logical_name() {
-    let mut registry = FunctionRegistry::default();
-    registry.register_binary("wrapping_add", |left, right| {
-        if left != DataType::Integer || right != DataType::Integer {
-            return Err(BindError::UnsupportedArguments {
-                name: "wrapping_add".to_owned(),
-                inputs: vec![left, right],
-            });
-        }
-        BoundExpression::new(
-            build_builtin_expression("i32_add")
-                .ok_or(BindError::MissingPhysicalExpression { name: "i32_add" })?,
-            [left, right],
-            DataType::Integer,
-        )
-    });
-
-    let expression = registry
-        .bind_binary("wrapping_add", DataType::Integer, DataType::Integer)
+fn nulls_short_circuit_scalar_errors_and_float_division_keeps_ieee_results() {
+    let integer_divide = numeric_expression(
+        "numeric_divide",
+        ArithmeticOperator::Divide,
+        &DataType::Integer,
+        &DataType::Integer,
+    )
+    .unwrap();
+    let output = integer_divide
+        .evaluate(&[
+            ColumnViewImpl::null(PhysicalType::Int32, 2),
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(0), 2),
+        ])
         .unwrap();
-    assert_eq!(expression.physical_name(), "i32_add");
-}
+    assert_eq!(
+        <&I32Array>::try_from(&output)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![None, None]
+    );
 
-#[test]
-fn stores_and_validates_slice_metadata_for_any_arity() {
-    for input_types in [
-        vec![],
-        vec![DataType::Integer],
-        vec![DataType::Integer; 3],
-        vec![DataType::Integer; 5],
-    ] {
-        let expression = BoundExpression::new(
-            Box::new(MetadataExpression {
-                input_types: vec![PhysicalType::Int32; input_types.len()],
-            }),
-            input_types.clone(),
-            DataType::Integer,
-        )
-        .unwrap();
-        assert_eq!(expression.input_types(), input_types);
-    }
-}
-
-#[test]
-fn slice_registry_rejects_wrong_arity_before_a_binary_factory_can_index() {
-    let registry = FunctionRegistry::with_builtins();
-    for inputs in [
-        vec![],
-        vec![DataType::Integer],
-        vec![DataType::Integer; 3],
-        vec![DataType::Integer; 5],
-    ] {
+    let float_divide = numeric_expression(
+        "numeric_divide",
+        ArithmeticOperator::Divide,
+        &DataType::Real,
+        &DataType::Real,
+    )
+    .unwrap();
+    for zero in [0.0_f32, -0.0] {
         assert_eq!(
-            expect_bind_error(registry.bind("+", &inputs)),
-            BindError::InputArityMismatch {
-                name: "+".to_owned(),
-                expected: 2,
-                actual: inputs.len(),
-            }
+            float_divide.evaluate(&[
+                ColumnViewImpl::constant(ScalarRefImpl::Float32(1.0), 1),
+                ColumnViewImpl::constant(ScalarRefImpl::Float32(zero), 1),
+            ]),
+            Err(ExpressionError::ScalarEvaluation {
+                function: "numeric_divide",
+                row: 0,
+                error: ScalarError::DivisionByZero,
+            })
         );
     }
+    let special = float_divide
+        .evaluate(&[
+            ColumnViewImpl::constant(ScalarRefImpl::Float32(f32::INFINITY), 2),
+            ColumnViewImpl::constant(ScalarRefImpl::Float32(f32::INFINITY), 2),
+        ])
+        .unwrap();
+    assert!(
+        <&F32Array>::try_from(&special)
+            .unwrap()
+            .get(0)
+            .unwrap()
+            .is_nan()
+    );
 }
