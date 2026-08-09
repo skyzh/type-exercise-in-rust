@@ -7,6 +7,7 @@ mod data_type;
 mod expression;
 mod physical_type;
 mod scalar;
+mod variant_catalog;
 
 #[cfg(test)]
 mod tests;
@@ -17,4 +18,5 @@ pub use column::*;
 pub use data_type::*;
 pub use expression::*;
 pub use physical_type::*;
+pub use rust_decimal::Decimal;
 pub use scalar::*;
