@@ -6,13 +6,14 @@ use crate::variant_catalog::for_each_physical_family;
 macro_rules! define_physical_types {
     ($( { $kind:ident, $variant:ident, $array:ident, $builder:ident, $owned:ty, $borrowed:ty } ),+ $(,)?) => {
         /// The physical representation selected at a runtime boundary.
-        #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+        #[derive(Clone, Debug, Eq, Hash, PartialEq)]
         pub enum PhysicalType {
-            $($variant),+
+            $($variant),+,
+            List(Box<PhysicalType>),
         }
 
         /// A catalog row used to audit the single physical-family definition.
-        #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+        #[derive(Clone, Debug, Eq, PartialEq)]
         pub struct PhysicalFamily {
             pub physical_type: PhysicalType,
             pub name: &'static str,
@@ -31,7 +32,7 @@ macro_rules! define_physical_types {
 for_each_physical_family!(define_physical_types);
 
 /// A checked erased-to-typed conversion found the wrong physical representation.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TypeMismatch {
     pub expected: PhysicalType,
     pub actual: PhysicalType,

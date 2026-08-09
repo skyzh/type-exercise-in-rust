@@ -47,10 +47,10 @@ pub fn validate_expression_inputs(
             actual: inputs.len(),
         });
     }
-    for (input, expected) in inputs.iter().zip(expected_types.iter().copied()) {
-        if input.physical_type() != expected {
+    for (input, expected) in inputs.iter().zip(expected_types) {
+        if input.physical_type() != *expected {
             return Err(TypeMismatch {
-                expected,
+                expected: expected.clone(),
                 actual: input.physical_type(),
             }
             .into());
@@ -515,7 +515,7 @@ pub(crate) fn build_string_comparison_expression(
 ) -> Box<dyn Expression> {
     Box::new(CheckedBinaryExpression::new(
         name,
-        [PhysicalType::String; 2],
+        [const { PhysicalType::String }; 2],
         StringBinary {
             operator: StringOperator::Compare(operator),
         },
@@ -525,7 +525,7 @@ pub(crate) fn build_string_comparison_expression(
 pub(crate) fn build_string_contains_expression(name: &'static str) -> Box<dyn Expression> {
     Box::new(CheckedBinaryExpression::new(
         name,
-        [PhysicalType::String; 2],
+        [const { PhysicalType::String }; 2],
         StringBinary {
             operator: StringOperator::Contains,
         },
@@ -538,7 +538,7 @@ pub(crate) fn build_bool_comparison_expression(
 ) -> Box<dyn Expression> {
     Box::new(CheckedBinaryExpression::new(
         name,
-        [PhysicalType::Bool; 2],
+        [const { PhysicalType::Bool }; 2],
         BoolCompare(operator),
     ))
 }

@@ -1,8 +1,10 @@
 mod iterator;
+mod list_array;
 mod primitive_array;
 mod string_array;
 
 use iterator::ArrayIterator;
+pub use list_array::{ListArray, ListError, ListScalar, ListScalarRef};
 pub use primitive_array::{
     BoolArray, BoolArrayBuilder, DecimalArray, DecimalArrayBuilder, F32Array, F32ArrayBuilder,
     F64Array, F64ArrayBuilder, I16Array, I16ArrayBuilder, I32Array, I32ArrayBuilder, I64Array,
@@ -13,7 +15,21 @@ pub use string_array::{StringArray, StringArrayBuilder};
 use std::fmt::Debug;
 
 use crate::variant_catalog::for_each_physical_family;
-use crate::{PhysicalType, Scalar, ScalarRef, ScalarRefImpl, TypeMismatch};
+use crate::{Decimal, PhysicalType, Scalar, ScalarImpl, ScalarRef, ScalarRefImpl, TypeMismatch};
+
+macro_rules! build_array_family_from_scalars {
+    ($values:expr, $variant:ident, $array:ident, $owned:ty) => {{
+        let typed = $values
+            .into_iter()
+            .map(|value| value.map(<$owned>::try_from).transpose())
+            .collect::<Result<Vec<_>, _>>()?;
+        let borrowed = typed
+            .iter()
+            .map(|value| value.as_ref().map(Scalar::as_scalar_ref))
+            .collect::<Vec<_>>();
+        Ok(Self::$variant($array::from_slice(&borrowed)))
+    }};
+}
 
 /// A nullable collection of one physical value type.
 pub trait Array:
@@ -64,19 +80,22 @@ macro_rules! define_array_erasure {
         /// A physical array whose concrete type is known only at runtime.
         #[derive(Clone, Debug, PartialEq)]
         pub enum ArrayImpl {
-            $($variant($array)),+
+            $($variant($array)),+,
+            List(ListArray),
         }
 
         impl ArrayImpl {
             pub fn physical_type(&self) -> PhysicalType {
                 match self {
-                    $(Self::$variant(_) => PhysicalType::$variant),+
+                    $(Self::$variant(_) => PhysicalType::$variant),+,
+                    Self::List(array) => PhysicalType::List(Box::new(array.element_type())),
                 }
             }
 
             pub fn len(&self) -> usize {
                 match self {
-                    $(Self::$variant(array) => array.len()),+
+                    $(Self::$variant(array) => array.len()),+,
+                    Self::List(array) => array.len(),
                 }
             }
 
@@ -85,8 +104,50 @@ macro_rules! define_array_erasure {
             }
 
             pub fn get(&self, row: usize) -> Option<ScalarRefImpl<'_>> {
+                if row >= self.len() {
+                    return None;
+                }
                 match self {
-                    $(Self::$variant(array) => array.get(row).map(ScalarRefImpl::$variant)),+
+                    $(Self::$variant(array) => array.get(row).map(ScalarRefImpl::$variant)),+,
+                    Self::List(array) => array
+                        .get(row)
+                        .ok()
+                        .flatten()
+                        .map(ScalarRefImpl::List),
+                }
+            }
+
+            pub(crate) fn slice(&self, start: usize, end: usize) -> Result<Self, ListError> {
+                if start > end || end > self.len() {
+                    return Err(ListError::RangeOutOfBounds {
+                        start,
+                        end,
+                        len: self.len(),
+                    });
+                }
+                match self {
+                    $(Self::$variant(array) => {
+                        let values = (start..end).map(|row| array.get(row)).collect::<Vec<_>>();
+                        Ok(Self::$variant($array::from_slice(&values)))
+                    }),+,
+                    Self::List(_) => Err(ListError::NestedList),
+                }
+            }
+
+            pub(crate) fn try_from_scalars(
+                physical_type: &PhysicalType,
+                values: Vec<Option<ScalarImpl>>,
+            ) -> Result<Self, ListError> {
+                match physical_type {
+                    PhysicalType::Int16 => build_array_family_from_scalars!(values, Int16, I16Array, i16),
+                    PhysicalType::Int32 => build_array_family_from_scalars!(values, Int32, I32Array, i32),
+                    PhysicalType::Int64 => build_array_family_from_scalars!(values, Int64, I64Array, i64),
+                    PhysicalType::Bool => build_array_family_from_scalars!(values, Bool, BoolArray, bool),
+                    PhysicalType::Float32 => build_array_family_from_scalars!(values, Float32, F32Array, f32),
+                    PhysicalType::Float64 => build_array_family_from_scalars!(values, Float64, F64Array, f64),
+                    PhysicalType::String => build_array_family_from_scalars!(values, String, StringArray, String),
+                    PhysicalType::Decimal => build_array_family_from_scalars!(values, Decimal, DecimalArray, Decimal),
+                    PhysicalType::List(_) => Err(ListError::NestedList),
                 }
             }
         }
@@ -134,3 +195,35 @@ macro_rules! define_array_family {
 }
 
 for_each_physical_family!(define_array_erasure);
+
+impl From<ListArray> for ArrayImpl {
+    fn from(array: ListArray) -> Self {
+        Self::List(array)
+    }
+}
+
+impl TryFrom<ArrayImpl> for ListArray {
+    type Error = ListError;
+
+    fn try_from(array: ArrayImpl) -> Result<Self, Self::Error> {
+        match array {
+            ArrayImpl::List(array) => Ok(array),
+            other => Err(ListError::ExpectedList {
+                actual: other.physical_type(),
+            }),
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a ArrayImpl> for &'a ListArray {
+    type Error = ListError;
+
+    fn try_from(array: &'a ArrayImpl) -> Result<Self, Self::Error> {
+        match array {
+            ArrayImpl::List(array) => Ok(array),
+            other => Err(ListError::ExpectedList {
+                actual: other.physical_type(),
+            }),
+        }
+    }
+}

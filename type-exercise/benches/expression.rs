@@ -18,8 +18,8 @@ enum HandwrittenColumn<'a> {
 
 fn handwritten_general_add(inputs: &[ColumnViewImpl<'_>]) -> ArrayImpl {
     assert_eq!(inputs.len(), 2);
-    let left = ColumnView::<i32>::try_from(inputs[0]).unwrap();
-    let right = ColumnView::<i32>::try_from(inputs[1]).unwrap();
+    let left = ColumnView::<i32>::try_from(inputs[0].clone()).unwrap();
+    let right = ColumnView::<i32>::try_from(inputs[1].clone()).unwrap();
     assert_eq!(left.len(), right.len());
 
     let mut output = <I32Array as Array>::Builder::with_capacity(left.len());

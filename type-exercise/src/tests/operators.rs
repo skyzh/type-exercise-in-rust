@@ -53,9 +53,9 @@ const EXPECTED_NUMERIC_PROMOTION_MATRIX: &[(DataType, DataType, Option<DataType>
 
 fn assert_promotion_catalog_matches_matrix(catalog: &[NumericPromotion]) {
     let mut expected_keys = HashSet::new();
-    for &(left, right, _) in EXPECTED_NUMERIC_PROMOTION_MATRIX {
+    for (left, right, _) in EXPECTED_NUMERIC_PROMOTION_MATRIX {
         assert!(
-            expected_keys.insert((left, right)),
+            expected_keys.insert((left.clone(), right.clone())),
             "duplicate expected promotion key: {left:?}/{right:?}"
         );
     }
@@ -64,19 +64,19 @@ fn assert_promotion_catalog_matches_matrix(catalog: &[NumericPromotion]) {
     let mut catalog_keys = HashSet::new();
     for entry in catalog {
         assert!(
-            catalog_keys.insert((entry.left, entry.right)),
+            catalog_keys.insert((entry.left.clone(), entry.right.clone())),
             "duplicate numeric promotion key: {:?}/{:?}",
             entry.left,
             entry.right
         );
     }
 
-    for &(left, right, expected) in EXPECTED_NUMERIC_PROMOTION_MATRIX {
+    for (left, right, expected) in EXPECTED_NUMERIC_PROMOTION_MATRIX {
         let actual = catalog
             .iter()
-            .find(|entry| entry.left == left && entry.right == right)
-            .map(|entry| entry.output);
-        assert_eq!(actual, expected, "promotion for {left:?}/{right:?}");
+            .find(|entry| &entry.left == left && &entry.right == right)
+            .map(|entry| entry.output.clone());
+        assert_eq!(actual, expected.clone(), "promotion for {left:?}/{right:?}");
     }
 
     let expected_present = EXPECTED_NUMERIC_PROMOTION_MATRIX
@@ -96,8 +96,8 @@ fn expect_bind_error(result: Result<BoundExpression, BindError>) -> BindError {
 #[test]
 fn promotion_catalog_matches_canonical_ordered_matrix() {
     assert_promotion_catalog_matches_matrix(NUMERIC_PROMOTIONS);
-    for &(left, right, expected) in EXPECTED_NUMERIC_PROMOTION_MATRIX {
-        assert_eq!(promote_numeric(left, right), expected);
+    for (left, right, expected) in EXPECTED_NUMERIC_PROMOTION_MATRIX {
+        assert_eq!(promote_numeric(left, right), expected.clone());
     }
     assert_eq!(
         promote_numeric(
@@ -116,13 +116,13 @@ fn promotion_catalog_matches_canonical_ordered_matrix() {
 fn promotion_catalog_regression_rejects_duplicate_row_substitution() {
     let mut mutated = NUMERIC_PROMOTIONS.to_vec();
     for entry in &mut mutated {
-        if (entry.left, entry.right) == (DataType::SmallInt, DataType::BigInt) {
+        if entry.left == DataType::SmallInt && entry.right == DataType::BigInt {
             *entry = NumericPromotion {
                 left: DataType::SmallInt,
                 right: DataType::Integer,
                 output: DataType::Integer,
             };
-        } else if (entry.left, entry.right) == (DataType::BigInt, DataType::SmallInt) {
+        } else if entry.left == DataType::BigInt && entry.right == DataType::SmallInt {
             *entry = NumericPromotion {
                 left: DataType::Integer,
                 right: DataType::SmallInt,
@@ -191,7 +191,7 @@ fn arithmetic_promotes_both_operand_orders_and_rejects_lossy_pairs() {
         (DataType::Double, DataType::BigInt),
     ] {
         assert_eq!(
-            expect_bind_error(registry.bind_binary("*", left, right)),
+            expect_bind_error(registry.bind_binary("*", left.clone(), right.clone())),
             BindError::UnsupportedArguments {
                 name: "*".to_owned(),
                 inputs: vec![left, right]
@@ -480,7 +480,7 @@ fn boundary_validation_fails_closed_for_two_four_and_five_inputs() {
         }
     );
     assert_eq!(
-        expect_bind_error(registry.bind("clamp", &[DataType::Integer; 4])),
+        expect_bind_error(registry.bind("clamp", &[const { DataType::Integer }; 4])),
         BindError::InputArityMismatch {
             name: "clamp".to_owned(),
             expected: 3,
@@ -528,11 +528,11 @@ fn boundary_validation_fails_closed_for_two_four_and_five_inputs() {
         ColumnViewImpl::constant(ScalarRefImpl::Int32(5), 1),
     ];
     assert_eq!(
-        validate_expression_inputs(&columns[..4], &[PhysicalType::Int32; 4]),
+        validate_expression_inputs(&columns[..4], &[const { PhysicalType::Int32 }; 4]),
         Ok(2)
     );
     assert_eq!(
-        validate_expression_inputs(&columns, &[PhysicalType::Int32; 5]),
+        validate_expression_inputs(&columns, &[const { PhysicalType::Int32 }; 5]),
         Err(ExpressionError::InputLengthMismatch {
             expected: 2,
             actual: 1,
