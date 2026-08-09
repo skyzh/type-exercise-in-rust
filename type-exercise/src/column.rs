@@ -140,9 +140,7 @@ impl<'a> ColumnViewImpl<'a> {
                 len,
                 ..
             } => Some(NonNullI32Column::Constant { value, len }),
-            ColumnViewImplKind::Array(ArrayImpl::String(_))
-            | ColumnViewImplKind::Constant { .. }
-            | ColumnViewImplKind::Dictionary { .. } => None,
+            _ => None,
         }
     }
 }

@@ -5,6 +5,7 @@ use std::fmt::{Display, Formatter};
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PhysicalType {
     Int32,
+    Float64,
     String,
 }
 

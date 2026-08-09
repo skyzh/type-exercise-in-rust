@@ -4,7 +4,8 @@ mod string_array;
 
 use iterator::ArrayIterator;
 pub use primitive_array::{
-    I32Array, I32ArrayBuilder, NonNullPrimitiveArray, PrimitiveArray, PrimitiveArrayBuilder,
+    F64Array, F64ArrayBuilder, I32Array, I32ArrayBuilder, NonNullPrimitiveArray, PrimitiveArray,
+    PrimitiveArrayBuilder,
 };
 pub use string_array::{StringArray, StringArrayBuilder};
 
@@ -60,6 +61,7 @@ pub trait ArrayBuilder: Sized {
 #[derive(Clone, Debug, PartialEq)]
 pub enum ArrayImpl {
     Int32(I32Array),
+    Float64(F64Array),
     String(StringArray),
 }
 
@@ -67,6 +69,7 @@ impl ArrayImpl {
     pub fn physical_type(&self) -> PhysicalType {
         match self {
             Self::Int32(_) => PhysicalType::Int32,
+            Self::Float64(_) => PhysicalType::Float64,
             Self::String(_) => PhysicalType::String,
         }
     }
@@ -74,6 +77,7 @@ impl ArrayImpl {
     pub fn len(&self) -> usize {
         match self {
             Self::Int32(array) => array.len(),
+            Self::Float64(array) => array.len(),
             Self::String(array) => array.len(),
         }
     }
@@ -85,6 +89,7 @@ impl ArrayImpl {
     pub fn get(&self, row: usize) -> Option<ScalarRefImpl<'_>> {
         match self {
             Self::Int32(array) => array.get(row).map(ScalarRefImpl::Int32),
+            Self::Float64(array) => array.get(row).map(ScalarRefImpl::Float64),
             Self::String(array) => array.get(row).map(ScalarRefImpl::String),
         }
     }
@@ -118,6 +123,40 @@ impl<'a> TryFrom<&'a ArrayImpl> for &'a I32Array {
             ArrayImpl::Int32(array) => Ok(array),
             other => Err(TypeMismatch {
                 expected: PhysicalType::Int32,
+                actual: other.physical_type(),
+            }),
+        }
+    }
+}
+
+impl From<F64Array> for ArrayImpl {
+    fn from(array: F64Array) -> Self {
+        Self::Float64(array)
+    }
+}
+
+impl TryFrom<ArrayImpl> for F64Array {
+    type Error = TypeMismatch;
+
+    fn try_from(array: ArrayImpl) -> Result<Self, Self::Error> {
+        match array {
+            ArrayImpl::Float64(array) => Ok(array),
+            other => Err(TypeMismatch {
+                expected: PhysicalType::Float64,
+                actual: other.physical_type(),
+            }),
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a ArrayImpl> for &'a F64Array {
+    type Error = TypeMismatch;
+
+    fn try_from(array: &'a ArrayImpl) -> Result<Self, Self::Error> {
+        match array {
+            ArrayImpl::Float64(array) => Ok(array),
+            other => Err(TypeMismatch {
+                expected: PhysicalType::Float64,
                 actual: other.physical_type(),
             }),
         }

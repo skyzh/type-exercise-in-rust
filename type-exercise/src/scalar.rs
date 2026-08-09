@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::{Array, I32Array, PhysicalType, StringArray, TypeMismatch};
+use crate::{Array, F64Array, I32Array, PhysicalType, StringArray, TypeMismatch};
 
 /// An owned scalar and its associated borrowed value and array representation.
 pub trait Scalar:
@@ -30,6 +30,7 @@ pub trait ScalarRef<'a>:
 #[derive(Clone, Debug, PartialEq)]
 pub enum ScalarImpl {
     Int32(i32),
+    Float64(f64),
     String(String),
 }
 
@@ -37,6 +38,7 @@ impl ScalarImpl {
     pub fn physical_type(&self) -> PhysicalType {
         match self {
             Self::Int32(_) => PhysicalType::Int32,
+            Self::Float64(_) => PhysicalType::Float64,
             Self::String(_) => PhysicalType::String,
         }
     }
@@ -46,6 +48,7 @@ impl ScalarImpl {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ScalarRefImpl<'a> {
     Int32(i32),
+    Float64(f64),
     String(&'a str),
 }
 
@@ -53,6 +56,7 @@ impl ScalarRefImpl<'_> {
     pub fn physical_type(&self) -> PhysicalType {
         match self {
             Self::Int32(_) => PhysicalType::Int32,
+            Self::Float64(_) => PhysicalType::Float64,
             Self::String(_) => PhysicalType::String,
         }
     }
@@ -72,6 +76,26 @@ impl Scalar for i32 {
 impl ScalarRef<'_> for i32 {
     type ArrayType = I32Array;
     type ScalarType = i32;
+
+    fn to_owned_scalar(self) -> Self::ScalarType {
+        self
+    }
+}
+
+impl Scalar for f64 {
+    const PHYSICAL_TYPE: PhysicalType = PhysicalType::Float64;
+
+    type ArrayType = F64Array;
+    type RefType<'a> = f64;
+
+    fn as_scalar_ref(&self) -> Self::RefType<'_> {
+        *self
+    }
+}
+
+impl ScalarRef<'_> for f64 {
+    type ArrayType = F64Array;
+    type ScalarType = f64;
 
     fn to_owned_scalar(self) -> Self::ScalarType {
         self
@@ -118,6 +142,26 @@ impl TryFrom<ScalarImpl> for i32 {
     }
 }
 
+impl From<f64> for ScalarImpl {
+    fn from(value: f64) -> Self {
+        Self::Float64(value)
+    }
+}
+
+impl TryFrom<ScalarImpl> for f64 {
+    type Error = TypeMismatch;
+
+    fn try_from(value: ScalarImpl) -> Result<Self, Self::Error> {
+        match value {
+            ScalarImpl::Float64(value) => Ok(value),
+            other => Err(TypeMismatch {
+                expected: PhysicalType::Float64,
+                actual: other.physical_type(),
+            }),
+        }
+    }
+}
+
 impl From<String> for ScalarImpl {
     fn from(value: String) -> Self {
         Self::String(value)
@@ -152,6 +196,26 @@ impl TryFrom<ScalarRefImpl<'_>> for i32 {
             ScalarRefImpl::Int32(value) => Ok(value),
             other => Err(TypeMismatch {
                 expected: PhysicalType::Int32,
+                actual: other.physical_type(),
+            }),
+        }
+    }
+}
+
+impl<'a> From<f64> for ScalarRefImpl<'a> {
+    fn from(value: f64) -> Self {
+        Self::Float64(value)
+    }
+}
+
+impl TryFrom<ScalarRefImpl<'_>> for f64 {
+    type Error = TypeMismatch;
+
+    fn try_from(value: ScalarRefImpl<'_>) -> Result<Self, Self::Error> {
+        match value {
+            ScalarRefImpl::Float64(value) => Ok(value),
+            other => Err(TypeMismatch {
+                expected: PhysicalType::Float64,
                 actual: other.physical_type(),
             }),
         }

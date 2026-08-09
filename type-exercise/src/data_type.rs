@@ -4,6 +4,7 @@ use crate::PhysicalType;
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum DataType {
     Integer,
+    Double,
     Varchar,
     Char { width: u16 },
 }
@@ -12,6 +13,7 @@ impl DataType {
     pub fn physical_type(self) -> PhysicalType {
         match self {
             Self::Integer => PhysicalType::Int32,
+            Self::Double => PhysicalType::Float64,
             Self::Varchar | Self::Char { .. } => PhysicalType::String,
         }
     }

@@ -1,6 +1,6 @@
 use crate::{
-    Array, ArrayBuilder, ArrayImpl, I32Array, PhysicalType, Scalar, ScalarImpl, ScalarRef,
-    ScalarRefImpl, StringArray, StringArrayBuilder, TypeMismatch,
+    Array, ArrayBuilder, ArrayImpl, DataType, F64Array, I32Array, PhysicalType, Scalar, ScalarImpl,
+    ScalarRef, ScalarRefImpl, StringArray, StringArrayBuilder, TypeMismatch,
 };
 
 fn assert_complete_family<S, A>()
@@ -16,7 +16,10 @@ where
 #[test]
 fn connects_owned_borrowed_and_array_types() {
     assert_complete_family::<i32, I32Array>();
+    assert_complete_family::<f64, F64Array>();
     assert_complete_family::<String, StringArray>();
+
+    assert_eq!(DataType::Double.physical_type(), PhysicalType::Float64);
 
     let integer = 42_i32;
     let integer_ref: <i32 as Scalar>::RefType<'_> = integer.as_scalar_ref();
@@ -40,6 +43,26 @@ fn connects_owned_borrowed_and_array_types() {
     drop(source);
     let built = builder.finish();
     assert_eq!(built.get(0), Some("owned by the array"));
+}
+
+#[test]
+fn preserves_special_float_values_across_the_explicit_double_family() {
+    let values = F64Array::from_slice(&[Some(f64::NAN), Some(f64::INFINITY), Some(-0.0), None]);
+
+    assert!(values.get(0).unwrap().is_nan());
+    assert_eq!(values.get(1), Some(f64::INFINITY));
+    assert_eq!(values.get(2).unwrap().to_bits(), (-0.0_f64).to_bits());
+    assert_eq!(values.get(3), None);
+
+    let erased_scalar = ScalarImpl::from(-0.0_f64);
+    assert_eq!(
+        f64::try_from(erased_scalar).unwrap().to_bits(),
+        (-0.0_f64).to_bits()
+    );
+    let erased_array = ArrayImpl::from(values.clone());
+    let restored = F64Array::try_from(erased_array).unwrap();
+    assert!(restored.get(0).unwrap().is_nan());
+    assert_eq!(restored.get(2).unwrap().to_bits(), (-0.0_f64).to_bits());
 }
 
 #[test]

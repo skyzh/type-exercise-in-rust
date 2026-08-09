@@ -24,6 +24,8 @@ pub struct PrimitiveArrayBuilder<T> {
 
 pub type I32Array = PrimitiveArray<i32>;
 pub type I32ArrayBuilder = PrimitiveArrayBuilder<i32>;
+pub type F64Array = PrimitiveArray<f64>;
+pub type F64ArrayBuilder = PrimitiveArrayBuilder<f64>;
 
 impl<T> PrimitiveArray<T> {
     pub fn from_values(values: Vec<T>) -> Self {
@@ -82,6 +84,54 @@ impl ArrayBuilder for I32ArrayBuilder {
             }
             None => {
                 self.values.push(0);
+                self.validity.push(false);
+                self.null_count += 1;
+            }
+        }
+    }
+
+    fn finish(self) -> Self::Array {
+        PrimitiveArray {
+            values: self.values,
+            validity: self.validity,
+            null_count: self.null_count,
+        }
+    }
+}
+
+impl Array for F64Array {
+    type Builder = F64ArrayBuilder;
+    type OwnedItem = f64;
+    type RefItem<'a> = f64;
+
+    fn get(&self, row: usize) -> Option<Self::RefItem<'_>> {
+        self.validity[row].then_some(self.values[row])
+    }
+
+    fn len(&self) -> usize {
+        self.values.len()
+    }
+}
+
+impl ArrayBuilder for F64ArrayBuilder {
+    type Array = F64Array;
+
+    fn with_capacity(capacity: usize) -> Self {
+        Self {
+            values: Vec::with_capacity(capacity),
+            validity: Vec::with_capacity(capacity),
+            null_count: 0,
+        }
+    }
+
+    fn push(&mut self, value: Option<f64>) {
+        match value {
+            Some(value) => {
+                self.values.push(value);
+                self.validity.push(true);
+            }
+            None => {
+                self.values.push(0.0);
                 self.validity.push(false);
                 self.null_count += 1;
             }
