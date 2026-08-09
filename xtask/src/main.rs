@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
@@ -89,6 +90,22 @@ const SOCIAL_IMAGE_FINGERPRINT: Fingerprint = Fingerprint {
     bytes: 1_043_209,
     fnv1a64: 0x87c2_ac72_f34f_d91d,
 };
+const BOOK_CONFIG_FINGERPRINT: Fingerprint = Fingerprint {
+    bytes: 305,
+    fnv1a64: 0x114c_8219_be8f_6b55,
+};
+const THEME_HEAD_FINGERPRINT: Fingerprint = Fingerprint {
+    bytes: 1537,
+    fnv1a64: 0x52a0_5948_1649_ad25,
+};
+const ROOT_MANIFEST_FINGERPRINT: Fingerprint = Fingerprint {
+    bytes: 251,
+    fnv1a64: 0x37ba_3635_943d_1f35,
+};
+const REFERENCE_MANIFEST_FINGERPRINT: Fingerprint = Fingerprint {
+    bytes: 295,
+    fnv1a64: 0xea4d_c3c4_3be5_5080,
+};
 
 const SUPPLIED_TEST_COUNTS: [usize; COURSE_CHAPTERS] = [4, 3, 5, 8, 5, 2, 7, 12, 7, 9, 6, 6];
 
@@ -129,6 +146,9 @@ const SUPPLIED_TEST_FILES: [&str; COURSE_CHAPTERS] = [
     "chapter_8.rs",
     "chapter_9.rs",
 ];
+
+const THEME_FILES: [&str; 1] = ["head.hbs"];
+const INTEGRATION_TEST_FILES: [&str; 0] = [];
 
 const TEST_REGISTRY_LINES: [&str; COURSE_CHAPTERS] = [
     "mod chapter_1;",
@@ -624,6 +644,16 @@ fn relative_regular_files(root: &Path) -> Result<Vec<String>> {
     Ok(files)
 }
 
+fn relative_regular_files_if_present(root: &Path) -> Result<Vec<String>> {
+    if !root
+        .try_exists()
+        .with_context(|| format!("failed to inspect {}", root.display()))?
+    {
+        return Ok(Vec::new());
+    }
+    relative_regular_files(root)
+}
+
 fn sitemap_xml_locations(xml: &str) -> Result<Vec<&str>> {
     let mut remaining = xml;
     let mut locations = Vec::new();
@@ -638,6 +668,101 @@ fn sitemap_xml_locations(xml: &str) -> Result<Vec<&str>> {
 }
 
 fn check_course_contract(root: &Path) -> Result<()> {
+    let book_config_path = root.join("course/book.toml");
+    let book_config_bytes =
+        fs::read(&book_config_path).context("failed to read course/book.toml")?;
+    let book_config =
+        std::str::from_utf8(&book_config_bytes).context("course/book.toml is not valid UTF-8")?;
+    for fact in [
+        "authors = [\"Alex Chi\"]",
+        "description = \"A twelve-chapter Rust course that builds a typed vectorized database expression engine\"",
+        "src = \"src\"",
+        "title = \"Build a Typed Database Expression Engine in Rust\"",
+        "git-repository-url = \"https://github.com/skyzh/type-exercise-in-rust\"",
+    ] {
+        require_once_normalized(book_config, fact, "mdBook publication configuration")?;
+    }
+    require_fingerprint(
+        &book_config_bytes,
+        BOOK_CONFIG_FINGERPRINT,
+        "mdBook publication configuration",
+    )?;
+
+    let theme_dir = root.join("course/theme");
+    let theme_files = relative_regular_files(&theme_dir)?;
+    if theme_files != THEME_FILES {
+        bail!(
+            "mdBook theme file set must match the exact allowlist: expected {:?}, found {theme_files:?}",
+            THEME_FILES
+        );
+    }
+    let theme_head_bytes =
+        fs::read(theme_dir.join("head.hbs")).context("failed to read course/theme/head.hbs")?;
+    let theme_head =
+        std::str::from_utf8(&theme_head_bytes).context("theme head is not valid UTF-8")?;
+    for fact in [
+        "<meta name=\"author\" content=\"Alex Chi Z\">",
+        "<meta property=\"og:site_name\" content=\"Type Exercise in Rust\">",
+        "<meta property=\"og:image:width\" content=\"1200\">",
+        "<meta property=\"og:image:height\" content=\"628\">",
+        "<meta name=\"twitter:creator\" content=\"@iskyzh\">",
+    ] {
+        require_once_normalized(theme_head, fact, "mdBook theme metadata")?;
+    }
+    require_fingerprint(
+        &theme_head_bytes,
+        THEME_HEAD_FINGERPRINT,
+        "mdBook theme head",
+    )?;
+
+    let root_manifest_bytes =
+        fs::read(root.join("Cargo.toml")).context("failed to read the root Cargo manifest")?;
+    let root_manifest = std::str::from_utf8(&root_manifest_bytes)
+        .context("root Cargo manifest is not valid UTF-8")?;
+    for fact in [
+        "members = [\"type-exercise\", \"type-exercise-starter\", \"xtask\"]",
+        "exclude = [\"archived/type-exercise-ref\", \"archived/legacy-days/*\"]",
+    ] {
+        require_once_normalized(root_manifest, fact, "root workspace selector")?;
+    }
+    require_fingerprint(
+        &root_manifest_bytes,
+        ROOT_MANIFEST_FINGERPRINT,
+        "root Cargo manifest",
+    )?;
+
+    let reference_manifest_path = root.join("type-exercise/Cargo.toml");
+    let reference_manifest_bytes = fs::read(&reference_manifest_path)
+        .context("failed to read the reference Cargo manifest")?;
+    let reference_manifest = std::str::from_utf8(&reference_manifest_bytes)
+        .context("reference Cargo manifest is not valid UTF-8")?;
+    for fact in [
+        "name = \"type-exercise\"",
+        "rust_decimal = { version = \"1\", default-features = false }",
+        "criterion = \"0.8.2\"",
+        "[[bench]] name = \"expression\" harness = false",
+    ] {
+        require_once_normalized(
+            reference_manifest,
+            fact,
+            "reference test-target configuration",
+        )?;
+    }
+    require_fingerprint(
+        &reference_manifest_bytes,
+        REFERENCE_MANIFEST_FINGERPRINT,
+        "reference Cargo manifest",
+    )?;
+
+    let integration_test_files =
+        relative_regular_files_if_present(&root.join("type-exercise/tests"))?;
+    if integration_test_files != INTEGRATION_TEST_FILES {
+        bail!(
+            "reference integration-test file set must match the exact allowlist: expected {:?}, found {integration_test_files:?}",
+            INTEGRATION_TEST_FILES
+        );
+    }
+
     let supplied_test_dir = root.join("type-exercise/src/tests");
     let supplied_test_files = relative_regular_files(&supplied_test_dir)?;
     if supplied_test_files != SUPPLIED_TEST_FILES {
@@ -1006,6 +1131,33 @@ fn check_course_contract(root: &Path) -> Result<()> {
     Ok(())
 }
 
+fn verify_real_reference_inventory(root: &Path) -> Result<()> {
+    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    let output = Command::new(cargo)
+        .current_dir(root)
+        .env("CARGO_TERM_COLOR", "never")
+        .args([
+            "test",
+            "-p",
+            "type-exercise",
+            "--lib",
+            "--locked",
+            "--",
+            "--test-threads=1",
+        ])
+        .output()
+        .context("failed to execute the real reference test inventory")?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if !output.status.success() {
+        bail!("real reference test inventory failed:\n{stdout}\n{stderr}");
+    }
+    let summary = "test result: ok. 76 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out;";
+    require_once(&stdout, summary, "real reference 76-test inventory")?;
+    println!("executed the exact real reference inventory: 76/76 tests");
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let args = Args::parse();
     let root = workspace_root()?;
@@ -1013,7 +1165,10 @@ fn main() -> Result<()> {
         Action::CopyTest { chapter } => {
             copy_test(&root, chapter)?;
         }
-        Action::CheckCourse => check_course_contract(&root)?,
+        Action::CheckCourse => {
+            check_course_contract(&root)?;
+            verify_real_reference_inventory(&root)?;
+        }
     }
     Ok(())
 }
@@ -1059,8 +1214,12 @@ mod tests {
         let target = fixture.path();
 
         for relative in [
+            "Cargo.toml",
             "README.md",
             ".github/workflows/ci.yml",
+            "course/book.toml",
+            "course/theme/head.hbs",
+            "type-exercise/Cargo.toml",
             "type-exercise/src/tests.rs",
         ] {
             copy_file(&source, target, relative);
@@ -1211,6 +1370,36 @@ mod tests {
                 "Your feedback is greatly appreciated. Join our [Discord Community](https://skyzh.dev/join/discord).",
                 "No learner feedback channel is available.",
             ),
+            (
+                "redirected mdBook source",
+                "course/book.toml",
+                "src = \"src\"",
+                "src = \"alternate\"",
+            ),
+            (
+                "corrupted mdBook title",
+                "course/book.toml",
+                "title = \"Build a Typed Database Expression Engine in Rust\"",
+                "title = \"Unrelated Generic Rust Notes\"",
+            ),
+            (
+                "corrupted rendered author",
+                "course/theme/head.hbs",
+                "<meta name=\"author\" content=\"Alex Chi Z\">",
+                "<meta name=\"author\" content=\"Anonymous Course Bot\">",
+            ),
+            (
+                "excluded reference package from workspace",
+                "Cargo.toml",
+                "exclude = [\"archived/type-exercise-ref\", \"archived/legacy-days/*\"]",
+                "exclude = [\"type-exercise\", \"archived/type-exercise-ref\", \"archived/legacy-days/*\"]",
+            ),
+            (
+                "disabled real reference lib tests",
+                "type-exercise/Cargo.toml",
+                "[dependencies]",
+                "[lib]\ntest = false\n\n[dependencies]",
+            ),
         ];
 
         for (name, relative, from, to) in mutations {
@@ -1255,6 +1444,27 @@ mod tests {
         registry.push_str("mod bonus;\n");
         fs::write(registry_path, registry).unwrap();
         assert!(check_course_contract(bonus.path()).is_err());
+    }
+
+    #[test]
+    fn rejects_unmanifested_theme_and_integration_test_targets() {
+        let theme = contract_fixture();
+        fs::write(
+            theme.path().join("course/theme/index.hbs"),
+            "<main>course unavailable</main>\n",
+        )
+        .unwrap();
+        assert!(check_course_contract(theme.path()).is_err());
+
+        let integration = contract_fixture();
+        let integration_test = integration.path().join("type-exercise/tests/bonus.rs");
+        fs::create_dir_all(integration_test.parent().unwrap()).unwrap();
+        fs::write(
+            integration_test,
+            "#[test]\nfn unmanifested_integration() {}\n",
+        )
+        .unwrap();
+        assert!(check_course_contract(integration.path()).is_err());
     }
 
     #[test]
