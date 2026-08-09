@@ -56,7 +56,7 @@ fn keeps_every_physical_family_in_the_single_checked_catalog() {
     assert_eq!(
         PHYSICAL_FAMILY_CATALOG
             .iter()
-            .map(|family| (family.physical_type, family.name))
+            .map(|family| (family.physical_type.clone(), family.name))
             .collect::<Vec<_>>(),
         vec![
             (PhysicalType::Int16, "Int16"),
