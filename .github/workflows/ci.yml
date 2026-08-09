@@ -36,6 +36,7 @@ jobs:
       - name: Copy supplied tests into the starter
         run: |
           cargo x copy-test --chapter 1
+          cargo x copy-test --chapter 2
       - name: Test course
         run: mdbook test course
       - name: Install sitemap generator

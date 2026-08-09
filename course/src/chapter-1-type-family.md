@@ -92,5 +92,6 @@ cargo test -p type-exercise-starter --lib --locked
 Before continuing, explain why `StringArray::get` needs a lifetime-indexed associated type and why
 an erased downcast is fallible even when the compile-time family is consistent.
 
+Next: [Chapter 2 scales the family without copying every connection](./chapter-2-type-catalog.md).
 
 {{#include copyright.md}}
