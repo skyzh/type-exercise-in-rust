@@ -2,16 +2,17 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 
 use crate::{
-    Array, ArrayImpl, NonNullPrimitiveArray, PhysicalType, Scalar, ScalarRefImpl, TypeMismatch,
+    Array, ArrayImpl, ListArray, ListError, ListScalarRef, NonNullPrimitiveArray, PhysicalType,
+    Scalar, ScalarRefImpl, TypeMismatch,
 };
 
 /// A borrowed column whose scalar and array types are known only at runtime.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ColumnViewImpl<'a> {
     kind: ColumnViewImplKind<'a>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 enum ColumnViewImplKind<'a> {
     Array(&'a ArrayImpl),
     Constant {
@@ -125,7 +126,7 @@ impl<'a> ColumnViewImpl<'a> {
     pub fn physical_type(&self) -> PhysicalType {
         match &self.kind {
             ColumnViewImplKind::Array(array) => array.physical_type(),
-            ColumnViewImplKind::Constant { physical_type, .. } => *physical_type,
+            ColumnViewImplKind::Constant { physical_type, .. } => physical_type.clone(),
             ColumnViewImplKind::Dictionary { values, .. } => values.physical_type(),
         }
     }
@@ -133,17 +134,17 @@ impl<'a> ColumnViewImpl<'a> {
     /// Return one erased scalar after the caller has checked the row bound.
     pub fn get(&self, row: usize) -> Option<ScalarRefImpl<'a>> {
         assert!(row < self.len(), "column view row out of bounds");
-        match self.kind {
+        match &self.kind {
             ColumnViewImplKind::Array(array) => array.get(row),
-            ColumnViewImplKind::Constant { value, .. } => value,
+            ColumnViewImplKind::Constant { value, .. } => *value,
             ColumnViewImplKind::Dictionary { indices, values } => {
                 indices[row].and_then(|key| values.get(key))
             }
         }
     }
 
-    pub(crate) fn as_non_null_i32(self) -> Option<NonNullI32Column<'a>> {
-        match self.kind {
+    pub(crate) fn as_non_null_i32(&self) -> Option<NonNullI32Column<'a>> {
+        match &self.kind {
             ColumnViewImplKind::Array(ArrayImpl::Int32(array)) => {
                 array.as_non_null().map(NonNullI32Column::Array)
             }
@@ -151,8 +152,59 @@ impl<'a> ColumnViewImpl<'a> {
                 value: Some(ScalarRefImpl::Int32(value)),
                 len,
                 ..
-            } => Some(NonNullI32Column::Constant { value, len }),
+            } => Some(NonNullI32Column::Constant {
+                value: *value,
+                len: *len,
+            }),
             _ => None,
+        }
+    }
+
+    pub fn try_as_list(self, element_type: PhysicalType) -> Result<ListColumnView<'a>, ListError> {
+        if matches!(element_type, PhysicalType::List(_)) {
+            return Err(ListError::NestedList);
+        }
+        let expected = PhysicalType::List(Box::new(element_type));
+        let actual = self.physical_type();
+        if actual != expected {
+            return Err(TypeMismatch { expected, actual }.into());
+        }
+        match self.kind {
+            ColumnViewImplKind::Array(ArrayImpl::List(array)) => Ok(ListColumnView {
+                kind: ListColumnViewKind::Array(array),
+            }),
+            ColumnViewImplKind::Constant { value, len, .. } => {
+                let value = match value {
+                    Some(ScalarRefImpl::List(value)) => Some(value),
+                    None => None,
+                    Some(other) => {
+                        return Err(TypeMismatch {
+                            expected,
+                            actual: other.physical_type(),
+                        }
+                        .into());
+                    }
+                };
+                Ok(ListColumnView {
+                    kind: ListColumnViewKind::Constant { value, len },
+                })
+            }
+            ColumnViewImplKind::Dictionary {
+                indices,
+                values: ArrayImpl::List(values),
+            } => Ok(ListColumnView {
+                kind: ListColumnViewKind::Dictionary { indices, values },
+            }),
+            ColumnViewImplKind::Array(array) => Err(TypeMismatch {
+                expected,
+                actual: array.physical_type(),
+            }
+            .into()),
+            ColumnViewImplKind::Dictionary { values, .. } => Err(TypeMismatch {
+                expected,
+                actual: values.physical_type(),
+            }
+            .into()),
         }
     }
 }
@@ -160,6 +212,55 @@ impl<'a> ColumnViewImpl<'a> {
 impl<'a> From<&'a ArrayImpl> for ColumnViewImpl<'a> {
     fn from(array: &'a ArrayImpl) -> Self {
         Self::array(array)
+    }
+}
+
+/// A borrowed List column whose element physical type was checked once.
+#[derive(Debug)]
+pub struct ListColumnView<'a> {
+    kind: ListColumnViewKind<'a>,
+}
+
+#[derive(Debug)]
+enum ListColumnViewKind<'a> {
+    Array(&'a ListArray),
+    Constant {
+        value: Option<ListScalarRef<'a>>,
+        len: usize,
+    },
+    Dictionary {
+        indices: &'a [Option<usize>],
+        values: &'a ListArray,
+    },
+}
+
+impl<'a> ListColumnView<'a> {
+    pub fn len(&self) -> usize {
+        match &self.kind {
+            ListColumnViewKind::Array(array) => array.len(),
+            ListColumnViewKind::Constant { len, .. } => *len,
+            ListColumnViewKind::Dictionary { indices, .. } => indices.len(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn get(&self, row: usize) -> Result<Option<ListScalarRef<'a>>, ListError> {
+        if row >= self.len() {
+            return Err(ListError::RowOutOfBounds {
+                row,
+                len: self.len(),
+            });
+        }
+        match &self.kind {
+            ListColumnViewKind::Array(array) => array.get(row),
+            ListColumnViewKind::Constant { value, .. } => Ok(*value),
+            ListColumnViewKind::Dictionary { indices, values } => {
+                indices[row].map_or(Ok(None), |key| values.get(key))
+            }
+        }
     }
 }
 

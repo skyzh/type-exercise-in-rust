@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use crate::variant_catalog::for_each_physical_family;
-use crate::{Array, Decimal, PhysicalType, TypeMismatch};
+use crate::{Array, Decimal, ListError, ListScalar, ListScalarRef, PhysicalType, TypeMismatch};
 
 /// An owned scalar and its associated borrowed value and array representation.
 pub trait Scalar:
@@ -32,13 +32,15 @@ macro_rules! define_scalar_erasure {
         /// An owned scalar whose concrete type is known only at runtime.
         #[derive(Clone, Debug, PartialEq)]
         pub enum ScalarImpl {
-            $($variant($owned)),+
+            $($variant($owned)),+,
+            List(ListScalar),
         }
 
         impl ScalarImpl {
             pub fn physical_type(&self) -> PhysicalType {
                 match self {
-                    $(Self::$variant(_) => PhysicalType::$variant),+
+                    $(Self::$variant(_) => PhysicalType::$variant),+,
+                    Self::List(value) => PhysicalType::List(Box::new(value.element_type())),
                 }
             }
         }
@@ -46,13 +48,26 @@ macro_rules! define_scalar_erasure {
         /// A borrowed scalar whose concrete type is known only at runtime.
         #[derive(Clone, Copy, Debug, PartialEq)]
         pub enum ScalarRefImpl<'a> {
-            $($variant($borrowed)),+
+            $($variant($borrowed)),+,
+            List(ListScalarRef<'a>),
         }
 
         impl ScalarRefImpl<'_> {
             pub fn physical_type(&self) -> PhysicalType {
                 match self {
-                    $(Self::$variant(_) => PhysicalType::$variant),+
+                    $(Self::$variant(_) => PhysicalType::$variant),+,
+                    Self::List(value) => PhysicalType::List(Box::new(value.element_type())),
+                }
+            }
+
+            pub fn to_owned_scalar(self) -> ScalarImpl {
+                match self {
+                    $(Self::$variant(value) => ScalarImpl::$variant(value.to_owned_scalar())),+,
+                    Self::List(value) => ScalarImpl::List(
+                        value
+                            .to_owned_scalar()
+                            .expect("a checked List scalar reference has a valid range"),
+                    ),
                 }
             }
         }
@@ -187,6 +202,57 @@ macro_rules! define_scalar_family {
 }
 
 for_each_physical_family!(define_scalar_erasure);
+
+impl From<ListScalar> for ScalarImpl {
+    fn from(value: ListScalar) -> Self {
+        Self::List(value)
+    }
+}
+
+impl TryFrom<ScalarImpl> for ListScalar {
+    type Error = ListError;
+
+    fn try_from(value: ScalarImpl) -> Result<Self, Self::Error> {
+        match value {
+            ScalarImpl::List(value) => Ok(value),
+            other => Err(ListError::ExpectedList {
+                actual: other.physical_type(),
+            }),
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a ScalarImpl> for &'a ListScalar {
+    type Error = ListError;
+
+    fn try_from(value: &'a ScalarImpl) -> Result<Self, Self::Error> {
+        match value {
+            ScalarImpl::List(value) => Ok(value),
+            other => Err(ListError::ExpectedList {
+                actual: other.physical_type(),
+            }),
+        }
+    }
+}
+
+impl<'a> From<ListScalarRef<'a>> for ScalarRefImpl<'a> {
+    fn from(value: ListScalarRef<'a>) -> Self {
+        Self::List(value)
+    }
+}
+
+impl<'a> TryFrom<ScalarRefImpl<'a>> for ListScalarRef<'a> {
+    type Error = ListError;
+
+    fn try_from(value: ScalarRefImpl<'a>) -> Result<Self, Self::Error> {
+        match value {
+            ScalarRefImpl::List(value) => Ok(value),
+            other => Err(ListError::ExpectedList {
+                actual: other.physical_type(),
+            }),
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

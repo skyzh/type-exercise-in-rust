@@ -11,7 +11,7 @@ use crate::{
 };
 
 /// A checked failure at an expression boundary.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ExpressionError {
     TypeMismatch(TypeMismatch),
     InputArityMismatch {
@@ -276,10 +276,10 @@ where
             });
         }
 
-        for (input, expected) in inputs.iter().zip(self.input_types) {
-            if input.physical_type() != expected {
+        for (input, expected) in inputs.iter().zip(&self.input_types) {
+            if input.physical_type() != *expected {
                 return Err(TypeMismatch {
-                    expected,
+                    expected: expected.clone(),
                     actual: input.physical_type(),
                 }
                 .into());
@@ -296,13 +296,13 @@ where
 
         let Some(left) = inputs[0].as_non_null_i32() else {
             return Ok((
-                evaluate_binary(&self.function, inputs[0], inputs[1])?,
+                evaluate_binary(&self.function, inputs[0].clone(), inputs[1].clone())?,
                 PrimitiveLoop::General,
             ));
         };
         let Some(right) = inputs[1].as_non_null_i32() else {
             return Ok((
-                evaluate_binary(&self.function, inputs[0], inputs[1])?,
+                evaluate_binary(&self.function, inputs[0].clone(), inputs[1].clone())?,
                 PrimitiveLoop::General,
             ));
         };
@@ -424,7 +424,7 @@ where
                 actual: inputs.len(),
             });
         }
-        evaluate_binary(&self.function, inputs[0], inputs[1])
+        evaluate_binary(&self.function, inputs[0].clone(), inputs[1].clone())
     }
 }
 

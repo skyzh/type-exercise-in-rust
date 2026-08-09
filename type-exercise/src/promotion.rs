@@ -1,7 +1,9 @@
+use std::borrow::Borrow;
+
 use crate::DataType;
 
 /// One ordered, lossless implicit numeric promotion.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NumericPromotion {
     pub left: DataType,
     pub right: DataType,
@@ -122,9 +124,14 @@ pub const NUMERIC_PROMOTIONS: &[NumericPromotion] = &[
     },
 ];
 
-pub fn promote_numeric(left: DataType, right: DataType) -> Option<DataType> {
+pub fn promote_numeric(
+    left: impl Borrow<DataType>,
+    right: impl Borrow<DataType>,
+) -> Option<DataType> {
+    let left = left.borrow();
+    let right = right.borrow();
     NUMERIC_PROMOTIONS
         .iter()
-        .find(|entry| entry.left == left && entry.right == right)
-        .map(|entry| entry.output)
+        .find(|entry| &entry.left == left && &entry.right == right)
+        .map(|entry| entry.output.clone())
 }

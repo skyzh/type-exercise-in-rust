@@ -71,11 +71,13 @@ fn preserves_distinct_logical_string_types() {
     let char = DataType::Char { width: 4 };
     for (left, right) in [
         (DataType::Varchar, DataType::Varchar),
-        (DataType::Varchar, char),
-        (char, DataType::Varchar),
-        (char, char),
+        (DataType::Varchar, char.clone()),
+        (char.clone(), DataType::Varchar),
+        (char.clone(), char.clone()),
     ] {
-        let expression = registry.bind_binary("concat", left, right).unwrap();
+        let expression = registry
+            .bind_binary("concat", left.clone(), right.clone())
+            .unwrap();
         assert_eq!(expression.input_types(), &[left, right]);
         assert_eq!(expression.output_type(), DataType::Varchar);
         assert_eq!(expression.physical_name(), "string_concat");
@@ -210,7 +212,7 @@ fn preserves_checked_execution_errors_after_binding() {
 fn registers_a_custom_logical_name() {
     let mut registry = FunctionRegistry::default();
     registry.register_binary("wrapping_add", |left, right| {
-        if (left, right) != (DataType::Integer, DataType::Integer) {
+        if left != DataType::Integer || right != DataType::Integer {
             return Err(BindError::UnsupportedArguments {
                 name: "wrapping_add".to_owned(),
                 inputs: vec![left, right],

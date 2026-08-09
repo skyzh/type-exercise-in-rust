@@ -88,7 +88,6 @@ impl BoundExpression {
         let input_types = input_types.into_iter().collect::<Box<[_]>>();
         let expected_inputs = input_types
             .iter()
-            .copied()
             .map(DataType::physical_type)
             .collect::<Vec<_>>();
         let actual_inputs = expression.input_types().to_vec();
@@ -116,7 +115,7 @@ impl BoundExpression {
     }
 
     pub fn output_type(&self) -> DataType {
-        self.output_type
+        self.output_type.clone()
     }
 
     pub fn physical_name(&self) -> &'static str {
@@ -209,7 +208,7 @@ impl FunctionRegistry {
                     actual: inputs.len(),
                 });
             };
-            factory(*left, *right)
+            factory(left.clone(), right.clone())
         });
     }
 
@@ -228,7 +227,7 @@ impl FunctionRegistry {
                     actual: inputs.len(),
                 });
             };
-            factory(*input)
+            factory(input.clone())
         });
     }
 
@@ -250,7 +249,7 @@ impl FunctionRegistry {
                     actual: inputs.len(),
                 });
             };
-            factory(*first, *second, *third)
+            factory(first.clone(), second.clone(), third.clone())
         });
     }
 
@@ -290,9 +289,11 @@ fn bind_arithmetic(
     left: DataType,
     right: DataType,
 ) -> Result<BoundExpression, BindError> {
-    let output = promote_numeric(left, right).ok_or_else(|| unsupported(name, [left, right]))?;
+    let output = promote_numeric(&left, &right)
+        .ok_or_else(|| unsupported(name, [left.clone(), right.clone()]))?;
     let expression = if operator == ArithmeticOperator::Add
-        && (left, right) == (DataType::Integer, DataType::Integer)
+        && left == DataType::Integer
+        && right == DataType::Integer
     {
         build_physical("i32_add")?
     } else {
@@ -313,10 +314,10 @@ fn bind_arithmetic(
 }
 
 fn bind_neg(input: DataType) -> Result<BoundExpression, BindError> {
-    promote_numeric(input, input).ok_or_else(|| unsupported("neg", [input]))?;
+    promote_numeric(&input, &input).ok_or_else(|| unsupported("neg", [input.clone()]))?;
     BoundExpression::new(
         build_numeric_neg_expression("numeric_neg", input.physical_type()),
-        [input],
+        [input.clone()],
         input,
     )
 }
@@ -326,10 +327,10 @@ fn bind_clamp(
     lower: DataType,
     upper: DataType,
 ) -> Result<BoundExpression, BindError> {
-    let pair =
-        promote_numeric(value, lower).ok_or_else(|| unsupported("clamp", [value, lower, upper]))?;
-    let output =
-        promote_numeric(pair, upper).ok_or_else(|| unsupported("clamp", [value, lower, upper]))?;
+    let pair = promote_numeric(&value, &lower)
+        .ok_or_else(|| unsupported("clamp", [value.clone(), lower.clone(), upper.clone()]))?;
+    let output = promote_numeric(&pair, &upper)
+        .ok_or_else(|| unsupported("clamp", [value.clone(), lower.clone(), upper.clone()]))?;
     BoundExpression::new(
         build_numeric_clamp_expression(
             "numeric_clamp",
@@ -351,7 +352,7 @@ fn bind_comparison(
     left: DataType,
     right: DataType,
 ) -> Result<BoundExpression, BindError> {
-    let expression = if let Some(common) = promote_numeric(left, right) {
+    let expression = if let Some(common) = promote_numeric(&left, &right) {
         build_numeric_comparison_expression(
             match operator {
                 ComparisonOperator::Less => "numeric_less",
@@ -381,7 +382,8 @@ fn bind_comparison(
     } else if matches!(
         operator,
         ComparisonOperator::Equal | ComparisonOperator::NotEqual
-    ) && (left, right) == (DataType::Boolean, DataType::Boolean)
+    ) && left == DataType::Boolean
+        && right == DataType::Boolean
     {
         build_bool_comparison_expression(
             match operator {
