@@ -1,9 +1,9 @@
 [book]
 authors = ["Alex Chi"]
-description = "An eight-chapter Rust course that builds a vectorized database expression framework"
+description = "A twelve-chapter Rust course that builds a typed vectorized database expression engine"
 language = "en"
 src = "src"
-title = "Build a Database Expression Framework in Rust"
+title = "Build a Typed Database Expression Engine in Rust"
 
 [output.html]
 git-repository-url = "https://github.com/skyzh/type-exercise-in-rust"

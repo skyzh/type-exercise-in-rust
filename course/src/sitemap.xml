@@ -4,28 +4,40 @@
         <loc>https://skyzh.github.io/type-exercise-in-rust</loc>
     </url>
     <url>
-        <loc>https://skyzh.github.io/type-exercise-in-rust/chapter-1-type-connections</loc>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/chapter-1-type-family</loc>
     </url>
     <url>
-        <loc>https://skyzh.github.io/type-exercise-in-rust/chapter-2-column-views</loc>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/chapter-10-list</loc>
     </url>
     <url>
-        <loc>https://skyzh.github.io/type-exercise-in-rust/chapter-3-vectorize-scalar</loc>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/chapter-11-rust-boundaries</loc>
     </url>
     <url>
-        <loc>https://skyzh.github.io/type-exercise-in-rust/chapter-4-expression-erasure</loc>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/chapter-12-async-boundary</loc>
     </url>
     <url>
-        <loc>https://skyzh.github.io/type-exercise-in-rust/chapter-5-logical-binding</loc>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/chapter-2-type-catalog</loc>
     </url>
     <url>
-        <loc>https://skyzh.github.io/type-exercise-in-rust/chapter-6-primitive-loops</loc>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/chapter-3-column-views</loc>
     </url>
     <url>
-        <loc>https://skyzh.github.io/type-exercise-in-rust/chapter-7-rust-boundaries</loc>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/chapter-4-concrete-loops</loc>
     </url>
     <url>
-        <loc>https://skyzh.github.io/type-exercise-in-rust/chapter-8-async-boundary</loc>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/chapter-5-generic-arithmetic</loc>
+    </url>
+    <url>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/chapter-6-systematic-arity</loc>
+    </url>
+    <url>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/chapter-7-runtime-erasure</loc>
+    </url>
+    <url>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/chapter-8-binding-coercion</loc>
+    </url>
+    <url>
+        <loc>https://skyzh.github.io/type-exercise-in-rust/chapter-9-primitive-loops</loc>
     </url>
     <url>
         <loc>https://skyzh.github.io/type-exercise-in-rust/preface</loc>

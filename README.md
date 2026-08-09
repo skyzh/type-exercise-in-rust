@@ -1,97 +1,66 @@
-# Build a Database Expression Framework in Rust
+# Build a Typed Database Expression Engine in Rust
 
-This course builds a small vectorized database expression framework from an explicit Rust starter.
-The starter contains one owned scalar enum and no trait relationships. A separate reference crate
-contains the maintained solution and canonical tests; an `xtask` copies each selected test into
-the starter when the learner is ready to validate a chapter.
+A hand-written loop for one integer function is easy. It stops scaling when the engine must also
+borrow strings without copying, preserve nulls, read several column encodings, coerce types, and
+select functions at runtime.
 
-The course contains eight chapters:
+This course builds the type families and checked boundaries that move those decisions out of each
+row loop. The result is a small vectorized expression engine whose generic code has a visible
+payoff: new types, operators, and arities reuse the same execution path.
 
-1. connect `i32`, `String`, their borrowed forms, and their physical arrays with traits and generic
-   associated types;
-2. read arrays, repeated constants, and dictionary-encoded values through one borrowed interface;
-3. vectorize a typed scalar function over nullable inputs;
-4. erase typed expressions behind runtime metadata and generate a builtin catalog;
-5. bind logical signatures to physical expressions;
-6. select and measure all-valid primitive loops while preserving every general fallback;
-7. strengthen iterator, lifetime, trait-object, and thread-safety boundaries without changing
-   expression results; and
-8. add static and erased batch-level futures while keeping each row evaluation synchronous.
+## Read the course
 
-The course is a dependency order rather than a fixed calendar.
+Read the [published course](https://skyzh.github.io/type-exercise-in-rust/). Work through the
+chapters in order; each chapter extends the same starter and keeps earlier supplied tests green.
+The book's `SUMMARY.md` is the sole ordered chapter list.
 
-## Book
+## What you will build
 
-Read the published mdBook at
-[Build a Database Expression Framework in Rust](https://skyzh.github.io/type-exercise-in-rust/).
+- Connect logical types, owned values, borrowed values, physical arrays, and checked erased enums.
+- Read nullable arrays, constants, and dictionaries without materializing a new column.
+- Apply unary, binary, and ternary scalar functions through generic, erased, and bound interfaces.
+- Promote supported numeric pairs for `+`, `-`, `*`, `/`, comparisons, and string `contains`.
+- Represent one-level Lists with checked offsets and independent outer and child nullability.
+- Preserve the same results and errors through one representative fast path and a batch-level
+  asynchronous adapter.
 
-To preview the book locally:
+The course deliberately stops short of Decimal arithmetic and precision enforcement, implicit
+narrowing or lossy casts, nested or list-producing functions, concrete four- and five-input
+builtins, exhaustive fast paths, an aggregate engine, and per-row futures.
 
-```console
-mdbook serve course --open
-```
+## Start the exercises
 
-## Start Here
-
-The learner workspace is [`type-exercise-starter`](./type-exercise-starter). Begin from `main`,
-where its only implemented data model is `ScalarImpl::{Int32, String}`:
+You should know ordinary Cargo use, enums, traits, references, and `Option`. Follow the
+[environment setup](https://skyzh.github.io/type-exercise-in-rust/setup.html), then work only in
+`type-exercise-starter`:
 
 ```console
 git fetch origin
 git switch --create course-work --track origin/main
 cargo check -p type-exercise-starter --lib --locked
-mdbook serve course --open
 ```
 
-The repository workspace contains the learner crate, [`type-exercise`](./type-exercise) reference
-solution, and [`xtask`](./xtask) support tool. Learners must not inspect the reference or anything
-under [`archived/`](./archived) while implementing a chapter. The starter-local `AGENTS.md`
-enforces that boundary for coding agents.
+Choose another branch name if `course-work` already exists. The starter baseline should compile.
+Do not inspect `type-exercise/` or `archived/` while solving an exercise.
 
-Read the mdBook source in [`course`](./course), beginning with the
-[preface](./course/src/preface.md), [setup](./course/src/setup.md), and
-[Chapter 1](./course/src/chapter-1-type-connections.md). Continue with
-[Chapter 2](./course/src/chapter-2-column-views.md),
-[Chapter 3](./course/src/chapter-3-vectorize-scalar.md),
-[Chapter 4](./course/src/chapter-4-expression-erasure.md),
-[Chapter 5](./course/src/chapter-5-logical-binding.md),
-[Chapter 6](./course/src/chapter-6-primitive-loops.md),
-[Chapter 7](./course/src/chapter-7-rust-boundaries.md), and
-[Chapter 8](./course/src/chapter-8-async-boundary.md).
+## How chapter tests work
 
-Copy a chapter's canonical test into the starter with the same workflow used by Mini-LSM:
+Copy the cumulative supplied contract when you are ready to start a chapter:
 
 ```console
 cargo x copy-test --chapter 1
 cargo test -p type-exercise-starter chapter_1 --locked
 ```
 
-The copied files under `type-exercise-starter/src/tests/` are supplied checks, not learner-owned
-implementation files.
+The first focused run should fail because the new behavior is missing. Read the copied destination
+under `type-exercise-starter/src/tests/`, implement the named API in other starter files, and rerun
+the same command until it passes. Never edit copied tests or `src/tests.rs`; keep all earlier copied
+chapters green.
 
-## Repository Validation
+## Questions and feedback
 
-Maintainers can validate the current reference solution, minimal starter, support tool, historical
-reference workspace, and book with:
-
-```console
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo test --workspace --locked
-cargo fmt --manifest-path archived/type-exercise-ref/Cargo.toml --all --check
-cargo clippy --manifest-path archived/type-exercise-ref/Cargo.toml --workspace --all-targets --all-features --locked -- -D warnings
-cargo test --manifest-path archived/type-exercise-ref/Cargo.toml --workspace --all-targets --all-features --locked
-cargo check -p type-exercise-starter --lib --locked
-mdbook test course
-```
-
-To validate a completed learner checkpoint, repeat the copy-and-test pair from
-**Start Here** with that chapter's number. Each chapter also gives its focused
-command and expected result.
-
-## Community
-
-Join [skyzh's Discord server](https://skyzh.dev/join/discord) to discuss the course.
+Join [skyzh's Discord server](https://skyzh.dev/join/discord) for discussion. For a concrete bug or
+improvement, open an [issue or pull request](https://github.com/skyzh/type-exercise-in-rust).
 
 ## License
 
