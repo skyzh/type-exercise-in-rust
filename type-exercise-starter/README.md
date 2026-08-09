@@ -1,23 +1,25 @@
 # Course Starter
 
-This is the learner workspace for the expression-framework course. Its only implemented data
-model is `ScalarImpl::{Int32, String}`. You will write every trait, associated-type connection,
-array, and column view yourself.
+This is the only learner implementation workspace. It begins with
+`ScalarImpl::{Int32, String}` and no relationship among owned values, borrowed values, arrays, or
+expressions.
 
-Run the compiling baseline from the repository root:
+From the repository root, verify the untouched baseline:
 
 ```console
 cargo check -p type-exercise-starter --lib --locked
+cargo test -p type-exercise-starter --lib --locked
 ```
 
-Each chapter provides tests through the repository's `xtask`, following the Mini-LSM course
-workflow. Copy a test only when you are ready to validate that chapter:
+When a chapter tells you to copy its contract, run the exact command without opening the source
+test first:
 
 ```console
 cargo x copy-test --chapter 1
 cargo test -p type-exercise-starter chapter_1 --locked
 ```
 
-The command copies the selected test from the reference crate into `src/tests/` and regenerates
-`src/tests.rs`. Do not edit those copied files. Implement the required public API in the remaining
-files under `src/`, without reading `../type-exercise/` or `../archived/`.
+The copy is cumulative. The first run for a new chapter is expected to fail until you implement
+its public contract. You may read the copied file under `src/tests/`, but do not edit it or
+`src/tests.rs`. Work in the other files under `src/`, keep earlier tests green, and do not inspect
+`../type-exercise/` or `../archived/` for solutions.

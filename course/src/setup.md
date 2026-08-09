@@ -1,6 +1,6 @@
 # Environment Setup
 
-Install [rustup](https://rustup.rs/), update to the latest stable Rust, and install
+Install [rustup](https://rustup.rs/), update stable Rust, and install
 [mdBook](https://rust-lang.github.io/mdBook/):
 
 ```console
@@ -8,57 +8,52 @@ rustup update stable
 rustc --version
 ```
 
-The repository's `rust-toolchain` selects the rolling `stable` channel, and the learner crate uses
-Rust Edition 2024. It does not declare an older minimum supported Rust version. The root workspace
-contains the minimal learner crate, a separate reference solution, and the `xtask` support tool.
+The repository selects rolling `stable` and Rust Edition 2024. It does not claim an older minimum
+supported Rust version.
 
-## Check Out the Starting State
+## Check out the starting state
 
-Clone the repository, then create your working branch from `main`:
+Clone the repository, then create a working branch from `main`:
 
 ```console
 git fetch origin
 git switch --create course-work --track origin/main
 ```
 
-If `course-work` already exists, choose another local branch name. Confirm that the starter contains
-only `ScalarImpl`, its baseline test, and the empty copied-test module list:
+Choose another branch name if `course-work` already exists. Verify the untouched starter:
 
 ```console
-find type-exercise-starter -maxdepth 3 -type f | sort
 cargo check -p type-exercise-starter --lib --locked
 cargo test -p type-exercise-starter --lib --locked
 ```
 
-Both commands should succeed. Chapter tests are not present in the starter until you intentionally
-copy one with `cargo x copy-test --chapter <N>`.
+Both commands should pass. Chapter tests do not exist in the starter until you copy them.
 
-## Learner Boundary
+## Follow the learner boundary
 
-For the first two chapters:
+- Work only in implementation files under `type-exercise-starter/src/`.
+- Do not edit `src/tests.rs` or copied files under `src/tests/`.
+- Do not read, search, diff, or copy `type-exercise/`, `archived/`, Git history, or an online
+  solution while implementing a chapter.
+- Use the chapter, copied destination test, compiler diagnostics, and official Rust documentation.
+- Add only the types, modules, dependencies, and public APIs owned by the current chapter.
 
-- modify implementation files only under `type-exercise-starter/src/`;
-- keep copied files under `type-exercise-starter/src/tests/`, `src/tests.rs`, public names, and dependencies unchanged;
-- do not add macros, unsafe code, expression traits, generated code, or additional scalar types;
-- use the current chapter, `type-exercise-starter/README.md`, copied tests, compiler diagnostics,
-  and official Rust documentation as implementation sources; and
-- do not read, search, diff, or copy `type-exercise/` or `archived/` while solving a chapter.
+The only permitted reference-to-starter operation is:
 
-The only allowed reference-to-starter operation is the exact repository-root test-copy command
-shown in each chapter. Run it without opening the source test first; afterward you may inspect the
-copied destination. Coding agents launched inside `type-exercise-starter/` receive the same rule
-from its `AGENTS.md`.
+```console
+cargo x copy-test --chapter <N>
+```
 
-## Preview the Course
+Run it without opening the source test. The command copies the cumulative tests through chapter
+`N`, removes later managed tests, and regenerates the module list. Afterward, you may read the
+copied destination. Its first focused run should be red until you implement the chapter.
 
-Run this from the repository root:
+## Preview the course
 
 ```console
 mdbook serve course --open
 ```
 
-The generated book is written to `course/book/` and is not committed.
-
-Continue to [Chapter 1: Connect Scalars, References, and Arrays](./chapter-1-type-connections.md).
+Continue to [Chapter 1: Connect One Type Family by Hand](./chapter-1-type-family.md).
 
 {{#include copyright.md}}

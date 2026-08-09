@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="920" viewBox="0 0 1200 920" role="img" aria-labelledby="title desc">
+  <title id="title">Map of the typed expression engine</title>
+  <desc id="desc">Logical types map to physical scalar and array families. Erased values cross checked conversion boundaries. Column views normalize arrays, constants, dictionaries, and typed nulls before one selected typed row loop. A one-level List stores offsets and independent outer and child validity.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f8fafc; }
+      .group { fill: #ffffff; stroke: #475569; stroke-width: 2; rx: 16; }
+      .logical { fill: #dbeafe; stroke: #2563eb; }
+      .typed { fill: #dcfce7; stroke: #15803d; }
+      .erased { fill: #fef3c7; stroke: #b45309; }
+      .column { fill: #f3e8ff; stroke: #7e22ce; }
+      .list { fill: #ffe4e6; stroke: #be123c; }
+      .box { stroke-width: 2; rx: 10; }
+      .title { font: 700 24px system-ui, sans-serif; fill: #0f172a; }
+      .head { font: 700 18px system-ui, sans-serif; fill: #0f172a; }
+      .text { font: 15px system-ui, sans-serif; fill: #1e293b; }
+      .small { font: 13px system-ui, sans-serif; fill: #334155; }
+      .arrow { stroke: #334155; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .checked { stroke-dasharray: 7 5; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="1200" height="920"/>
+  <text class="title" x="40" y="46">One planning decision, one typed row loop</text>
+
+  <rect class="box logical" x="40" y="80" width="250" height="150"/>
+  <text class="head" x="60" y="112">Planner types</text>
+  <text class="text" x="60" y="142">DataType</text>
+  <text class="small" x="60" y="168">meaning: Integer, Double,</text>
+  <text class="small" x="60" y="190">Varchar, Char, Decimal, List(T)</text>
+  <text class="text" x="60" y="216">→ PhysicalType</text>
+
+  <rect class="box typed" x="350" y="80" width="500" height="150"/>
+  <text class="head" x="370" y="112">Compile-time physical family</text>
+  <text class="text" x="370" y="148">Scalar ↔ ScalarRef&lt;'a&gt; (GAT)</text>
+  <text class="text" x="370" y="180">↕</text>
+  <text class="text" x="410" y="180">Array ↔ ArrayBuilder</text>
+  <text class="small" x="370" y="210">i16 · i32 · i64 · bool · f32 · f64 · String · Decimal</text>
+
+  <rect class="box erased" x="910" y="80" width="250" height="150"/>
+  <text class="head" x="930" y="112">Runtime-erased enums</text>
+  <text class="text" x="930" y="148">ScalarImpl</text>
+  <text class="text" x="930" y="176">ScalarRefImpl&lt;'a&gt;</text>
+  <text class="text" x="930" y="204">ArrayImpl</text>
+
+  <path class="arrow" d="M290 155 H350"/>
+  <path class="arrow checked" d="M850 140 H910"/>
+  <path class="arrow checked" d="M910 190 H850"/>
+  <text class="small" x="856" y="124">From</text>
+  <text class="small" x="850" y="218">TryFrom</text>
+
+  <rect class="box column" x="40" y="300" width="1120" height="180"/>
+  <text class="head" x="60" y="334">ColumnViewImpl&lt;'a&gt; normalizes representation before evaluation</text>
+  <rect class="group" x="70" y="360" width="180" height="78"/>
+  <text class="text" x="92" y="392">array</text><text class="small" x="92" y="418">borrow ArrayImpl</text>
+  <rect class="group" x="280" y="360" width="180" height="78"/>
+  <text class="text" x="302" y="392">constant</text><text class="small" x="302" y="418">repeat ScalarRefImpl</text>
+  <rect class="group" x="490" y="360" width="180" height="78"/>
+  <text class="text" x="512" y="392">dictionary</text><text class="small" x="512" y="418">checked keys + array</text>
+  <rect class="group" x="700" y="360" width="180" height="78"/>
+  <text class="text" x="722" y="392">typed null</text><text class="small" x="722" y="418">type + length, no value</text>
+  <rect class="box typed" x="920" y="350" width="210" height="98"/>
+  <text class="text" x="940" y="384">ColumnView&lt;'a, S&gt;</text>
+  <text class="small" x="940" y="412">get(row)</text>
+  <text class="small" x="940" y="434">→ Option&lt;S::RefType&lt;'a&gt;&gt;</text>
+  <path class="arrow" d="M880 399 H920"/>
+
+  <rect class="box erased" x="40" y="550" width="540" height="250"/>
+  <text class="head" x="60" y="584">Planning and runtime selection</text>
+  <text class="text" x="60" y="620">FunctionRegistry</text>
+  <text class="small" x="60" y="646">name + DataType inputs → promotion/coercion</text>
+  <text class="text" x="60" y="684">BoundExpression</text>
+  <text class="small" x="60" y="710">checks logical metadata against physical metadata once</text>
+  <text class="text" x="60" y="748">Box&lt;dyn Expression&gt;</text>
+  <text class="small" x="60" y="774">unary · binary · real ternary; arity-first errors</text>
+
+  <rect class="box typed" x="640" y="550" width="520" height="250"/>
+  <text class="head" x="660" y="584">Selected typed batch path</text>
+  <text class="text" x="660" y="620">validate arity → types → lengths</text>
+  <text class="text" x="660" y="654">for each row:</text>
+  <text class="small" x="690" y="680">read ColumnView values</text>
+  <text class="small" x="690" y="704">null in any strict input → null output</text>
+  <text class="small" x="690" y="728">otherwise evaluate scalar operator</text>
+  <text class="small" x="690" y="752">push into associated ArrayBuilder</text>
+  <text class="small" x="660" y="782">one optional dense i32 fast path; same observable contract</text>
+  <path class="arrow" d="M580 675 H640"/>
+
+  <rect class="box list" x="40" y="835" width="1120" height="58"/>
+  <text class="head" x="60" y="870">One-level List: outer validity + offsets + child ArrayImpl + independent child validity</text>
+
+  <text class="small" x="40" y="914">Nullability is Option/validity state, not DataType::Nullable. Aggregate execution is outside this course.</text>
+</svg>
