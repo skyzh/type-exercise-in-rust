@@ -5,6 +5,9 @@ edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[dependencies]
+rust_decimal = { version = "1", default-features = false }
+
 [dev-dependencies]
 criterion = "0.8.2"
 

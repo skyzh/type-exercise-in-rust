@@ -1,6 +1,6 @@
 use crate::{
-    Array, ArrayImpl, ColumnView, ColumnViewImpl, I32Array, InvalidDictionaryKey, PhysicalType,
-    ScalarRefImpl, StringArray, TypeMismatch,
+    Array, ArrayImpl, BoolArray, ColumnView, ColumnViewImpl, F64Array, I16Array, I32Array,
+    InvalidDictionaryKey, PhysicalType, ScalarRefImpl, StringArray, TypeMismatch,
 };
 
 #[test]
@@ -32,6 +32,39 @@ fn reads_arrays_constants_and_dictionaries_as_logical_rows() {
             .collect::<Vec<_>>(),
         vec![Some("green"), None, None, Some("red")]
     );
+}
+
+#[test]
+fn reads_expanded_families_through_array_constant_and_dictionary_views() {
+    let doubles: ArrayImpl = F64Array::from_slice(&[Some(-0.0), None, Some(f64::INFINITY)]).into();
+    let double_keys = [Some(2), Some(0), None];
+    let double_dictionary =
+        ColumnView::<f64>::try_from(ColumnViewImpl::dictionary(&double_keys, &doubles).unwrap())
+            .unwrap();
+    assert_eq!(double_dictionary.get(0), Some(f64::INFINITY));
+    assert_eq!(
+        double_dictionary.get(1).unwrap().to_bits(),
+        (-0.0_f64).to_bits()
+    );
+    assert_eq!(double_dictionary.get(2), None);
+
+    let boolean =
+        ColumnView::<bool>::try_from(ColumnViewImpl::constant(ScalarRefImpl::Bool(true), 2))
+            .unwrap();
+    assert_eq!(boolean.get(0), Some(true));
+    assert_eq!(boolean.get(1), Some(true));
+
+    let smallints: ArrayImpl = I16Array::from_slice(&[Some(-1), None]).into();
+    let smallints = ColumnView::<i16>::try_from(ColumnViewImpl::array(&smallints)).unwrap();
+    assert_eq!(smallints.get(0), Some(-1));
+    assert_eq!(smallints.get(1), None);
+
+    let null = ColumnView::<f64>::try_from(ColumnViewImpl::null(PhysicalType::Float64, 2)).unwrap();
+    assert_eq!(null.get(0), None);
+    assert_eq!(null.get(1), None);
+
+    let booleans: ArrayImpl = BoolArray::from_slice(&[Some(false)]).into();
+    assert_eq!(booleans.physical_type(), PhysicalType::Bool);
 }
 
 #[test]

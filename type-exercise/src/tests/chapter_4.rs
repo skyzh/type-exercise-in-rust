@@ -181,6 +181,10 @@ fn delegates_length_errors_to_the_typed_boundary() {
     ];
     assert_eq!(
         expression.evaluate(&inputs),
-        Err(ExpressionError::InputLengthMismatch { left: 1, right: 2 })
+        Err(ExpressionError::InputLengthMismatch {
+            expected: 1,
+            actual: 2,
+            input_index: 1,
+        })
     );
 }

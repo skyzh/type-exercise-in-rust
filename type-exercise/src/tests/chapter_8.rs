@@ -177,7 +177,11 @@ fn async_boundary_preserves_arity_type_and_length_errors() {
     let mut future = expression.evaluate_async(&wrong_length);
     assert_eq!(
         poll_ready(future.as_mut()),
-        Err(ExpressionError::InputLengthMismatch { left: 2, right: 1 })
+        Err(ExpressionError::InputLengthMismatch {
+            expected: 2,
+            actual: 1,
+            input_index: 1,
+        })
     );
 }
 

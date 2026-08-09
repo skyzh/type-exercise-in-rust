@@ -14,8 +14,15 @@ use crate::{
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ExpressionError {
     TypeMismatch(TypeMismatch),
-    InputArityMismatch { expected: usize, actual: usize },
-    InputLengthMismatch { left: usize, right: usize },
+    InputArityMismatch {
+        expected: usize,
+        actual: usize,
+    },
+    InputLengthMismatch {
+        expected: usize,
+        actual: usize,
+        input_index: usize,
+    },
 }
 
 impl Display for ExpressionError {
@@ -28,10 +35,14 @@ impl Display for ExpressionError {
                     "input arity mismatch: expected {expected}, got {actual}"
                 )
             }
-            Self::InputLengthMismatch { left, right } => {
+            Self::InputLengthMismatch {
+                expected,
+                actual,
+                input_index,
+            } => {
                 write!(
                     formatter,
-                    "input length mismatch: left {left}, right {right}"
+                    "input {input_index} length mismatch: expected {expected}, got {actual}"
                 )
             }
         }
@@ -186,8 +197,9 @@ where
 {
     if left.len() != right.len() {
         return Err(ExpressionError::InputLengthMismatch {
-            left: left.len(),
-            right: right.len(),
+            expected: left.len(),
+            actual: right.len(),
+            input_index: 1,
         });
     }
 
@@ -245,8 +257,9 @@ where
 
         if inputs[0].len() != inputs[1].len() {
             return Err(ExpressionError::InputLengthMismatch {
-                left: inputs[0].len(),
-                right: inputs[1].len(),
+                expected: inputs[0].len(),
+                actual: inputs[1].len(),
+                input_index: 1,
             });
         }
 
