@@ -109,5 +109,6 @@ cargo test -p type-exercise-starter chapter_2 --locked
 cargo test -p type-exercise-starter --lib --locked
 ```
 
+Next: [Chapter 3 reads several nullable column encodings](./chapter-3-column-views.md).
 
 {{#include copyright.md}}
