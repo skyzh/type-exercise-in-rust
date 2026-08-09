@@ -1,8 +1,36 @@
 use crate::{
-    Array, ArrayImpl, BindError, BoundExpression, ColumnViewImpl, DataType, ExpressionError,
-    FunctionRegistry, I32Array, PhysicalType, ScalarRefImpl, StringArray, TypeMismatch,
-    build_builtin_expression,
+    Array, ArrayImpl, BindError, BoundExpression, ColumnViewImpl, DataType, Expression,
+    ExpressionError, FunctionRegistry, I32Array, PhysicalType, ScalarRefImpl, StringArray,
+    TypeMismatch, build_builtin_expression,
 };
+
+struct MetadataExpression {
+    input_types: Vec<PhysicalType>,
+}
+
+impl Expression for MetadataExpression {
+    fn name(&self) -> &'static str {
+        "metadata_only"
+    }
+
+    fn input_types(&self) -> &[PhysicalType] {
+        &self.input_types
+    }
+
+    fn output_type(&self) -> PhysicalType {
+        PhysicalType::Int32
+    }
+
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+        if inputs.len() != self.input_types.len() {
+            return Err(ExpressionError::InputArityMismatch {
+                expected: self.input_types.len(),
+                actual: inputs.len(),
+            });
+        }
+        Ok(I32Array::from_slice(&[]).into())
+    }
+}
 
 fn expect_bind_error(result: Result<BoundExpression, BindError>) -> BindError {
     match result {
@@ -89,32 +117,28 @@ fn rejects_unsupported_logical_signatures() {
         expect_bind_error(registry.bind_binary("+", DataType::Varchar, DataType::Integer,)),
         BindError::UnsupportedArguments {
             name: "+".to_owned(),
-            left: DataType::Varchar,
-            right: DataType::Integer,
+            inputs: vec![DataType::Varchar, DataType::Integer],
         }
     );
     assert_eq!(
         expect_bind_error(registry.bind_binary("+", DataType::Integer, DataType::Varchar,)),
         BindError::UnsupportedArguments {
             name: "+".to_owned(),
-            left: DataType::Integer,
-            right: DataType::Varchar,
+            inputs: vec![DataType::Integer, DataType::Varchar],
         }
     );
     assert_eq!(
         expect_bind_error(registry.bind_binary("concat", DataType::Integer, DataType::Varchar,)),
         BindError::UnsupportedArguments {
             name: "concat".to_owned(),
-            left: DataType::Integer,
-            right: DataType::Varchar,
+            inputs: vec![DataType::Integer, DataType::Varchar],
         }
     );
     assert_eq!(
         expect_bind_error(registry.bind_binary("concat", DataType::Varchar, DataType::Integer,)),
         BindError::UnsupportedArguments {
             name: "concat".to_owned(),
-            left: DataType::Varchar,
-            right: DataType::Integer,
+            inputs: vec![DataType::Varchar, DataType::Integer],
         }
     );
 }
@@ -130,7 +154,7 @@ fn rejects_a_factory_with_inconsistent_physical_metadata() {
         input_error,
         BindError::PhysicalSignatureMismatch {
             name: "string_concat",
-            expected_inputs: [PhysicalType::Int32, PhysicalType::Int32],
+            expected_inputs: vec![PhysicalType::Int32, PhysicalType::Int32],
             actual_inputs: vec![PhysicalType::String, PhysicalType::String],
             expected_output: PhysicalType::String,
             actual_output: PhysicalType::String,
@@ -146,7 +170,7 @@ fn rejects_a_factory_with_inconsistent_physical_metadata() {
         output_error,
         BindError::PhysicalSignatureMismatch {
             name: "string_concat",
-            expected_inputs: [PhysicalType::String, PhysicalType::String],
+            expected_inputs: vec![PhysicalType::String, PhysicalType::String],
             actual_inputs: vec![PhysicalType::String, PhysicalType::String],
             expected_output: PhysicalType::Int32,
             actual_output: PhysicalType::String,
@@ -189,8 +213,7 @@ fn registers_a_custom_logical_name() {
         if (left, right) != (DataType::Integer, DataType::Integer) {
             return Err(BindError::UnsupportedArguments {
                 name: "wrapping_add".to_owned(),
-                left,
-                right,
+                inputs: vec![left, right],
             });
         }
         BoundExpression::new(
@@ -205,4 +228,44 @@ fn registers_a_custom_logical_name() {
         .bind_binary("wrapping_add", DataType::Integer, DataType::Integer)
         .unwrap();
     assert_eq!(expression.physical_name(), "i32_add");
+}
+
+#[test]
+fn stores_and_validates_slice_metadata_for_any_arity() {
+    for input_types in [
+        vec![],
+        vec![DataType::Integer],
+        vec![DataType::Integer; 3],
+        vec![DataType::Integer; 5],
+    ] {
+        let expression = BoundExpression::new(
+            Box::new(MetadataExpression {
+                input_types: vec![PhysicalType::Int32; input_types.len()],
+            }),
+            input_types.clone(),
+            DataType::Integer,
+        )
+        .unwrap();
+        assert_eq!(expression.input_types(), input_types);
+    }
+}
+
+#[test]
+fn slice_registry_rejects_wrong_arity_before_a_binary_factory_can_index() {
+    let registry = FunctionRegistry::with_builtins();
+    for inputs in [
+        vec![],
+        vec![DataType::Integer],
+        vec![DataType::Integer; 3],
+        vec![DataType::Integer; 5],
+    ] {
+        assert_eq!(
+            expect_bind_error(registry.bind("+", &inputs)),
+            BindError::InputArityMismatch {
+                name: "+".to_owned(),
+                expected: 2,
+                actual: inputs.len(),
+            }
+        );
+    }
 }

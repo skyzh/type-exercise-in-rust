@@ -155,7 +155,11 @@ fn preserves_runtime_type_arity_and_length_errors() {
             ColumnViewImpl::array(&integers),
             ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
         ]),
-        Err(ExpressionError::InputLengthMismatch { left: 2, right: 1 })
+        Err(ExpressionError::InputLengthMismatch {
+            expected: 2,
+            actual: 1,
+            input_index: 1,
+        })
     );
 }
 

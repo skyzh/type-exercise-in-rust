@@ -13,17 +13,21 @@ pub enum BindError {
     UnknownFunction {
         name: String,
     },
+    InputArityMismatch {
+        name: String,
+        expected: usize,
+        actual: usize,
+    },
     UnsupportedArguments {
         name: String,
-        left: DataType,
-        right: DataType,
+        inputs: Vec<DataType>,
     },
     MissingPhysicalExpression {
         name: &'static str,
     },
     PhysicalSignatureMismatch {
         name: &'static str,
-        expected_inputs: [PhysicalType; 2],
+        expected_inputs: Vec<PhysicalType>,
         actual_inputs: Vec<PhysicalType>,
         expected_output: PhysicalType,
         actual_output: PhysicalType,
@@ -34,11 +38,16 @@ impl Display for BindError {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::UnknownFunction { name } => write!(formatter, "unknown function `{name}`"),
-            Self::UnsupportedArguments { name, left, right } => {
-                write!(
-                    formatter,
-                    "function `{name}` does not support {left:?} and {right:?}"
-                )
+            Self::InputArityMismatch {
+                name,
+                expected,
+                actual,
+            } => write!(
+                formatter,
+                "function `{name}` expects {expected} arguments, got {actual}"
+            ),
+            Self::UnsupportedArguments { name, inputs } => {
+                write!(formatter, "function `{name}` does not support {inputs:?}")
             }
             Self::MissingPhysicalExpression { name } => {
                 write!(formatter, "physical expression `{name}` is not registered")
@@ -62,26 +71,26 @@ impl Error for BindError {}
 /// One runtime expression paired with its checked logical signature.
 pub struct BoundExpression {
     expression: Box<dyn Expression>,
-    input_types: [DataType; 2],
+    input_types: Box<[DataType]>,
     output_type: DataType,
 }
 
 impl BoundExpression {
     pub fn new(
         expression: Box<dyn Expression>,
-        input_types: [DataType; 2],
+        input_types: impl IntoIterator<Item = DataType>,
         output_type: DataType,
     ) -> Result<Self, BindError> {
-        let expected_inputs = [
-            input_types[0].physical_type(),
-            input_types[1].physical_type(),
-        ];
+        let input_types = input_types.into_iter().collect::<Box<[_]>>();
+        let expected_inputs = input_types
+            .iter()
+            .copied()
+            .map(DataType::physical_type)
+            .collect::<Vec<_>>();
         let actual_inputs = expression.input_types().to_vec();
         let expected_output = output_type.physical_type();
         let actual_output = expression.output_type();
-        if actual_inputs.as_slice() != expected_inputs.as_slice()
-            || actual_output != expected_output
-        {
+        if actual_inputs != expected_inputs || actual_output != expected_output {
             return Err(BindError::PhysicalSignatureMismatch {
                 name: expression.name(),
                 expected_inputs,
@@ -98,7 +107,7 @@ impl BoundExpression {
         })
     }
 
-    pub fn input_types(&self) -> &[DataType; 2] {
+    pub fn input_types(&self) -> &[DataType] {
         &self.input_types
     }
 
@@ -128,13 +137,13 @@ impl AsyncExpression for BoundExpression {
     }
 }
 
-type BinaryFactory =
-    dyn Fn(DataType, DataType) -> Result<BoundExpression, BindError> + Send + Sync + 'static;
+type FunctionFactory =
+    dyn Fn(&[DataType]) -> Result<BoundExpression, BindError> + Send + Sync + 'static;
 
-/// Planning-time registry for logical binary functions.
+/// Planning-time registry for logical functions of any arity.
 #[derive(Default)]
 pub struct FunctionRegistry {
-    binary: HashMap<String, Box<BinaryFactory>>,
+    functions: HashMap<String, Box<FunctionFactory>>,
 }
 
 impl FunctionRegistry {
@@ -145,6 +154,15 @@ impl FunctionRegistry {
         registry
     }
 
+    pub fn register(
+        &mut self,
+        name: impl Into<String>,
+        factory: impl Fn(&[DataType]) -> Result<BoundExpression, BindError> + Send + Sync + 'static,
+    ) {
+        self.functions.insert(name.into(), Box::new(factory));
+    }
+
+    /// Retain the original binary registration surface while storing a slice factory.
     pub fn register_binary(
         &mut self,
         name: impl Into<String>,
@@ -153,20 +171,36 @@ impl FunctionRegistry {
         + Sync
         + 'static,
     ) {
-        self.binary.insert(name.into(), Box::new(factory));
+        let name = name.into();
+        let error_name = name.clone();
+        self.register(name, move |inputs| {
+            let [left, right] = inputs else {
+                return Err(BindError::InputArityMismatch {
+                    name: error_name.clone(),
+                    expected: 2,
+                    actual: inputs.len(),
+                });
+            };
+            factory(*left, *right)
+        });
     }
 
+    pub fn bind(&self, name: &str, inputs: &[DataType]) -> Result<BoundExpression, BindError> {
+        self.functions
+            .get(name)
+            .ok_or_else(|| BindError::UnknownFunction {
+                name: name.to_owned(),
+            })?(inputs)
+    }
+
+    /// Retain the original binary binding surface on top of the slice registry.
     pub fn bind_binary(
         &self,
         name: &str,
         left: DataType,
         right: DataType,
     ) -> Result<BoundExpression, BindError> {
-        self.binary
-            .get(name)
-            .ok_or_else(|| BindError::UnknownFunction {
-                name: name.to_owned(),
-            })?(left, right)
+        self.bind(name, &[left, right])
     }
 }
 
@@ -178,8 +212,7 @@ fn bind_add(left: DataType, right: DataType) -> Result<BoundExpression, BindErro
     if (left, right) != (DataType::Integer, DataType::Integer) {
         return Err(BindError::UnsupportedArguments {
             name: "+".to_owned(),
-            left,
-            right,
+            inputs: vec![left, right],
         });
     }
     BoundExpression::new(build_physical("i32_add")?, [left, right], DataType::Integer)
@@ -189,8 +222,7 @@ fn bind_concat(left: DataType, right: DataType) -> Result<BoundExpression, BindE
     if !left.is_string() || !right.is_string() {
         return Err(BindError::UnsupportedArguments {
             name: "concat".to_owned(),
-            left,
-            right,
+            inputs: vec![left, right],
         });
     }
     BoundExpression::new(

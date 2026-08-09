@@ -115,7 +115,11 @@ fn rejects_input_lengths_before_evaluating_rows() {
             ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 2),
             ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 3),
         ),
-        Err(ExpressionError::InputLengthMismatch { left: 2, right: 3 })
+        Err(ExpressionError::InputLengthMismatch {
+            expected: 2,
+            actual: 3,
+            input_index: 1,
+        })
     );
 }
 
