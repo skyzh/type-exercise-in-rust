@@ -7,7 +7,6 @@ publish.workspace = true
 
 [dependencies]
 bitvec = "1"
-rust_decimal = { version = "1", default-features = false }
 
 [dev-dependencies]
 criterion = "0.8.2"

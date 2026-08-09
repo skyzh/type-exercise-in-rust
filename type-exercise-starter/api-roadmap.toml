@@ -1,0 +1,193 @@
+version = 1
+
+[[target]]
+day = 1
+title = "Physical rows and checked mismatch"
+file = "src/physical_type.rs"
+items = ["PhysicalType", "TypeMismatch"]
+declarations = ["pub enum PhysicalType", "pub struct TypeMismatch"]
+materialized = true
+
+[[target]]
+day = 1
+title = "Owned and borrowed scalar contract"
+file = "src/scalar.rs"
+items = ["Scalar", "ScalarRef", "ScalarImpl", "ScalarRefImpl"]
+declarations = ["pub trait Scalar", "pub trait ScalarRef", "pub enum ScalarImpl", "pub enum ScalarRefImpl"]
+materialized = true
+
+[[target]]
+day = 1
+title = "Nullable array contract and erasure"
+file = "src/array.rs"
+items = ["Array", "ArrayBuilder", "ArrayImpl"]
+declarations = ["pub trait Array", "pub trait ArrayBuilder", "pub enum ArrayImpl"]
+materialized = true
+
+[[target]]
+day = 1
+title = "Flat fixed-width buffers"
+file = "src/array/primitive_array.rs"
+items = ["PrimitiveArray", "PrimitiveArrayBuilder"]
+declarations = ["pub struct PrimitiveArray", "pub struct PrimitiveArrayBuilder"]
+materialized = true
+
+[[target]]
+day = 1
+title = "Shared UTF-8 bytes and offsets"
+file = "src/array/string_array.rs"
+items = ["StringArray", "StringArrayBuilder"]
+declarations = ["pub struct StringArray", "pub struct StringArrayBuilder"]
+materialized = true
+
+[[target]]
+day = 2
+title = "Single physical-family catalog"
+file = "src/variant_catalog.rs"
+items = ["for_each_physical_family"]
+declarations = ["macro_rules! for_each_physical_family"]
+materialized = true
+
+[[target]]
+day = 2
+title = "Logical-to-physical mapping"
+file = "src/data_type.rs"
+items = ["DataType", "DataType::decimal", "DataType::physical_type"]
+declarations = ["pub enum DataType", "pub fn decimal(", "pub fn physical_type("]
+materialized = true
+
+[[target]]
+day = 2
+title = "Checked Decimal descriptor and scalar"
+file = "src/decimal.rs"
+items = ["DecimalType", "DecimalType::try_new", "Decimal", "Decimal::try_new", "DecimalError"]
+declarations = ["pub struct DecimalType", "pub fn try_new(", "pub struct Decimal", "pub fn try_new(", "pub enum DecimalError"]
+materialized = true
+
+[[target]]
+day = 2
+title = "Metadata-aware Decimal storage"
+file = "src/array/decimal_array.rs"
+items = ["DecimalArray", "DecimalArray::try_from_raw_parts", "DecimalArrayBuilder", "DecimalArrayBuilder::try_with_type", "DecimalArrayBuilder::try_push"]
+declarations = ["pub struct DecimalArray", "pub fn try_from_raw_parts(", "pub struct DecimalArrayBuilder", "pub fn try_with_type(", "pub fn try_push("]
+materialized = true
+
+[[target]]
+day = 2
+title = "Exact Decimal scalar erasure"
+file = "src/scalar.rs"
+items = ["ScalarImpl::try_decimal", "ScalarRefImpl::try_decimal", "From<Decimal> for ScalarRefImpl", "TryFrom<ScalarRefImpl> for Decimal"]
+declarations = ["pub fn try_decimal(&self,", "pub fn try_decimal(self,", "impl<'a> From<Decimal> for ScalarRefImpl<'a>", "impl TryFrom<ScalarRefImpl<'_>> for Decimal"]
+materialized = true
+
+[[target]]
+day = 3
+title = "Array, constant, null, and indexed column views"
+file = "src/column.rs"
+items = ["ColumnViewImpl", "ColumnViewImpl::array", "ColumnViewImpl::constant", "ColumnViewImpl::null", "ColumnViewImpl::dictionary", "ColumnView::get", "ColumnView::len"]
+declarations = ["pub struct ColumnViewImpl", "pub fn array(", "pub fn constant(", "pub fn null(", "pub fn dictionary(", "pub fn get(", "pub fn len("]
+materialized = false
+
+[[target]]
+day = 4
+title = "Generic scalar functions and expression adapters"
+file = "src/expression.rs"
+items = ["BinaryScalarFunction", "I32Add", "evaluate_binary", "UnaryExpression", "BinaryExpression", "Expression"]
+declarations = ["pub trait BinaryScalarFunction", "pub struct I32Add", "pub fn evaluate_binary(", "pub struct UnaryExpression", "pub struct BinaryExpression", "pub trait Expression"]
+materialized = false
+
+[[target]]
+day = 5
+title = "Lossless numeric promotion"
+file = "src/promotion.rs"
+items = ["NumericPromotion", "NUMERIC_PROMOTIONS", "promote_numeric"]
+declarations = ["pub struct NumericPromotion", "pub const NUMERIC_PROMOTIONS", "pub fn promote_numeric("]
+materialized = false
+
+[[target]]
+day = 5
+title = "Arithmetic and numeric comparison kernels"
+file = "src/operators.rs"
+items = ["ArithmeticOperator", "ComparisonOperator", "build_numeric_binary_expression", "build_numeric_comparison_expression"]
+declarations = ["pub enum ArithmeticOperator", "pub enum ComparisonOperator", "fn build_numeric_binary_expression(", "fn build_numeric_comparison_expression("]
+materialized = false
+
+[[target]]
+day = 6
+title = "Systematic unary, binary, and ternary arity"
+file = "src/operators.rs"
+items = ["CheckedUnaryScalarFunction", "CheckedBinaryScalarFunction", "CheckedTernaryScalarFunction", "TernaryExpression", "ExpressionError"]
+declarations = ["pub trait CheckedUnaryScalarFunction", "pub trait CheckedBinaryScalarFunction", "pub trait CheckedTernaryScalarFunction", "pub struct TernaryExpression", "pub enum ExpressionError"]
+materialized = false
+
+[[target]]
+day = 7
+title = "Three-valued Boolean logic"
+file = "src/boolean_logic.rs"
+items = ["NullEvaluationPolicy", "BooleanOperator", "build_boolean_expression", "BOOLEAN_TRUTH_TABLE"]
+declarations = ["pub enum NullEvaluationPolicy", "pub enum BooleanOperator", "pub fn build_boolean_expression(", "pub const BOOLEAN_TRUTH_TABLE"]
+materialized = false
+
+[[target]]
+day = 8
+title = "Runtime expression erasure and builtin catalog"
+file = "src/expression.rs"
+items = ["Expression", "UnaryExpression", "CheckedBinaryExpression", "TernaryExpression", "builtin_function_catalog"]
+declarations = ["pub trait Expression", "pub struct UnaryExpression", "pub struct CheckedBinaryExpression", "pub struct TernaryExpression", "macro_rules! builtin_function_catalog"]
+materialized = false
+
+[[target]]
+day = 9
+title = "Binder and runtime function registry"
+file = "src/binder.rs"
+items = ["BindError", "BoundExpression", "FunctionRegistry", "FunctionRegistry::register", "FunctionRegistry::bind"]
+declarations = ["pub enum BindError", "pub struct BoundExpression", "pub struct FunctionRegistry", "pub fn register(", "pub fn bind("]
+materialized = false
+
+[[target]]
+day = 10
+title = "Representative primitive fast loops"
+file = "src/expression.rs"
+items = ["PrimitiveLoop", "PrimitiveBinaryExpression::evaluate_with_loop", "BoundExpression::evaluate_with_loop"]
+declarations = ["pub enum PrimitiveLoop", "pub fn evaluate_with_loop(", "pub fn evaluate_with_loop("]
+materialized = false
+
+[[target]]
+day = 11
+title = "One-level List scalars and arrays"
+file = "src/array/list_array.rs"
+items = ["ListScalar", "ListScalarRef", "ListArray", "ListArray::try_from_raw_parts", "ListArray::try_from_rows", "ListArrayBuilder"]
+declarations = ["pub struct ListScalar", "pub struct ListScalarRef", "pub struct ListArray", "pub fn try_from_raw_parts(", "pub fn try_from_rows", "pub struct ListArrayBuilder"]
+materialized = false
+
+[[target]]
+day = 11
+title = "List column downcast"
+file = "src/column.rs"
+items = ["ListColumnView", "ColumnViewImpl::try_as_list"]
+declarations = ["pub struct ListColumnView", "pub fn try_as_list("]
+materialized = false
+
+[[target]]
+day = 12
+title = "Iterator and Rust trait boundaries"
+file = "src/array/iterator.rs"
+items = ["ArrayIterator"]
+declarations = ["pub struct ArrayIterator"]
+materialized = false
+
+[[target]]
+day = 12
+title = "Thread-safe erased expression boundary"
+file = "src/expression.rs"
+items = ["Expression: Any + Send + Sync"]
+declarations = ["pub trait Expression: Any + Send + Sync"]
+materialized = false
+
+[[target]]
+day = 13
+title = "Batch-level asynchronous adapter"
+file = "src/expression.rs"
+items = ["evaluate_static", "BatchFuture", "AsyncExpression", "AsyncExpressionAdapter", "BoundExpression::evaluate_async"]
+declarations = ["pub fn evaluate_static(", "pub type BatchFuture", "pub trait AsyncExpression", "pub struct AsyncExpressionAdapter", "pub fn evaluate_async("]
+materialized = false

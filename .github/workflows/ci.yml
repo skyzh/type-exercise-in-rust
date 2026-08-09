@@ -33,6 +33,8 @@ jobs:
         run: cargo test --manifest-path archived/type-exercise-ref/Cargo.toml --no-fail-fast --workspace --all-features --locked
       - name: Check minimal starter
         run: cargo check -p type-exercise-starter --lib --locked
+      - name: Check starter API roadmap
+        run: cargo x check-starter-api
       - name: Copy supplied tests into the starter
         run: |
           cargo x copy-test --chapter 1

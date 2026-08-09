@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
+use serde::Deserialize;
 
 #[derive(Debug, Parser)]
 #[command(author, version, about)]
@@ -19,6 +20,24 @@ enum Action {
         #[arg(long)]
         chapter: usize,
     },
+    /// Verify the learner-visible API roadmap against the cumulative starter.
+    CheckStarterApi,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApiManifest {
+    version: u8,
+    target: Vec<ApiTarget>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApiTarget {
+    day: usize,
+    title: String,
+    file: String,
+    items: Vec<String>,
+    declarations: Vec<String>,
+    materialized: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -144,6 +163,105 @@ fn copy_test(root: &Path, chapter: usize) -> Result<CopyReport> {
     Ok(CopyReport { changed_files })
 }
 
+fn check_starter_api(root: &Path) -> Result<()> {
+    let starter = root.join("type-exercise-starter");
+    let manifest_path = starter.join("api-roadmap.toml");
+    let manifest_text = fs::read_to_string(&manifest_path)
+        .with_context(|| format!("failed to read {}", manifest_path.display()))?;
+    let manifest: ApiManifest = toml::from_str(&manifest_text)
+        .with_context(|| format!("failed to parse {}", manifest_path.display()))?;
+    if manifest.version != 1 {
+        bail!(
+            "unsupported starter API manifest version {}",
+            manifest.version
+        );
+    }
+
+    let roadmap_path = starter.join("API_ROADMAP.md");
+    let roadmap = fs::read_to_string(&roadmap_path)
+        .with_context(|| format!("failed to read {}", roadmap_path.display()))?;
+    let mut seen = std::collections::BTreeSet::new();
+    let mut days = std::collections::BTreeSet::new();
+    for target in &manifest.target {
+        if !(1..=13).contains(&target.day) {
+            bail!("starter API target has invalid Day {}", target.day);
+        }
+        if target.items.is_empty() || target.items.len() != target.declarations.len() {
+            bail!(
+                "starter API target Day {} {} must pair every item with one declaration",
+                target.day,
+                target.file
+            );
+        }
+        if !seen.insert((target.day, target.file.clone(), target.title.clone())) {
+            bail!(
+                "duplicate starter API target: Day {} {} {}",
+                target.day,
+                target.file,
+                target.title
+            );
+        }
+        days.insert(target.day);
+
+        let roadmap_marker = format!("| {} | `{}` | {} |", target.day, target.file, target.title);
+        if !roadmap.contains(&roadmap_marker) {
+            bail!("roadmap is missing manifest row: {roadmap_marker}");
+        }
+
+        let source_path = starter.join(&target.file);
+        let source = fs::read_to_string(&source_path).ok();
+        for (item, declaration) in target.items.iter().zip(&target.declarations) {
+            let item_marker = format!("`{item}`");
+            let declaration_marker = format!("`{declaration}`");
+            if !roadmap.contains(&item_marker) || !roadmap.contains(&declaration_marker) {
+                bail!("roadmap is missing `{item}` or its declaration shape `{declaration}`");
+            }
+            match (&source, target.materialized) {
+                (Some(source), true) if !source.contains(declaration) => bail!(
+                    "materialized starter target `{item}` is missing `{declaration}` in {}",
+                    source_path.display()
+                ),
+                (Some(source), false) if source.contains(declaration) => bail!(
+                    "future starter target `{item}` was materialized before Day {} in {}",
+                    target.day,
+                    source_path.display()
+                ),
+                (None, true) => bail!(
+                    "materialized starter target file is missing: {}",
+                    source_path.display()
+                ),
+                _ => {}
+            }
+        }
+    }
+
+    let expected_days = (1..=13).collect::<std::collections::BTreeSet<_>>();
+    if days != expected_days {
+        bail!("starter API roadmap must cover every Day 1-13 exactly as a complete set");
+    }
+    if manifest
+        .target
+        .iter()
+        .any(|target| target.materialized && target.day > 2)
+    {
+        bail!("only cumulative Days 1-2 starter targets may be materialized on PR #45");
+    }
+
+    let reference_manifest = fs::read_to_string(root.join("type-exercise/Cargo.toml"))?;
+    if reference_manifest.contains("rust_decimal") {
+        bail!("reference production dependencies must not reintroduce rust_decimal");
+    }
+    let reference_catalog = fs::read_to_string(root.join("type-exercise/src/variant_catalog.rs"))?;
+    if !reference_catalog.contains("{ decimal, Decimal")
+        || reference_catalog.contains("{ copy, Decimal")
+    {
+        bail!("Decimal must remain a dedicated catalog row, never a copy primitive row");
+    }
+
+    println!("starter API roadmap matches cumulative Days 1-2 and reserves Days 3-13");
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let args = Args::parse();
     let root = workspace_root()?;
@@ -151,6 +269,7 @@ fn main() -> Result<()> {
         Action::CopyTest { chapter } => {
             copy_test(&root, chapter)?;
         }
+        Action::CheckStarterApi => check_starter_api(&root)?,
     }
     Ok(())
 }
@@ -161,7 +280,7 @@ mod tests {
 
     use tempfile::TempDir;
 
-    use super::copy_test;
+    use super::{check_starter_api, copy_test, workspace_root};
 
     fn fixture() -> TempDir {
         let root = tempfile::tempdir().unwrap();
@@ -262,5 +381,10 @@ mod tests {
             fs::read(target.join("chapter_2.rs")).unwrap(),
             fs::read(root.path().join("type-exercise/src/tests/chapter_2.rs")).unwrap()
         );
+    }
+
+    #[test]
+    fn workspace_starter_api_manifest_matches_the_cumulative_scaffold() {
+        check_starter_api(&workspace_root().unwrap()).unwrap();
     }
 }

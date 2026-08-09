@@ -8,7 +8,8 @@ than the type itself warrants.
 
 **By the end of this chapter, you will:**
 
-- add complete `i16`, `i64`, `bool`, `f32`, `f64`, and Decimal storage families;
+- add complete `i16`, `i64`, `bool`, `f32`, and `f64` static families plus a metadata-aware
+  Decimal family;
 - map planner-visible `DataType` values to physical storage; and
 - keep the non-List physical rows in one catalog that drives exhaustive code.
 
@@ -17,7 +18,8 @@ cargo x copy-test --chapter 2
 cargo test -p type-exercise-starter chapter_2 --locked
 ```
 
-The first run should fail on the new families and catalog.
+The first run should fail at the declared Day 2 `todo!` boundaries for the new families and
+catalog, not on a missing file or symbol.
 
 ## Add Double explicitly before generalizing
 
@@ -37,10 +39,12 @@ the remaining non-List rows:
 | `Real` | `Float32` | `f32` / `f32` |
 | `Double` | `Float64` | `f64` / `f64` |
 | `Varchar`, `Char` | `String` | `String` / `&str` |
-| `Decimal` | `Decimal` | `Decimal` / `Decimal` |
+| `Decimal(p, s)` | `Decimal(p, s)` | typed `Decimal` / typed `Decimal` |
 
-`Char { width }` and `Decimal { scale, precision }` retain logical metadata, but this course does
-not validate width, precision, or scale in physical storage.
+`Char { width }` retains logical metadata without changing String storage. Decimal is different:
+its precision and scale define the physical value's meaning, including for empty and all-null
+arrays. Use `DecimalType::try_new(precision, scale)` and enforce `1 <= precision <= 38` plus
+`scale <= precision`. This course keeps scale nonnegative.
 
 ## Checkpoint 1: make primitive storage generic
 
@@ -68,11 +72,37 @@ not validate width, precision, or scale in physical storage.
 - **Run:** the focused and cumulative tests.
 - **Passing means:** every logical scalar type has one documented physical family.
 
+## Checkpoint 4: give Decimal one shared descriptor
+
+- **Target:** `type-exercise-starter/src/decimal.rs::{DecimalType, Decimal, DecimalError}` and
+  `type-exercise-starter/src/array/decimal_array.rs::{DecimalArray, DecimalArrayBuilder}`.
+- **Change:** store one flat `i128` unscaled coefficient per row, packed validity, and one checked
+  `DecimalType` shared by the whole array. Require the descriptor before the first builder push.
+- **Preserve:** null rows use validity rather than `Option<Decimal>` storage; empty and all-null
+  arrays remain typed; a failed coefficient or metadata check must not append a partial row.
+- **Run:** the focused and cumulative tests.
+- **Passing means:** scalar, array, and erased Decimal values preserve exact precision and scale.
+
+The represented value is `unscaled × 10^-scale`. A valid coefficient has fewer than or exactly
+`precision` decimal digits, so `10^precision` itself is out of range. Validate with an
+overflow-safe absolute value: `i128::MIN` is an ordinary error case, not a reason to panic. Do not
+use `rust_decimal`; repeating scale inside every stored row would create a second source of truth.
+
+Decimal is a dedicated catalog row rather than a `PrimitiveArray<Decimal>` alias. Static numeric
+families can use metadata-free `ArrayBuilder::with_capacity`; Decimal uses
+`DecimalArrayBuilder::try_with_type`. Decimal arithmetic, comparisons, casts, rounding, and
+implicit coercion remain outside this chapter.
+
 ## Required and extension work
 
-All table rows are required. Decimal arithmetic and precision enforcement are not. Extending the
-catalog with another physical family is useful practice, but it must bring the complete scalar,
-array, erasure, and mismatch surface rather than one enum variant.
+All table rows and Decimal storage checks are required. Decimal arithmetic and casts are not.
+Extending the catalog with another physical family is useful practice, but it must bring the
+complete scalar, array, erasure, and mismatch surface rather than one enum variant.
+
+The starter's `type-exercise-starter/API_ROADMAP.md` names every later target through Day 13.
+Only Days 1–2 are Rust modules in this snapshot; future declarations stay
+documentation-only until their cumulative checkpoint lands. Day 5 includes numeric comparisons,
+Day 7 introduces three-valued Boolean logic, and the former Days 7–12 shift to Days 8–13.
 
 ```console
 cargo test -p type-exercise-starter chapter_2 --locked

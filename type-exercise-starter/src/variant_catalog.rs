@@ -1,8 +1,4 @@
-/// Invoke a callback with every supported non-List physical family.
-///
-/// Each row is `{storage kind, erased variant, array, builder, owned scalar,
-/// borrowed scalar}`. Keeping this list singular makes adding a family a
-/// compile-visible change across physical types, scalars, arrays, and erasure.
+/// Day 2 target: the single inventory of supported non-List families.
 macro_rules! for_each_physical_family {
     ($callback:ident) => {
         $callback! {

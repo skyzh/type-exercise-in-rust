@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
-use crate::{ArrayImpl, PhysicalType, ScalarImpl, ScalarRefImpl, TypeMismatch};
+use crate::{ArrayImpl, DecimalError, PhysicalType, ScalarImpl, ScalarRefImpl, TypeMismatch};
 
 /// A checked failure while constructing or slicing a one-level List value.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -11,6 +11,7 @@ pub enum ListError {
         actual: PhysicalType,
     },
     TypeMismatch(TypeMismatch),
+    Decimal(DecimalError),
     OffsetCount {
         expected: usize,
         actual: usize,
@@ -51,6 +52,7 @@ impl Display for ListError {
                 write!(formatter, "expected a List value, got {actual:?}")
             }
             Self::TypeMismatch(error) => Display::fmt(error, formatter),
+            Self::Decimal(error) => Display::fmt(error, formatter),
             Self::OffsetCount { expected, actual } => write!(
                 formatter,
                 "list offset count mismatch: expected {expected}, got {actual}"
@@ -89,6 +91,12 @@ impl Error for ListError {}
 impl From<TypeMismatch> for ListError {
     fn from(error: TypeMismatch) -> Self {
         Self::TypeMismatch(error)
+    }
+}
+
+impl From<DecimalError> for ListError {
+    fn from(error: DecimalError) -> Self {
+        Self::Decimal(error)
     }
 }
 
@@ -400,7 +408,10 @@ fn reject_nested(physical_type: &PhysicalType) -> Result<(), ListError> {
 #[cfg(test)]
 mod tests {
     use super::{ListArrayBuilder, ListError, ListScalar};
-    use crate::{Array, I32Array, PhysicalType, StringArray, TypeMismatch};
+    use crate::{
+        Array, Decimal, DecimalArray, DecimalType, I32Array, PhysicalType, StringArray,
+        TypeMismatch,
+    };
 
     #[test]
     fn failed_row_keeps_builder_state_unchanged() {
@@ -419,6 +430,72 @@ mod tests {
             Err(ListError::TypeMismatch(TypeMismatch {
                 expected: PhysicalType::Int32,
                 actual: PhysicalType::String,
+            }))
+        );
+        assert_eq!((builder.values, builder.offsets, builder.validity), before);
+    }
+
+    #[test]
+    fn empty_all_null_and_populated_decimal_lists_keep_child_metadata() {
+        let decimal_type = DecimalType::try_new(8, 2).unwrap();
+        let value = Decimal::try_new(12_345, decimal_type).unwrap();
+        let child = DecimalArray::try_from_slice(decimal_type, &[Some(value), None]).unwrap();
+        let scalar = ListScalar::try_new(child.into()).unwrap();
+        let element_type = PhysicalType::Decimal(decimal_type);
+
+        let populated = super::ListArray::try_from_rows(
+            element_type.clone(),
+            [Some(scalar.as_list_ref()), None],
+        )
+        .unwrap();
+        assert_eq!(populated.element_type(), element_type);
+        assert_eq!(
+            populated.get(0).unwrap().unwrap().get(0).unwrap(),
+            Some(value.into())
+        );
+        assert_eq!(populated.get(0).unwrap().unwrap().get(1).unwrap(), None);
+        assert_eq!(populated.get(1).unwrap(), None);
+
+        let all_null = super::ListArray::try_from_rows(element_type.clone(), [None, None]).unwrap();
+        assert_eq!(all_null.element_type(), element_type);
+        assert_eq!(all_null.values().physical_type(), element_type);
+        assert_eq!(all_null.values().len(), 0);
+    }
+
+    #[test]
+    fn mixed_decimal_descriptors_fail_before_list_builder_mutation() {
+        let expected_type = DecimalType::try_new(8, 2).unwrap();
+        let other_type = DecimalType::try_new(8, 3).unwrap();
+        let expected = ListScalar::try_new(
+            DecimalArray::try_from_slice(
+                expected_type,
+                &[Some(Decimal::try_new(100, expected_type).unwrap())],
+            )
+            .unwrap()
+            .into(),
+        )
+        .unwrap();
+        let other = ListScalar::try_new(
+            DecimalArray::try_from_slice(
+                other_type,
+                &[Some(Decimal::try_new(100, other_type).unwrap())],
+            )
+            .unwrap()
+            .into(),
+        )
+        .unwrap();
+        let mut builder = ListArrayBuilder::new(PhysicalType::Decimal(expected_type), 2).unwrap();
+        builder.push(Some(expected.as_list_ref())).unwrap();
+        let before = (
+            builder.values.clone(),
+            builder.offsets.clone(),
+            builder.validity.clone(),
+        );
+        assert_eq!(
+            builder.push(Some(other.as_list_ref())),
+            Err(ListError::TypeMismatch(TypeMismatch {
+                expected: PhysicalType::Decimal(expected_type),
+                actual: PhysicalType::Decimal(other_type),
             }))
         );
         assert_eq!((builder.values, builder.offsets, builder.validity), before);
