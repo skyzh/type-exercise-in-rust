@@ -2,6 +2,7 @@
 
 mod array;
 mod binder;
+mod boolean_logic;
 mod column;
 mod data_type;
 mod decimal;
@@ -17,6 +18,7 @@ mod tests;
 
 pub use array::*;
 pub use binder::*;
+pub use boolean_logic::*;
 pub use column::*;
 pub use data_type::*;
 pub use decimal::*;

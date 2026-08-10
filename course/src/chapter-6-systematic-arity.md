@@ -82,4 +82,6 @@ cargo test -p type-exercise-starter --lib --locked
 ```
 
 
+Next: [Chapter 7 adds three-valued Boolean logic with SQL null semantics](./chapter-7-boolean-logic.md).
+
 {{#include copyright.md}}

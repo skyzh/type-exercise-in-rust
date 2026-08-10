@@ -9,3 +9,4 @@
 - [Expose the Cost of Concrete Loops](./chapter-4-concrete-loops.md)
 - [Make Numeric Evaluation Generic](./chapter-5-generic-arithmetic.md)
 - [Make Arity Systematic](./chapter-6-systematic-arity.md)
+- [Implement Three-Valued Boolean Logic](./chapter-7-boolean-logic.md)
