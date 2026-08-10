@@ -297,7 +297,7 @@ fn bind_arithmetic(
     {
         build_physical("i32_add")?
     } else {
-        build_numeric_binary_expression(
+        Box::new(build_numeric_binary_expression(
             match operator {
                 ArithmeticOperator::Add => "numeric_add",
                 ArithmeticOperator::Subtract => "numeric_subtract",
@@ -308,7 +308,7 @@ fn bind_arithmetic(
             left.physical_type(),
             right.physical_type(),
             output.physical_type(),
-        )
+        ))
     };
     BoundExpression::new(expression, [left, right], output)
 }
@@ -316,7 +316,10 @@ fn bind_arithmetic(
 fn bind_neg(input: DataType) -> Result<BoundExpression, BindError> {
     promote_numeric(&input, &input).ok_or_else(|| unsupported("neg", [input.clone()]))?;
     BoundExpression::new(
-        build_numeric_neg_expression("numeric_neg", input.physical_type()),
+        Box::new(build_numeric_neg_expression(
+            "numeric_neg",
+            input.physical_type(),
+        )),
         [input.clone()],
         input,
     )
@@ -332,7 +335,7 @@ fn bind_clamp(
     let output = promote_numeric(&pair, &upper)
         .ok_or_else(|| unsupported("clamp", [value.clone(), lower.clone(), upper.clone()]))?;
     BoundExpression::new(
-        build_numeric_clamp_expression(
+        Box::new(build_numeric_clamp_expression(
             "numeric_clamp",
             [
                 value.physical_type(),
@@ -340,7 +343,7 @@ fn bind_clamp(
                 upper.physical_type(),
             ],
             output.physical_type(),
-        ),
+        )),
         [value, lower, upper],
         output,
     )
@@ -352,8 +355,8 @@ fn bind_comparison(
     left: DataType,
     right: DataType,
 ) -> Result<BoundExpression, BindError> {
-    let expression = if let Some(common) = promote_numeric(&left, &right) {
-        build_numeric_comparison_expression(
+    let expression: Box<dyn Expression> = if let Some(common) = promote_numeric(&left, &right) {
+        Box::new(build_numeric_comparison_expression(
             match operator {
                 ComparisonOperator::Less => "numeric_less",
                 ComparisonOperator::LessOrEqual => "numeric_less_or_equal",
@@ -366,9 +369,9 @@ fn bind_comparison(
             left.physical_type(),
             right.physical_type(),
             common.physical_type(),
-        )
+        ))
     } else if left.is_string() && right.is_string() {
-        build_string_comparison_expression(
+        Box::new(build_string_comparison_expression(
             match operator {
                 ComparisonOperator::Less => "string_less",
                 ComparisonOperator::LessOrEqual => "string_less_or_equal",
@@ -378,21 +381,21 @@ fn bind_comparison(
                 ComparisonOperator::NotEqual => "string_not_equal",
             },
             operator,
-        )
+        ))
     } else if matches!(
         operator,
         ComparisonOperator::Equal | ComparisonOperator::NotEqual
     ) && left == DataType::Boolean
         && right == DataType::Boolean
     {
-        build_bool_comparison_expression(
+        Box::new(build_bool_comparison_expression(
             match operator {
                 ComparisonOperator::Equal => "bool_equal",
                 ComparisonOperator::NotEqual => "bool_not_equal",
                 _ => unreachable!("ordered boolean comparison is rejected"),
             },
             operator,
-        )
+        ))
     } else {
         return Err(unsupported(name, [left, right]));
     };
@@ -404,7 +407,7 @@ fn bind_contains(left: DataType, right: DataType) -> Result<BoundExpression, Bin
         return Err(unsupported("contains", [left, right]));
     }
     BoundExpression::new(
-        build_string_contains_expression("string_contains"),
+        Box::new(build_string_contains_expression("string_contains")),
         [left, right],
         DataType::Boolean,
     )

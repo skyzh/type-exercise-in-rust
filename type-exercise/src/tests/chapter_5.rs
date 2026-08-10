@@ -1,12 +1,12 @@
 use std::collections::HashSet;
 
-use crate::{DecimalType,
-    ArithmeticOperator, Array, ArrayImpl, ColumnViewImpl, DataType, Expression, ExpressionError,
-    F32Array, F64Array, I16Array, I32Array, I64Array, NUMERIC_PROMOTIONS, NumericPromotion,
-    PhysicalType, ScalarError, ScalarRefImpl, promote_numeric,
+use crate::{
+    ArithmeticOperator, Array, ArrayImpl, BoolArray, ColumnViewImpl, ComparisonOperator, DataType,
+    DecimalType, F32Array, F64Array, I16Array, I32Array, I64Array, NUMERIC_PROMOTIONS,
+    NumericPromotion, PhysicalType, ScalarRefImpl, StringArray, promote_numeric,
 };
 
-use crate::operators::build_numeric_binary_expression;
+use crate::operators::{build_numeric_binary_expression, build_numeric_comparison_expression};
 
 const EXPECTED_NUMERIC_PROMOTION_MATRIX: &[(DataType, DataType, Option<DataType>)] = &[
     (
@@ -87,22 +87,6 @@ fn assert_promotion_catalog_matches_matrix(catalog: &[NumericPromotion]) {
     assert_eq!(catalog_keys.len(), expected_present);
 }
 
-fn numeric_expression(
-    name: &'static str,
-    operator: ArithmeticOperator,
-    left: &DataType,
-    right: &DataType,
-) -> Option<Box<dyn Expression>> {
-    let output = promote_numeric(left, right)?;
-    Some(build_numeric_binary_expression(
-        name,
-        operator,
-        left.physical_type(),
-        right.physical_type(),
-        output.physical_type(),
-    ))
-}
-
 #[test]
 fn promotion_catalog_matches_canonical_ordered_matrix() {
     assert_promotion_catalog_matches_matrix(NUMERIC_PROMOTIONS);
@@ -181,14 +165,14 @@ fn arithmetic_promotes_both_operand_orders_and_rejects_lossy_pairs() {
             ScalarRefImpl::Int32(2),
         ),
     ] {
-        let expression = numeric_expression(
+        let output_type = promote_numeric(&left_type, &right_type).unwrap();
+        let expression = build_numeric_binary_expression(
             "numeric_add",
             ArithmeticOperator::Add,
-            &left_type,
-            &right_type,
-        )
-        .unwrap();
-        assert_eq!(expression.output_type(), PhysicalType::Float64);
+            left_type.physical_type(),
+            right_type.physical_type(),
+            output_type.physical_type(),
+        );
         let output = expression
             .evaluate(&[
                 ColumnViewImpl::constant(left, 1),
@@ -201,29 +185,29 @@ fn arithmetic_promotes_both_operand_orders_and_rejects_lossy_pairs() {
     for (left, right) in [
         (DataType::BigInt, DataType::Double),
         (DataType::Double, DataType::BigInt),
+        (DataType::BigInt, DataType::Real),
+        (DataType::Real, DataType::BigInt),
     ] {
-        assert!(
-            numeric_expression(
-                "numeric_multiply",
-                ArithmeticOperator::Multiply,
-                &left,
-                &right
-            )
-            .is_none()
-        );
+        assert_eq!(promote_numeric(&left, &right), None, "{left:?}/{right:?}");
     }
 }
 
 #[test]
-fn signed_arithmetic_wraps_and_division_reports_the_exact_row() {
+fn signed_arithmetic_wraps_and_division_reports_a_batch_error() {
     for (name, operator, expected) in [
         ("numeric_add", ArithmeticOperator::Add, 13),
         ("numeric_subtract", ArithmeticOperator::Subtract, 5),
         ("numeric_multiply", ArithmeticOperator::Multiply, 36),
         ("numeric_divide", ArithmeticOperator::Divide, 2),
     ] {
-        let expression =
-            numeric_expression(name, operator, &DataType::Integer, &DataType::Integer).unwrap();
+        let output_type = promote_numeric(&DataType::Integer, &DataType::Integer).unwrap();
+        let expression = build_numeric_binary_expression(
+            name,
+            operator,
+            DataType::Integer.physical_type(),
+            DataType::Integer.physical_type(),
+            output_type.physical_type(),
+        );
         let output = expression
             .evaluate(&[
                 ColumnViewImpl::constant(ScalarRefImpl::Int32(9), 1),
@@ -237,13 +221,14 @@ fn signed_arithmetic_wraps_and_division_reports_the_exact_row() {
         );
     }
 
-    let add = numeric_expression(
+    let output_type = promote_numeric(&DataType::SmallInt, &DataType::SmallInt).unwrap();
+    let add = build_numeric_binary_expression(
         "numeric_add",
         ArithmeticOperator::Add,
-        &DataType::SmallInt,
-        &DataType::SmallInt,
-    )
-    .unwrap();
+        DataType::SmallInt.physical_type(),
+        DataType::SmallInt.physical_type(),
+        output_type.physical_type(),
+    );
     let added = add
         .evaluate(&[
             ColumnViewImpl::constant(ScalarRefImpl::Int16(i16::MAX), 1),
@@ -255,13 +240,14 @@ fn signed_arithmetic_wraps_and_division_reports_the_exact_row() {
         Some(i16::MIN)
     );
 
-    let multiply = numeric_expression(
+    let output_type = promote_numeric(&DataType::BigInt, &DataType::BigInt).unwrap();
+    let multiply = build_numeric_binary_expression(
         "numeric_multiply",
         ArithmeticOperator::Multiply,
-        &DataType::BigInt,
-        &DataType::BigInt,
-    )
-    .unwrap();
+        DataType::BigInt.physical_type(),
+        DataType::BigInt.physical_type(),
+        output_type.physical_type(),
+    );
     let multiplied = multiply
         .evaluate(&[
             ColumnViewImpl::constant(ScalarRefImpl::Int64(i64::MAX), 1),
@@ -270,48 +256,44 @@ fn signed_arithmetic_wraps_and_division_reports_the_exact_row() {
         .unwrap();
     assert_eq!(<&I64Array>::try_from(&multiplied).unwrap().get(0), Some(-2));
 
-    let divide = numeric_expression(
+    let output_type = promote_numeric(&DataType::Integer, &DataType::Integer).unwrap();
+    let divide = build_numeric_binary_expression(
         "numeric_divide",
         ArithmeticOperator::Divide,
-        &DataType::Integer,
-        &DataType::Integer,
-    )
-    .unwrap();
+        DataType::Integer.physical_type(),
+        DataType::Integer.physical_type(),
+        output_type.physical_type(),
+    );
     let numerators: ArrayImpl = I32Array::from_values(vec![8, 9, 10]).into();
     let divisors: ArrayImpl = I32Array::from_values(vec![2, 0, 5]).into();
-    assert_eq!(
-        divide.evaluate(&[
-            ColumnViewImpl::array(&numerators),
-            ColumnViewImpl::array(&divisors)
-        ]),
-        Err(ExpressionError::ScalarEvaluation {
-            function: "numeric_divide",
-            row: 1,
-            error: ScalarError::DivisionByZero,
-        })
+    assert!(
+        divide
+            .evaluate(&[
+                ColumnViewImpl::array(&numerators),
+                ColumnViewImpl::array(&divisors)
+            ])
+            .is_err()
     );
-    assert_eq!(
-        divide.evaluate(&[
-            ColumnViewImpl::constant(ScalarRefImpl::Int32(i32::MIN), 1),
-            ColumnViewImpl::constant(ScalarRefImpl::Int32(-1), 1),
-        ]),
-        Err(ExpressionError::ScalarEvaluation {
-            function: "numeric_divide",
-            row: 0,
-            error: ScalarError::DivisionOverflow,
-        })
+    assert!(
+        divide
+            .evaluate(&[
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(i32::MIN), 1),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(-1), 1),
+            ])
+            .is_err()
     );
 }
 
 #[test]
 fn nulls_short_circuit_scalar_errors_and_float_division_keeps_ieee_results() {
-    let integer_divide = numeric_expression(
+    let output_type = promote_numeric(&DataType::Integer, &DataType::Integer).unwrap();
+    let integer_divide = build_numeric_binary_expression(
         "numeric_divide",
         ArithmeticOperator::Divide,
-        &DataType::Integer,
-        &DataType::Integer,
-    )
-    .unwrap();
+        DataType::Integer.physical_type(),
+        DataType::Integer.physical_type(),
+        output_type.physical_type(),
+    );
     let output = integer_divide
         .evaluate(&[
             ColumnViewImpl::null(PhysicalType::Int32, 2),
@@ -326,24 +308,22 @@ fn nulls_short_circuit_scalar_errors_and_float_division_keeps_ieee_results() {
         vec![None, None]
     );
 
-    let float_divide = numeric_expression(
+    let output_type = promote_numeric(&DataType::Real, &DataType::Real).unwrap();
+    let float_divide = build_numeric_binary_expression(
         "numeric_divide",
         ArithmeticOperator::Divide,
-        &DataType::Real,
-        &DataType::Real,
-    )
-    .unwrap();
+        DataType::Real.physical_type(),
+        DataType::Real.physical_type(),
+        output_type.physical_type(),
+    );
     for zero in [0.0_f32, -0.0] {
-        assert_eq!(
-            float_divide.evaluate(&[
-                ColumnViewImpl::constant(ScalarRefImpl::Float32(1.0), 1),
-                ColumnViewImpl::constant(ScalarRefImpl::Float32(zero), 1),
-            ]),
-            Err(ExpressionError::ScalarEvaluation {
-                function: "numeric_divide",
-                row: 0,
-                error: ScalarError::DivisionByZero,
-            })
+        assert!(
+            float_divide
+                .evaluate(&[
+                    ColumnViewImpl::constant(ScalarRefImpl::Float32(1.0), 1),
+                    ColumnViewImpl::constant(ScalarRefImpl::Float32(zero), 1),
+                ])
+                .is_err()
         );
     }
     let special = float_divide
@@ -358,5 +338,199 @@ fn nulls_short_circuit_scalar_errors_and_float_division_keeps_ieee_results() {
             .get(0)
             .unwrap()
             .is_nan()
+    );
+}
+
+#[test]
+fn comparisons_cover_every_operator_and_both_operand_orders() {
+    for (left_type, right_type, left, right) in [
+        (
+            DataType::SmallInt,
+            DataType::Double,
+            ScalarRefImpl::Int16(2),
+            ScalarRefImpl::Float64(2.0),
+        ),
+        (
+            DataType::Double,
+            DataType::SmallInt,
+            ScalarRefImpl::Float64(5.0),
+            ScalarRefImpl::Int16(5),
+        ),
+        (
+            DataType::Integer,
+            DataType::Integer,
+            ScalarRefImpl::Int32(5),
+            ScalarRefImpl::Int32(5),
+        ),
+    ] {
+        let common_type = promote_numeric(&left_type, &right_type).unwrap();
+        let equal = build_numeric_comparison_expression(
+            "numeric_equal",
+            ComparisonOperator::Equal,
+            left_type.physical_type(),
+            right_type.physical_type(),
+            common_type.physical_type(),
+        );
+        let output = equal
+            .evaluate(&[
+                ColumnViewImpl::constant(left, 1),
+                ColumnViewImpl::constant(right, 1),
+            ])
+            .unwrap();
+        assert_eq!(<&BoolArray>::try_from(&output).unwrap().get(0), Some(true));
+    }
+
+    let (left_type, right_type) = (DataType::Integer, DataType::Integer);
+    let cases = [
+        (ComparisonOperator::Less, 2, 5, true),
+        (ComparisonOperator::Less, 5, 5, false),
+        (ComparisonOperator::LessOrEqual, 5, 5, true),
+        (ComparisonOperator::Greater, 7, 5, true),
+        (ComparisonOperator::Greater, 5, 5, false),
+        (ComparisonOperator::GreaterOrEqual, 5, 5, true),
+        (ComparisonOperator::Equal, 5, 5, true),
+        (ComparisonOperator::Equal, 2, 5, false),
+        (ComparisonOperator::NotEqual, 2, 5, true),
+        (ComparisonOperator::NotEqual, 5, 5, false),
+    ];
+    for (operator, left, right, expected) in cases {
+        let common_type = promote_numeric(&left_type, &right_type).unwrap();
+        let expression = build_numeric_comparison_expression(
+            "numeric_compare",
+            operator,
+            left_type.physical_type(),
+            right_type.physical_type(),
+            common_type.physical_type(),
+        );
+        let output = expression
+            .evaluate(&[
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(left), 1),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(right), 1),
+            ])
+            .unwrap();
+        assert_eq!(
+            <&BoolArray>::try_from(&output).unwrap().get(0),
+            Some(expected),
+            "{operator:?} {left} vs {right}"
+        );
+    }
+}
+
+#[test]
+fn nan_comparisons_are_false_except_not_equal() {
+    let (left_type, right_type) = (DataType::Double, DataType::Double);
+    for operator in [
+        ComparisonOperator::Less,
+        ComparisonOperator::LessOrEqual,
+        ComparisonOperator::Greater,
+        ComparisonOperator::GreaterOrEqual,
+        ComparisonOperator::Equal,
+    ] {
+        let common_type = promote_numeric(&left_type, &right_type).unwrap();
+        let expression = build_numeric_comparison_expression(
+            "numeric_compare",
+            operator,
+            left_type.physical_type(),
+            right_type.physical_type(),
+            common_type.physical_type(),
+        );
+        let output = expression
+            .evaluate(&[
+                ColumnViewImpl::constant(ScalarRefImpl::Float64(f64::NAN), 1),
+                ColumnViewImpl::constant(ScalarRefImpl::Float64(1.0), 1),
+            ])
+            .unwrap();
+        assert_eq!(
+            <&BoolArray>::try_from(&output).unwrap().get(0),
+            Some(false),
+            "{operator:?} with NaN"
+        );
+    }
+
+    let common_type = promote_numeric(&left_type, &right_type).unwrap();
+    let not_equal = build_numeric_comparison_expression(
+        "numeric_not_equal",
+        ComparisonOperator::NotEqual,
+        left_type.physical_type(),
+        right_type.physical_type(),
+        common_type.physical_type(),
+    );
+    let output = not_equal
+        .evaluate(&[
+            ColumnViewImpl::constant(ScalarRefImpl::Float64(f64::NAN), 1),
+            ColumnViewImpl::constant(ScalarRefImpl::Float64(1.0), 1),
+        ])
+        .unwrap();
+    assert_eq!(<&BoolArray>::try_from(&output).unwrap().get(0), Some(true));
+}
+
+#[test]
+fn comparison_nulls_short_circuit_before_the_scalar_call() {
+    let common_type = promote_numeric(&DataType::Integer, &DataType::Integer).unwrap();
+    let expression = build_numeric_comparison_expression(
+        "numeric_less",
+        ComparisonOperator::Less,
+        DataType::Integer.physical_type(),
+        DataType::Integer.physical_type(),
+        common_type.physical_type(),
+    );
+    let output = expression
+        .evaluate(&[
+            ColumnViewImpl::null(PhysicalType::Int32, 2),
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(5), 2),
+        ])
+        .unwrap();
+    assert_eq!(
+        <&BoolArray>::try_from(&output)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![None, None]
+    );
+}
+
+#[test]
+fn comparison_rejects_wrong_arity_types_and_lengths_before_rows() {
+    let common_type = promote_numeric(&DataType::Integer, &DataType::Integer).unwrap();
+    let expression = build_numeric_comparison_expression(
+        "numeric_less",
+        ComparisonOperator::Less,
+        DataType::Integer.physical_type(),
+        DataType::Integer.physical_type(),
+        common_type.physical_type(),
+    );
+
+    assert!(
+        expression
+            .evaluate(&[
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 1),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(3), 1),
+            ])
+            .is_err()
+    );
+    assert!(
+        expression
+            .evaluate(&[ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1)])
+            .is_err()
+    );
+
+    let strings: ArrayImpl = StringArray::from_slice(&[Some("wrong")]).into();
+    assert!(
+        expression
+            .evaluate(&[
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
+                ColumnViewImpl::array(&strings),
+            ])
+            .is_err()
+    );
+
+    assert!(
+        expression
+            .evaluate(&[
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 2),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 3),
+            ])
+            .is_err()
     );
 }

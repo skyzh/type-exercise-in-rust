@@ -1,22 +1,23 @@
 # Chapter 5: Make Numeric Evaluation Generic
 
 The type family now earns its cost: one binary adapter can evaluate four arithmetic operations
-across every supported, lossless promotion row.
+and six numeric comparisons across every supported, lossless promotion row.
 
 **Prerequisites:** Chapters 1–4 and integer/float edge cases.
 
 **By the end of this chapter, you will:**
 
 - select a common numeric output from one ordered promotion table;
-- run `+`, `-`, `*`, and `/` through the same checked binary path; and
-- report row-attributed division failures without evaluating strict null rows.
+- run `+`, `-`, `*`, and `/` through the same checked binary path;
+- compare numbers with `<`, `<=`, `>`, `>=`, `=`, and `!=` on the same promoted family; and
+- fail closed on division and comparison errors without evaluating strict null rows.
 
 ```console
 cargo x copy-test --chapter 5
 cargo test -p type-exercise-starter chapter_5 --locked
 ```
 
-The first run should fail on the promotion table and generic arithmetic catalog.
+The first run should fail on the promotion table and generic arithmetic/comparison catalog.
 
 ## Make promotion explicit
 
@@ -39,26 +40,38 @@ division scale need a separate contract before Decimal arithmetic is safe to tea
 
 - **Target:** `type-exercise-starter/src/operators.rs::{ArithmeticOperator, CheckedBinaryExpression,
   build_numeric_binary_expression}`.
-- **Change:** dispatch once to the promoted output scalar and evaluate all four operations.
+- **Change:** dispatch once to the promoted output scalar and evaluate all four operations; the
+  builder returns one checked shell per promoted family, evaluated with the Chapter 4 typed loop.
 - **Preserve:** signed `+`, `-`, and `*` wrap explicitly. Integer division by zero and `MIN / -1`
-  return `ScalarError`; `±0.0` divisors return division-by-zero, while other IEEE NaN/infinity
-  results propagate.
+  return a checked scalar error; `±0.0` divisors return division-by-zero, while other IEEE
+  NaN/infinity results propagate.
 - **Run:** the focused and cumulative tests.
 - **Passing means:** operation semantics and output families agree for arrays and repeated values.
 
-The first failing non-null row becomes
-`ExpressionError::ScalarEvaluation { function, row, error }`. If any strict input is null, the row
-is null and the scalar operation is not called; `null / 0` is therefore null, not an error.
+If any strict input is null, the row is null and the scalar operation is not called; `null / 0` is
+therefore null, not an error. The batch evaluator returns an `Err` on the first failing non-null
+row without producing partial output; the row-attributed error shape is chosen in Chapter 6.
 
-The numeric builder chooses one typed shell from the promotion result. Logical function names and
-the registry do not enter this path yet; Chapter 8 will bind them after Chapter 7 establishes the
+## Checkpoint 3: compare through the same promotion table
+
+- **Target:** `type-exercise-starter/src/operators.rs::{ComparisonOperator, build_numeric_comparison_expression}`.
+- **Change:** promote both operands with the same lossless table used by arithmetic, then evaluate
+  all six operators as one checked binary shell producing `Boolean` rows.
+- **Preserve:** ordered comparisons with NaN are false, `=` is false, and `!=` is true; null rows
+  stay null and never call the scalar comparison.
+- **Run:** the focused and cumulative tests.
+- **Passing means:** operand order, operator names, NaN behavior, and output families agree with
+  the promotion table and the Chapter 4 null contract.
+
+The numeric builders choose one typed shell from the promotion result. Logical function names and
+the registry do not enter this path yet; Chapter 9 will bind them after Chapter 8 establishes the
 runtime boundary.
 
 ## Required and extension work
 
-The pinned matrix and all four operations are required. Decimal arithmetic, narrowing casts, and
-precision-losing implicit casts are extensions only after their semantics are specified. Do not
-broaden the table merely to make more Rust conversions compile.
+The pinned matrix, all four operations, and all six comparisons are required. Decimal arithmetic,
+narrowing casts, and precision-losing implicit casts are extensions only after their semantics are
+specified. Do not broaden the table merely to make more Rust conversions compile.
 
 ```console
 cargo test -p type-exercise-starter chapter_5 --locked
