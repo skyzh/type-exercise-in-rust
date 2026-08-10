@@ -14,7 +14,7 @@ kernel rather than a peer adapter that performs representation selection. Fallba
 cases use the general typed-view loop. The harness checks identical outputs before timing.
 
 The four dense cases cover array/array, array/constant, constant/array, and constant/constant.
-Three fallback cases cover a nullable array, a null constant, and a dictionary. Dictionary keys
+Three fallback cases cover a nullable array, a null constant, and an Indexed view. Its indices
 are constructed and validated before the timed loop, so setup work is not mistaken for expression
 evaluation. Criterion uses 20 samples, a 250 ms warm-up, and a 750 ms measurement period per
 implementation. Results are machine-specific observations, not portable pass/fail thresholds.

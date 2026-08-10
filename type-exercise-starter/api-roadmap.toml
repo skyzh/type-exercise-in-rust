@@ -84,8 +84,8 @@ materialized = true
 day = 3
 title = "Checked column representations and typed views"
 file = "src/column.rs"
-items = ["ColumnViewImpl", "ColumnViewImpl::array", "ColumnViewImpl::constant", "ColumnViewImpl::null", "ColumnViewImpl::dictionary", "ColumnView", "ColumnView::get", "ColumnView::len", "TryFrom<ColumnViewImpl> for ColumnView"]
-declarations = ["pub struct ColumnViewImpl", "pub fn array(", "pub fn constant(", "pub fn null(", "pub fn dictionary(", "pub struct ColumnView", "pub fn get(", "pub fn len(", "impl<'a, S> TryFrom<ColumnViewImpl<'a>> for ColumnView<'a, S>"]
+items = ["ColumnViewImpl", "ColumnViewImpl::array", "ColumnViewImpl::constant", "ColumnViewImpl::null", "ColumnViewImpl::indexed", "InvalidIndex", "ColumnView", "ColumnView::get", "ColumnView::len", "TryFrom<ColumnViewImpl> for ColumnView"]
+declarations = ["pub struct ColumnViewImpl", "pub fn array(", "pub fn constant(", "pub fn null(", "pub fn indexed(", "pub struct InvalidIndex", "pub struct ColumnView", "pub fn get(", "pub fn len(", "impl<'a, S> TryFrom<ColumnViewImpl<'a>> for ColumnView<'a, S>"]
 materialized = false
 
 [[target]]

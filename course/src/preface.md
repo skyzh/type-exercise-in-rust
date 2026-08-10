@@ -27,7 +27,7 @@ The map has three reading directions:
 1. `DataType` tells the planner what a value means; `PhysicalType` selects storage.
 2. `Scalar`, `ScalarRef`, `Array`, and `ArrayBuilder` form one compile-time family, while erased
    enums cross runtime boundaries through checked conversions.
-3. `ColumnViewImpl` normalizes array, constant, dictionary, and typed-null encodings before one
+3. `ColumnViewImpl` normalizes array, constant, Indexed, and typed-null representations before one
    selected typed expression enters its row loop.
 
 Nullability is value state—`Option` or validity—not a `DataType::Nullable` variant. A one-level

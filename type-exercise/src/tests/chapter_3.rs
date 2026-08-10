@@ -1,10 +1,10 @@
 use crate::{
     Array, ArrayImpl, BoolArray, ColumnView, ColumnViewImpl, F64Array, I16Array, I32Array,
-    InvalidDictionaryKey, PhysicalType, ScalarRefImpl, StringArray, TypeMismatch,
+    InvalidIndex, PhysicalType, ScalarRefImpl, StringArray, TypeMismatch,
 };
 
 #[test]
-fn reads_arrays_constants_and_dictionaries_as_logical_rows() {
+fn reads_arrays_constants_and_indexed_views_as_logical_rows() {
     let array: ArrayImpl = I32Array::from_slice(&[Some(10), None, Some(30)]).into();
     let array_view = ColumnView::<i32>::try_from(ColumnViewImpl::array(&array)).unwrap();
     assert_eq!(array_view.len(), 3);
@@ -22,31 +22,31 @@ fn reads_arrays_constants_and_dictionaries_as_logical_rows() {
     );
 
     let values: ArrayImpl = StringArray::from_slice(&[Some("red"), None, Some("green")]).into();
-    let keys = [Some(2), None, Some(1), Some(0)];
-    let dictionary =
-        ColumnView::<String>::try_from(ColumnViewImpl::dictionary(&keys, &values).unwrap())
+    let indices = [Some(2), None, Some(1), Some(0), Some(2)];
+    let indexed =
+        ColumnView::<String>::try_from(ColumnViewImpl::indexed(&indices, &values).unwrap())
             .unwrap();
     assert_eq!(
-        (0..dictionary.len())
-            .map(|row| dictionary.get(row))
+        (0..indexed.len())
+            .map(|row| indexed.get(row))
             .collect::<Vec<_>>(),
-        vec![Some("green"), None, None, Some("red")]
+        vec![Some("green"), None, None, Some("red"), Some("green")]
     );
 }
 
 #[test]
-fn reads_expanded_families_through_array_constant_and_dictionary_views() {
+fn reads_expanded_families_through_array_constant_and_indexed_views() {
     let doubles: ArrayImpl = F64Array::from_slice(&[Some(-0.0), None, Some(f64::INFINITY)]).into();
-    let double_keys = [Some(2), Some(0), None];
-    let double_dictionary =
-        ColumnView::<f64>::try_from(ColumnViewImpl::dictionary(&double_keys, &doubles).unwrap())
+    let double_indices = [Some(2), Some(0), None];
+    let double_indexed =
+        ColumnView::<f64>::try_from(ColumnViewImpl::indexed(&double_indices, &doubles).unwrap())
             .unwrap();
-    assert_eq!(double_dictionary.get(0), Some(f64::INFINITY));
+    assert_eq!(double_indexed.get(0), Some(f64::INFINITY));
     assert_eq!(
-        double_dictionary.get(1).unwrap().to_bits(),
+        double_indexed.get(1).unwrap().to_bits(),
         (-0.0_f64).to_bits()
     );
-    assert_eq!(double_dictionary.get(2), None);
+    assert_eq!(double_indexed.get(2), None);
 
     let boolean =
         ColumnView::<bool>::try_from(ColumnViewImpl::constant(ScalarRefImpl::Bool(true), 2))
@@ -80,30 +80,30 @@ fn preserves_the_type_and_length_of_null_and_empty_views() {
     assert_eq!(empty.physical_type(), PhysicalType::Int32);
 
     let values: ArrayImpl = I32Array::from_slice(&[Some(1)]).into();
-    let no_keys: [Option<usize>; 0] = [];
-    let dictionary = ColumnViewImpl::dictionary(&no_keys, &values).unwrap();
-    assert!(dictionary.is_empty());
+    let no_indices: [Option<usize>; 0] = [];
+    let indexed = ColumnViewImpl::indexed(&no_indices, &values).unwrap();
+    assert!(indexed.is_empty());
 }
 
 #[test]
-fn rejects_every_invalid_dictionary_key_with_a_precise_error() {
+fn rejects_every_invalid_index_with_a_precise_error() {
     let values: ArrayImpl = I32Array::from_slice(&[Some(1)]).into();
     assert_eq!(
-        ColumnViewImpl::dictionary(&[Some(0), Some(1)], &values),
-        Err(InvalidDictionaryKey {
+        ColumnViewImpl::indexed(&[Some(0), Some(1)], &values),
+        Err(InvalidIndex {
             row: 1,
-            key: 1,
-            dictionary_len: 1,
+            index: 1,
+            values_len: 1,
         })
     );
 
     let empty_values: ArrayImpl = I32Array::from_slice(&[]).into();
     assert_eq!(
-        ColumnViewImpl::dictionary(&[Some(0)], &empty_values),
-        Err(InvalidDictionaryKey {
+        ColumnViewImpl::indexed(&[Some(0)], &empty_values),
+        Err(InvalidIndex {
             row: 0,
-            key: 0,
-            dictionary_len: 0,
+            index: 0,
+            values_len: 0,
         })
     );
 }
@@ -126,4 +126,16 @@ fn rejects_a_physical_type_mismatch_before_reading_rows() {
             actual: PhysicalType::Int32,
         }
     );
+}
+
+#[test]
+fn course_name_is_indexed_and_dictionary_is_only_the_industry_comparison() {
+    let chapter = include_str!("../../../course/src/chapter-3-column-views.md");
+    let (lesson, comparison) = chapter.split_once("## Test your understanding").unwrap();
+    assert!(!lesson.to_ascii_lowercase().contains("dictionary"));
+    assert!(lesson.contains("ColumnViewImpl::{array, constant, null, indexed}"));
+    assert!(comparison.contains("DictionaryArray<K>"));
+    assert!(comparison.contains("ArrayRef"));
+    assert!(comparison.contains("ColumnarValue"));
+    assert!(comparison.contains("persistable, interchangeable dictionary encoding"));
 }

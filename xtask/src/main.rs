@@ -450,6 +450,34 @@ fn validate_reference_declaration_shapes(root: &Path, manifest: &ApiManifest) ->
     validate_reference_declaration_parity(manifest, &list_source, &binder_source)
 }
 
+fn validate_indexed_view_source(source: &str) -> Result<()> {
+    for required in [
+        "pub struct InvalidIndex",
+        "pub fn indexed(",
+        "ColumnViewImplKind::Indexed",
+        "ListColumnViewKind::Indexed",
+        "ColumnViewKind::Indexed",
+        "values_len: usize",
+    ] {
+        if !source.contains(required) {
+            bail!("Indexed column-view source is missing `{required}`");
+        }
+    }
+    for stale in [
+        "InvalidDictionaryKey",
+        "pub fn dictionary(",
+        "ColumnViewImplKind::Dictionary",
+        "ListColumnViewKind::Dictionary",
+        "ColumnViewKind::Dictionary",
+        "dictionary_len",
+    ] {
+        if source.contains(stale) {
+            bail!("Indexed column-view source retains stale symbol `{stale}`");
+        }
+    }
+    Ok(())
+}
+
 fn check_starter_api(root: &Path) -> Result<()> {
     let starter = root.join("type-exercise-starter");
     let manifest_path = starter.join("api-roadmap.toml");
@@ -518,6 +546,8 @@ fn check_starter_api(root: &Path) -> Result<()> {
     let decimal_storage =
         fs::read_to_string(root.join("type-exercise/src/array/decimal_array.rs"))?;
     validate_decimal_storage_source(&decimal_storage)?;
+    let column_source = fs::read_to_string(root.join("type-exercise/src/column.rs"))?;
+    validate_indexed_view_source(&column_source)?;
     validate_reference_declaration_shapes(root, &manifest)?;
 
     println!("starter API roadmap matches cumulative Days 1-2 and reserves Days 3-13");
@@ -544,8 +574,9 @@ mod tests {
 
     use super::{
         ApiManifest, check_starter_api, copy_test, validate_decimal_storage_source,
-        validate_manifest_against_approved, validate_reference_declaration_parity,
-        validate_reference_declaration_sources, workspace_root,
+        validate_indexed_view_source, validate_manifest_against_approved,
+        validate_reference_declaration_parity, validate_reference_declaration_sources,
+        workspace_root,
     };
 
     fn fixture() -> TempDir {
@@ -794,6 +825,31 @@ pub struct DecimalArrayBuilder {
         let mutated = format!("{decoys}{mutated}");
         assert_eq!(mutated.matches("_row_types").count(), 6);
         assert!(validate_decimal_storage_source(&mutated).is_err());
+    }
+
+    #[test]
+    fn indexed_view_guard_rejects_every_old_dictionary_symbol() {
+        let root = workspace_root().unwrap();
+        let source = fs::read_to_string(root.join("type-exercise/src/column.rs")).unwrap();
+        validate_indexed_view_source(&source).unwrap();
+
+        for (current, stale) in [
+            ("pub fn indexed(", "pub fn dictionary("),
+            (
+                "ColumnViewImplKind::Indexed",
+                "ColumnViewImplKind::Dictionary",
+            ),
+            (
+                "ListColumnViewKind::Indexed",
+                "ListColumnViewKind::Dictionary",
+            ),
+            ("ColumnViewKind::Indexed", "ColumnViewKind::Dictionary"),
+            ("InvalidIndex", "InvalidDictionaryKey"),
+            ("values_len", "dictionary_len"),
+        ] {
+            let mutated = source.replacen(current, stale, 1);
+            assert!(validate_indexed_view_source(&mutated).is_err(), "{stale}");
+        }
     }
 
     #[test]
