@@ -11,3 +11,4 @@
 - [Make Arity Systematic](./chapter-6-systematic-arity.md)
 - [Implement Three-Valued Boolean Logic](./chapter-7-boolean-logic.md)
 - [Erase Typed Expressions at Runtime](./chapter-8-runtime-erasure.md)
+- [Bind and Coerce Logical Calls](./chapter-9-binding-coercion.md)

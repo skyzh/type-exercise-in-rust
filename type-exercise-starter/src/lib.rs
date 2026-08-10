@@ -38,6 +38,7 @@ mod variant_catalog;
 // };
 // Day 9, checkpoint 1: uncomment after implementing the binder and registry.
 // mod binder;
+// pub use binder::{BindError, BoundExpression, FunctionRegistry};
 
 #[cfg(test)]
 mod tests;
