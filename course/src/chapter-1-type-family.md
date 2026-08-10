@@ -20,9 +20,9 @@ cargo x copy-test --chapter 1
 cargo test -p type-exercise-starter chapter_1 --locked
 ```
 
-The untouched starter compiles because it declares the Day 1 target shapes, but the focused test
-should fail at the Day 1 `todo!` boundary. It should not fail on an unresolved target. Do not edit
-the copied test.
+The untouched starter compiles. Follow the `Day 1, checkpoint ...` comments beside the declarations
+in the named starter files; the focused test should then fail at the corresponding `todo!` boundary
+until you implement it. Do not edit the copied test.
 
 The family you are building has reciprocal arrows:
 
@@ -76,7 +76,8 @@ null or empty row repeats an offset. Both arrays store row validity in the packe
 - **Target:** `From`/`TryFrom` implementations in `type-exercise-starter/src/scalar.rs` and
   `type-exercise-starter/src/array.rs`, plus exports in `type-exercise-starter/src/lib.rs`.
 - **Change:** upcast typed values into erased enums and recover the requested type.
-- **Preserve:** wrong variants return `TypeMismatch { expected, actual }`; they do not panic.
+- **Preserve:** wrong variants return `Err`; they do not panic. The starter's readable
+  `TypeMismatch` is available, but copied tests do not require a particular field layout or message.
 - **Run:** the focused and cumulative starter tests.
 - **Passing means:** correct variants round-trip and wrong variants fail at the boundary.
 

@@ -2,6 +2,12 @@ mod decimal_array;
 mod primitive_array;
 mod string_array;
 
+// Day 11, checkpoints 1–2: uncomment after implementing `array/list_array.rs`.
+// mod list_array;
+// pub use list_array::{ListArray, ListError, ListScalar, ListScalarRef};
+// Day 12, checkpoint 1: uncomment when replacing `Array::iter` with the private iterator.
+// mod iterator;
+
 pub use decimal_array::{DecimalArray, DecimalArrayBuilder};
 pub use primitive_array::{
     BoolArray, BoolArrayBuilder, F32Array, F32ArrayBuilder, F64Array, F64ArrayBuilder, I16Array,
@@ -14,7 +20,7 @@ use std::fmt::Debug;
 
 use crate::{PhysicalType, Scalar, ScalarRef, ScalarRefImpl, TypeMismatch};
 
-/// Day 1 target: one nullable physical value family.
+/// Day 1, checkpoint 2: implement one nullable physical value family.
 pub trait Array:
     Debug + Clone + Sized + TryFrom<ArrayImpl, Error = TypeMismatch> + Into<ArrayImpl>
 where
@@ -28,6 +34,8 @@ where
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
+    /// Day 12, checkpoint 1: replace this adapter with the private iterator from
+    /// `array/iterator.rs` while preserving this opaque return signature.
     fn iter<'a>(&'a self) -> impl Iterator<Item = Option<Self::RefItem<'a>>> + 'a {
         (0..self.len()).map(|row| self.get(row))
     }
@@ -36,7 +44,7 @@ where
     }
 }
 
-/// Day 1 target: append-only construction for one static family.
+/// Day 1, checkpoint 2: implement append-only construction for one static family.
 pub trait ArrayBuilder: Sized {
     type Array: Array<Builder = Self>;
     fn with_capacity(capacity: usize) -> Self;
@@ -44,7 +52,9 @@ pub trait ArrayBuilder: Sized {
     fn finish(self) -> Self::Array;
 }
 
-/// Days 1–2 target: runtime-erased array variants.
+/// Day 1, checkpoint 3: implement runtime erasure for Int32 and String.
+/// Day 2, checkpoints 1–4: extend the same enum and conversions with the remaining scalar rows.
+/// Day 11, checkpoint 3: extend this enum with `// List(ListArray),` and add checked List erasure.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ArrayImpl {
     Int16(I16Array),

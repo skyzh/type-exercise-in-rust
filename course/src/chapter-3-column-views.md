@@ -12,23 +12,26 @@ interface.
 - preserve null rows without materializing another array; and
 - reject every invalid index before a view becomes usable.
 
-Create `type-exercise-starter/src/column.rs` for the Day 3 declarations and implementation. Then
-register the module and expose its public API from `type-exercise-starter/src/lib.rs`:
+Open the existing Day 3 skeleton in `type-exercise-starter/src/column.rs`. Follow its checkpoint
+comments, uncomment the declarations you are implementing, then uncomment the matching module and
+public export in `type-exercise-starter/src/lib.rs`:
 
 ```rust,ignore
 mod column;
-pub use column::{ColumnView, ColumnViewImpl, InvalidIndex};
+pub use column::{ColumnView, ColumnViewImpl};
 ```
 
-Keep the three public types in `column.rs`; this module wiring lets the copied test import them from
-the starter crate root.
+Keep the public views in `column.rs`; this module wiring lets the copied test import them from the
+starter crate root.
 
 ```console
 cargo x copy-test --chapter 3
 cargo test -p type-exercise-starter chapter_3 --locked
 ```
 
-The first run should fail on the missing column constructors and typed view.
+The first run should fail on the still-commented column constructors and typed view. After you
+uncomment their skeletons, it should reach your missing implementation rather than any tool-driven
+source rewrite.
 
 ## Representation and logical rows
 
@@ -60,8 +63,9 @@ separate nullable scalar family.
 - **Run:** the Chapter 3 focused test.
 - **Passing means:** all four representations expose the expected row count and physical type.
 
-Validate every non-null index in the constructor. Report its logical row, index, and values length
-in `InvalidIndex`; do not wait for a later `get` to panic.
+Validate every non-null index in the constructor and return `Err` before exposing a usable view; do
+not wait for a later `get` to panic. Choose a readable error representation, but the supplied tests
+do not require a particular public error type, field layout, or display text.
 
 ## Checkpoint 2: recover one typed view
 

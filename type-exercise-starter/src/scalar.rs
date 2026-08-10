@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use crate::{Array, Decimal, DecimalError, PhysicalType, TypeMismatch};
 
-/// Day 1 target: connect an owned scalar to its borrowed and array forms.
+/// Day 1, checkpoint 1: connect an owned scalar to its borrowed and array forms.
 pub trait Scalar:
     Debug + Clone + TryFrom<ScalarImpl, Error = TypeMismatch> + Into<ScalarImpl>
 where
@@ -14,7 +14,7 @@ where
     fn as_scalar_ref(&self) -> Self::RefType<'_>;
 }
 
-/// Day 1 target: describe the copyable value borrowed from a scalar or array.
+/// Day 1, checkpoint 1: describe the copyable value borrowed from a scalar or array.
 pub trait ScalarRef<'a>:
     Debug + Copy + 'a + TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch> + Into<ScalarRefImpl<'a>>
 {
@@ -23,7 +23,9 @@ pub trait ScalarRef<'a>:
     fn to_owned_scalar(self) -> Self::ScalarType;
 }
 
-/// Days 1–2 target: the runtime-owned scalar variants.
+/// Day 1, checkpoints 1 and 3: implement Int32/String ownership and erasure.
+/// Day 2, checkpoints 1–4: add the remaining scalar families and Decimal.
+/// Day 11, checkpoint 1: extend this enum with `// List(ListScalar),`.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ScalarImpl {
     Int16(i16),
@@ -36,7 +38,9 @@ pub enum ScalarImpl {
     Decimal(Decimal),
 }
 
-/// Days 1–2 target: the runtime-borrowed scalar variants.
+/// Day 1, checkpoints 1 and 3: implement borrowed Int32/String ownership and erasure.
+/// Day 2, checkpoints 1–4: add the remaining scalar families and Decimal.
+/// Day 11, checkpoint 1: extend this enum with `// List(ListScalarRef<'a>),`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ScalarRefImpl<'a> {
     Int16(i16),

@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 
 use crate::PhysicalType;
 
-/// Day 2 target: one checked precision/scale descriptor shared by a column.
+/// Day 2, checkpoint 4: implement one checked precision/scale descriptor shared by a column.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct DecimalType {
     precision: u8,
@@ -23,7 +23,7 @@ impl DecimalType {
     }
 }
 
-/// Day 2 target: a transient typed scalar, never the per-row array storage.
+/// Day 2, checkpoint 4: implement a transient typed scalar, never per-row array metadata.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Decimal {
     unscaled: i128,
@@ -43,6 +43,7 @@ impl Decimal {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Day 2, checkpoint 4: return readable errors for invalid Decimal metadata and rows.
 pub enum DecimalError {
     InvalidPrecision {
         precision: u8,

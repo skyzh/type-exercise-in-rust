@@ -4,13 +4,15 @@ use bitvec::vec::BitVec;
 
 use crate::{Array, ArrayBuilder};
 
-/// Days 1–2 target: flat fixed-width values plus packed validity.
+/// Day 1, checkpoint 2: implement flat Int32 values plus packed validity.
+/// Day 2, checkpoint 1: generalize the same layout to the remaining primitive families.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PrimitiveArray<T> {
     marker: PhantomData<T>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
+/// Day 1, checkpoint 2: implement append-only primitive construction.
 pub struct PrimitiveArrayBuilder<T> {
     marker: PhantomData<T>,
 }
