@@ -35,6 +35,7 @@ jobs:
           cargo x copy-test --chapter 4
           cargo x copy-test --chapter 5
           cargo x copy-test --chapter 6
+          cargo x copy-test --chapter 7
           git diff --exit-code -- type-exercise-starter/src ":(exclude)type-exercise-starter/src/tests.rs" ":(exclude)type-exercise-starter/src/tests/**"
       - name: Test course
         run: mdbook test course

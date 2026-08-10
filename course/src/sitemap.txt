@@ -5,5 +5,6 @@ https://skyzh.github.io/type-exercise-in-rust/chapter-3-column-views
 https://skyzh.github.io/type-exercise-in-rust/chapter-4-concrete-loops
 https://skyzh.github.io/type-exercise-in-rust/chapter-5-generic-arithmetic
 https://skyzh.github.io/type-exercise-in-rust/chapter-6-systematic-arity
+https://skyzh.github.io/type-exercise-in-rust/chapter-7-boolean-logic
 https://skyzh.github.io/type-exercise-in-rust/preface
 https://skyzh.github.io/type-exercise-in-rust/setup

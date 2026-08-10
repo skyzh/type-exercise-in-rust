@@ -28,6 +28,10 @@ mod variant_catalog;
 // pub use operators::validate_expression_inputs;
 // Day 7, checkpoint 1: uncomment after implementing three-valued Boolean logic.
 // mod boolean_logic;
+// pub use boolean_logic::{
+//     BOOLEAN_TRUTH_TABLE, BooleanExpression, BooleanOperator, BooleanTruthRow,
+//     NullEvaluationPolicy, build_boolean_expression,
+// };
 // Day 9, checkpoint 1: uncomment after implementing the binder and registry.
 // mod binder;
 
