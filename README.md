@@ -24,7 +24,7 @@ The book's `SUMMARY.md` is the sole ordered chapter list.
 - Preserve the same results and errors through one representative fast path and a batch-level
   asynchronous adapter.
 
-The course deliberately stops short of Decimal arithmetic and precision enforcement, implicit
+The course deliberately stops short of Decimal arithmetic, casts, and rounding, implicit
 narrowing or lossy casts, nested or list-producing functions, concrete four- and five-input
 builtins, exhaustive fast paths, an aggregate engine, and per-row futures.
 

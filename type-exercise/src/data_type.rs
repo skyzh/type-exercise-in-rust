@@ -1,4 +1,4 @@
-use crate::PhysicalType;
+use crate::{DecimalError, DecimalType, PhysicalType};
 
 /// A planner-visible type that maps to one physical scalar and array family.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -11,7 +11,7 @@ pub enum DataType {
     Double,
     Varchar,
     Char { width: u16 },
-    Decimal { scale: u16, precision: u16 },
+    Decimal(DecimalType),
     List(Box<DataType>),
 }
 
@@ -25,7 +25,7 @@ impl DataType {
             Self::Real => PhysicalType::Float32,
             Self::Double => PhysicalType::Float64,
             Self::Varchar | Self::Char { .. } => PhysicalType::String,
-            Self::Decimal { .. } => PhysicalType::Decimal,
+            Self::Decimal(decimal_type) => PhysicalType::Decimal(*decimal_type),
             Self::List(element_type) => PhysicalType::List(Box::new(element_type.physical_type())),
         }
     }
@@ -42,7 +42,11 @@ impl DataType {
                 | Self::BigInt
                 | Self::Real
                 | Self::Double
-                | Self::Decimal { .. }
+                | Self::Decimal(_)
         )
+    }
+
+    pub fn decimal(precision: u8, scale: u8) -> Result<Self, DecimalError> {
+        DecimalType::try_new(precision, scale).map(Self::Decimal)
     }
 }

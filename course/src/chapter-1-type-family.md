@@ -20,7 +20,9 @@ cargo x copy-test --chapter 1
 cargo test -p type-exercise-starter chapter_1 --locked
 ```
 
-The untouched starter should fail because it has only `ScalarImpl`. Do not edit the copied test.
+The untouched starter compiles because it declares the Day 1 target shapes, but the focused test
+should fail at the Day 1 `todo!` boundary. It should not fail on an unresolved target. Do not edit
+the copied test.
 
 The family you are building has reciprocal arrows:
 
@@ -92,5 +94,6 @@ cargo test -p type-exercise-starter --lib --locked
 Before continuing, explain why `StringArray::get` needs a lifetime-indexed associated type and why
 an erased downcast is fallible even when the compile-time family is consistent.
 
+Next: [Chapter 2 scales the family without copying every connection](./chapter-2-type-catalog.md).
 
 {{#include copyright.md}}

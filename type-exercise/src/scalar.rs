@@ -1,7 +1,9 @@
 use std::fmt::Debug;
 
 use crate::variant_catalog::for_each_physical_family;
-use crate::{Array, Decimal, ListError, ListScalar, ListScalarRef, PhysicalType, TypeMismatch};
+use crate::{
+    Array, Decimal, DecimalError, ListError, ListScalar, ListScalarRef, PhysicalType, TypeMismatch,
+};
 
 /// An owned scalar and its associated borrowed value and array representation.
 pub trait Scalar:
@@ -27,6 +29,32 @@ pub trait ScalarRef<'a>:
     fn to_owned_scalar(self) -> Self::ScalarType;
 }
 
+macro_rules! erased_scalar_physical_type {
+    (copy, $variant:ident, $value:ident) => {{
+        let _ = $value;
+        PhysicalType::$variant
+    }};
+    (borrowed, $variant:ident, $value:ident) => {{
+        let _ = $value;
+        PhysicalType::$variant
+    }};
+    (decimal, $variant:ident, $value:ident) => {
+        PhysicalType::Decimal($value.decimal_type())
+    };
+}
+
+macro_rules! erased_scalar_to_owned {
+    (copy, $variant:ident, $value:ident) => {
+        ScalarImpl::$variant($value.to_owned_scalar())
+    };
+    (borrowed, $variant:ident, $value:ident) => {
+        ScalarImpl::$variant($value.to_owned_scalar())
+    };
+    (decimal, $variant:ident, $value:ident) => {
+        ScalarImpl::$variant($value)
+    };
+}
+
 macro_rules! define_scalar_erasure {
     ($( { $kind:ident, $variant:ident, $array:ident, $builder:ident, $owned:ty, $borrowed:ty } ),+ $(,)?) => {
         /// An owned scalar whose concrete type is known only at runtime.
@@ -39,7 +67,7 @@ macro_rules! define_scalar_erasure {
         impl ScalarImpl {
             pub fn physical_type(&self) -> PhysicalType {
                 match self {
-                    $(Self::$variant(_) => PhysicalType::$variant),+,
+                    $(Self::$variant(value) => erased_scalar_physical_type!($kind, $variant, value)),+,
                     Self::List(value) => PhysicalType::List(Box::new(value.element_type())),
                 }
             }
@@ -55,14 +83,14 @@ macro_rules! define_scalar_erasure {
         impl ScalarRefImpl<'_> {
             pub fn physical_type(&self) -> PhysicalType {
                 match self {
-                    $(Self::$variant(_) => PhysicalType::$variant),+,
+                    $(Self::$variant(value) => erased_scalar_physical_type!($kind, $variant, value)),+,
                     Self::List(value) => PhysicalType::List(Box::new(value.element_type())),
                 }
             }
 
             pub fn to_owned_scalar(self) -> ScalarImpl {
                 match self {
-                    $(Self::$variant(value) => ScalarImpl::$variant(value.to_owned_scalar())),+,
+                    $(Self::$variant(value) => erased_scalar_to_owned!($kind, $variant, value)),+,
                     Self::List(value) => ScalarImpl::List(
                         value
                             .to_owned_scalar()
@@ -199,9 +227,78 @@ macro_rules! define_scalar_family {
             }
         }
     };
+    (decimal, $variant:ident, $array:ident, $owned:ty, $borrowed:ty) => {
+        impl From<Decimal> for ScalarImpl {
+            fn from(value: Decimal) -> Self {
+                Self::$variant(value)
+            }
+        }
+
+        impl TryFrom<ScalarImpl> for Decimal {
+            type Error = DecimalError;
+
+            fn try_from(value: ScalarImpl) -> Result<Self, Self::Error> {
+                match value {
+                    ScalarImpl::$variant(value) => Ok(value),
+                    other => Err(DecimalError::ExpectedDecimal {
+                        actual: other.physical_type(),
+                    }),
+                }
+            }
+        }
+
+        impl<'a> From<Decimal> for ScalarRefImpl<'a> {
+            fn from(value: Decimal) -> Self {
+                Self::$variant(value)
+            }
+        }
+
+        impl TryFrom<ScalarRefImpl<'_>> for Decimal {
+            type Error = DecimalError;
+
+            fn try_from(value: ScalarRefImpl<'_>) -> Result<Self, Self::Error> {
+                match value {
+                    ScalarRefImpl::$variant(value) => Ok(value),
+                    other => Err(DecimalError::ExpectedDecimal {
+                        actual: other.physical_type(),
+                    }),
+                }
+            }
+        }
+    };
 }
 
 for_each_physical_family!(define_scalar_erasure);
+
+impl ScalarImpl {
+    pub fn try_decimal(&self, expected: crate::DecimalType) -> Result<Decimal, DecimalError> {
+        match self {
+            Self::Decimal(value) if value.decimal_type() == expected => Ok(*value),
+            Self::Decimal(value) => Err(DecimalError::MetadataMismatch {
+                expected,
+                actual: value.decimal_type(),
+            }),
+            other => Err(DecimalError::ExpectedDecimal {
+                actual: other.physical_type(),
+            }),
+        }
+    }
+}
+
+impl ScalarRefImpl<'_> {
+    pub fn try_decimal(self, expected: crate::DecimalType) -> Result<Decimal, DecimalError> {
+        match self {
+            Self::Decimal(value) if value.decimal_type() == expected => Ok(value),
+            Self::Decimal(value) => Err(DecimalError::MetadataMismatch {
+                expected,
+                actual: value.decimal_type(),
+            }),
+            other => Err(DecimalError::ExpectedDecimal {
+                actual: other.physical_type(),
+            }),
+        }
+    }
+}
 
 impl From<ListScalar> for ScalarImpl {
     fn from(value: ListScalar) -> Self {

@@ -1,5 +1,5 @@
 use crate::variant_catalog::for_each_physical_family;
-use crate::{Array, ArrayBuilder, Decimal};
+use crate::{Array, ArrayBuilder};
 use bitvec::vec::BitVec;
 
 /// A compact teaching representation for nullable fixed-width values.
@@ -36,6 +36,7 @@ macro_rules! define_primitive_alias {
         pub type $builder = PrimitiveArrayBuilder<$owned>;
     };
     (borrowed, $array:ident, $builder:ident, $owned:ty) => {};
+    (decimal, $array:ident, $builder:ident, $owned:ty) => {};
 }
 
 for_each_physical_family!(define_primitive_aliases);
@@ -131,6 +132,7 @@ macro_rules! implement_primitive_family {
         }
     };
     (borrowed, $array:ident, $builder:ident, $owned:ty) => {};
+    (decimal, $array:ident, $builder:ident, $owned:ty) => {};
 }
 
 for_each_physical_family!(implement_primitive_families);

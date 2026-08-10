@@ -10,10 +10,14 @@ These instructions apply to work inside `type-exercise-starter/`.
 
 ## Starter and tests
 
-- The untouched starter must remain a compiling crate whose only implemented data model is `ScalarImpl::{Int32, String}`.
+- The untouched starter must remain a compiling crate with solution-free declaration scaffolds for
+  the cumulative Days 1–2 targets. Their `todo!` bodies are intentional learner work; later APIs
+  stay documentation-only in `API_ROADMAP.md` until their chapter lands.
 - Implement chapter work under `src/`, but do not modify `src/tests.rs` or files under `src/tests/`; those are supplied checks managed by `cargo x copy-test`.
 - Preserve the public names and behavior required by the copied tests. Do not weaken, skip, delete, or rewrite tests to make an implementation pass.
-- Keep the implementation in safe Rust and do not add dependencies, macros, generated code, expression APIs, or scalar variants before the chapter that introduces them.
+- Keep the implementation in safe Rust. Preserve only the dependencies, family-catalog macro,
+  scalar variants, and generated declaration shapes already introduced by the current cumulative
+  chapter; do not materialize future expression, binder, List, or async APIs from the roadmap.
 
 ## Working protocol
 

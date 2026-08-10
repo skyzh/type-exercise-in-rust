@@ -423,3 +423,40 @@ fn bind_concat(left: DataType, right: DataType) -> Result<BoundExpression, BindE
         DataType::Varchar,
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{BindError, FunctionRegistry};
+    use crate::DataType;
+
+    #[test]
+    fn decimal_storage_does_not_enable_operators_or_cast_like_coercion() {
+        let decimal = DataType::decimal(8, 2).unwrap();
+        let registry = FunctionRegistry::with_builtins();
+
+        for (name, inputs) in [
+            ("+", vec![decimal.clone(), decimal.clone()]),
+            ("-", vec![decimal.clone(), DataType::Integer]),
+            ("*", vec![DataType::Integer, decimal.clone()]),
+            ("/", vec![decimal.clone(), decimal.clone()]),
+            ("neg", vec![decimal.clone()]),
+            (
+                "clamp",
+                vec![decimal.clone(), decimal.clone(), decimal.clone()],
+            ),
+            ("<", vec![decimal.clone(), decimal.clone()]),
+            ("<=", vec![decimal.clone(), decimal.clone()]),
+            (">", vec![decimal.clone(), decimal.clone()]),
+            (">=", vec![decimal.clone(), decimal.clone()]),
+            ("=", vec![decimal.clone(), decimal.clone()]),
+            ("!=", vec![decimal.clone(), decimal.clone()]),
+            ("contains", vec![decimal.clone(), DataType::Varchar]),
+            ("concat", vec![DataType::Varchar, decimal.clone()]),
+        ] {
+            assert!(matches!(
+                registry.bind(name, &inputs),
+                Err(BindError::UnsupportedArguments { .. })
+            ));
+        }
+    }
+}

@@ -1,4 +1,5 @@
 https://skyzh.github.io/type-exercise-in-rust
 https://skyzh.github.io/type-exercise-in-rust/chapter-1-type-family
+https://skyzh.github.io/type-exercise-in-rust/chapter-2-type-catalog
 https://skyzh.github.io/type-exercise-in-rust/preface
 https://skyzh.github.io/type-exercise-in-rust/setup

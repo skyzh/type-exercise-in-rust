@@ -1,35 +1,77 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
-use crate::variant_catalog::for_each_physical_family;
+use crate::DecimalType;
 
-macro_rules! define_physical_types {
-    ($( { $kind:ident, $variant:ident, $array:ident, $builder:ident, $owned:ty, $borrowed:ty } ),+ $(,)?) => {
-        /// The physical representation selected at a runtime boundary.
-        #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-        pub enum PhysicalType {
-            $($variant),+,
-            List(Box<PhysicalType>),
-        }
-
-        /// A catalog row used to audit the single physical-family definition.
-        #[derive(Clone, Debug, Eq, PartialEq)]
-        pub struct PhysicalFamily {
-            pub physical_type: PhysicalType,
-            pub name: &'static str,
-        }
-
-        /// Every supported non-List physical family, in catalog order.
-        pub const PHYSICAL_FAMILY_CATALOG: &[PhysicalFamily] = &[
-            $(PhysicalFamily {
-                physical_type: PhysicalType::$variant,
-                name: stringify!($variant),
-            }),+
-        ];
-    };
+/// The exact physical representation selected at a runtime boundary.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum PhysicalType {
+    Int16,
+    Int32,
+    Int64,
+    Bool,
+    Float32,
+    Float64,
+    String,
+    Decimal(DecimalType),
+    List(Box<PhysicalType>),
 }
 
-for_each_physical_family!(define_physical_types);
+/// A descriptor-free family tag used only for catalog completeness.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum PhysicalFamily {
+    Int16,
+    Int32,
+    Int64,
+    Bool,
+    Float32,
+    Float64,
+    String,
+    Decimal,
+}
+
+/// One catalog row used to audit the single physical-family definition.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PhysicalFamilyEntry {
+    pub family: PhysicalFamily,
+    pub name: &'static str,
+}
+
+/// Every supported non-List physical family, in catalog order.
+pub const PHYSICAL_FAMILY_CATALOG: &[PhysicalFamilyEntry] = &[
+    PhysicalFamilyEntry {
+        family: PhysicalFamily::Int16,
+        name: "Int16",
+    },
+    PhysicalFamilyEntry {
+        family: PhysicalFamily::Int32,
+        name: "Int32",
+    },
+    PhysicalFamilyEntry {
+        family: PhysicalFamily::Int64,
+        name: "Int64",
+    },
+    PhysicalFamilyEntry {
+        family: PhysicalFamily::Bool,
+        name: "Bool",
+    },
+    PhysicalFamilyEntry {
+        family: PhysicalFamily::Float32,
+        name: "Float32",
+    },
+    PhysicalFamilyEntry {
+        family: PhysicalFamily::Float64,
+        name: "Float64",
+    },
+    PhysicalFamilyEntry {
+        family: PhysicalFamily::String,
+        name: "String",
+    },
+    PhysicalFamilyEntry {
+        family: PhysicalFamily::Decimal,
+        name: "Decimal",
+    },
+];
 
 /// A checked erased-to-typed conversion found the wrong physical representation.
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -1,21 +1,25 @@
+mod decimal_array;
 mod iterator;
 mod list_array;
 mod primitive_array;
 mod string_array;
 
+pub use decimal_array::{DecimalArray, DecimalArrayBuilder};
 use iterator::ArrayIterator;
 pub use list_array::{ListArray, ListError, ListScalar, ListScalarRef};
 pub use primitive_array::{
-    BoolArray, BoolArrayBuilder, DecimalArray, DecimalArrayBuilder, F32Array, F32ArrayBuilder,
-    F64Array, F64ArrayBuilder, I16Array, I16ArrayBuilder, I32Array, I32ArrayBuilder, I64Array,
-    I64ArrayBuilder, NonNullPrimitiveArray, PrimitiveArray, PrimitiveArrayBuilder,
+    BoolArray, BoolArrayBuilder, F32Array, F32ArrayBuilder, F64Array, F64ArrayBuilder, I16Array,
+    I16ArrayBuilder, I32Array, I32ArrayBuilder, I64Array, I64ArrayBuilder, NonNullPrimitiveArray,
+    PrimitiveArray, PrimitiveArrayBuilder,
 };
 pub use string_array::{StringArray, StringArrayBuilder};
 
 use std::fmt::Debug;
 
 use crate::variant_catalog::for_each_physical_family;
-use crate::{Decimal, PhysicalType, Scalar, ScalarImpl, ScalarRef, ScalarRefImpl, TypeMismatch};
+use crate::{
+    DecimalError, PhysicalType, Scalar, ScalarImpl, ScalarRef, ScalarRefImpl, TypeMismatch,
+};
 
 macro_rules! build_array_family_from_scalars {
     ($values:expr, $variant:ident, $array:ident, $owned:ty) => {{
@@ -29,6 +33,38 @@ macro_rules! build_array_family_from_scalars {
             .collect::<Vec<_>>();
         Ok(Self::$variant($array::from_slice(&borrowed)))
     }};
+}
+
+macro_rules! erased_array_physical_type {
+    (copy, $variant:ident, $array:ident) => {{
+        let _ = $array;
+        PhysicalType::$variant
+    }};
+    (borrowed, $variant:ident, $array:ident) => {{
+        let _ = $array;
+        PhysicalType::$variant
+    }};
+    (decimal, $variant:ident, $array:ident) => {
+        PhysicalType::Decimal($array.decimal_type())
+    };
+}
+
+macro_rules! erased_array_slice {
+    (copy, $variant:ident, $array_type:ident, $array:ident, $start:ident, $end:ident) => {{
+        let values = ($start..$end)
+            .map(|row| $array.get(row))
+            .collect::<Vec<_>>();
+        Ok(Self::$variant($array_type::from_slice(&values)))
+    }};
+    (borrowed, $variant:ident, $array_type:ident, $array:ident, $start:ident, $end:ident) => {{
+        let values = ($start..$end)
+            .map(|row| $array.get(row))
+            .collect::<Vec<_>>();
+        Ok(Self::$variant($array_type::from_slice(&values)))
+    }};
+    (decimal, $variant:ident, $array_type:ident, $array:ident, $start:ident, $end:ident) => {
+        Ok(Self::$variant($array.try_slice($start, $end)?))
+    };
 }
 
 /// A nullable collection of one physical value type.
@@ -87,7 +123,7 @@ macro_rules! define_array_erasure {
         impl ArrayImpl {
             pub fn physical_type(&self) -> PhysicalType {
                 match self {
-                    $(Self::$variant(_) => PhysicalType::$variant),+,
+                    $(Self::$variant(array) => erased_array_physical_type!($kind, $variant, array)),+,
                     Self::List(array) => PhysicalType::List(Box::new(array.element_type())),
                 }
             }
@@ -126,10 +162,7 @@ macro_rules! define_array_erasure {
                     });
                 }
                 match self {
-                    $(Self::$variant(array) => {
-                        let values = (start..end).map(|row| array.get(row)).collect::<Vec<_>>();
-                        Ok(Self::$variant($array::from_slice(&values)))
-                    }),+,
+                    $(Self::$variant(array) => erased_array_slice!($kind, $variant, $array, array, start, end)),+,
                     Self::List(_) => Err(ListError::NestedList),
                 }
             }
@@ -146,18 +179,38 @@ macro_rules! define_array_erasure {
                     PhysicalType::Float32 => build_array_family_from_scalars!(values, Float32, F32Array, f32),
                     PhysicalType::Float64 => build_array_family_from_scalars!(values, Float64, F64Array, f64),
                     PhysicalType::String => build_array_family_from_scalars!(values, String, StringArray, String),
-                    PhysicalType::Decimal => build_array_family_from_scalars!(values, Decimal, DecimalArray, Decimal),
+                    PhysicalType::Decimal(decimal_type) => {
+                        let typed = values
+                            .into_iter()
+                            .map(|value| match value {
+                                Some(ScalarImpl::Decimal(value))
+                                    if value.decimal_type() == *decimal_type => Ok(Some(value)),
+                                Some(ScalarImpl::Decimal(value)) => {
+                                    Err(DecimalError::MetadataMismatch {
+                                        expected: *decimal_type,
+                                        actual: value.decimal_type(),
+                                    }.into())
+                                }
+                                Some(other) => Err(TypeMismatch {
+                                    expected: PhysicalType::Decimal(*decimal_type),
+                                    actual: other.physical_type(),
+                                }.into()),
+                                None => Ok(None),
+                            })
+                            .collect::<Result<Vec<_>, ListError>>()?;
+                        Ok(Self::Decimal(DecimalArray::try_from_slice(*decimal_type, &typed)?))
+                    },
                     PhysicalType::List(_) => Err(ListError::NestedList),
                 }
             }
         }
 
-        $(define_array_family!($variant, $array);)+
+        $(define_array_family!($kind, $variant, $array);)+
     };
 }
 
 macro_rules! define_array_family {
-    ($variant:ident, $array:ident) => {
+    (copy, $variant:ident, $array:ident) => {
         impl From<$array> for ArrayImpl {
             fn from(array: $array) -> Self {
                 Self::$variant(array)
@@ -192,9 +245,60 @@ macro_rules! define_array_family {
             }
         }
     };
+    (borrowed, $variant:ident, $array:ident) => {
+        define_array_family!(copy, $variant, $array);
+    };
+    (decimal, $variant:ident, $array:ident) => {
+        impl From<$array> for ArrayImpl {
+            fn from(array: $array) -> Self {
+                Self::$variant(array)
+            }
+        }
+
+        impl TryFrom<ArrayImpl> for $array {
+            type Error = DecimalError;
+
+            fn try_from(array: ArrayImpl) -> Result<Self, Self::Error> {
+                match array {
+                    ArrayImpl::$variant(array) => Ok(array),
+                    other => Err(DecimalError::ExpectedDecimal {
+                        actual: other.physical_type(),
+                    }),
+                }
+            }
+        }
+
+        impl<'a> TryFrom<&'a ArrayImpl> for &'a $array {
+            type Error = DecimalError;
+
+            fn try_from(array: &'a ArrayImpl) -> Result<Self, Self::Error> {
+                match array {
+                    ArrayImpl::$variant(array) => Ok(array),
+                    other => Err(DecimalError::ExpectedDecimal {
+                        actual: other.physical_type(),
+                    }),
+                }
+            }
+        }
+    };
 }
 
 for_each_physical_family!(define_array_erasure);
+
+impl ArrayImpl {
+    pub fn try_decimal(&self, expected: crate::DecimalType) -> Result<&DecimalArray, DecimalError> {
+        match self {
+            Self::Decimal(array) if array.decimal_type() == expected => Ok(array),
+            Self::Decimal(array) => Err(DecimalError::MetadataMismatch {
+                expected,
+                actual: array.decimal_type(),
+            }),
+            other => Err(DecimalError::ExpectedDecimal {
+                actual: other.physical_type(),
+            }),
+        }
+    }
+}
 
 impl From<ListArray> for ArrayImpl {
     fn from(array: ListArray) -> Self {
