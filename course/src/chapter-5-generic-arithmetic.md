@@ -31,10 +31,22 @@ division scale need a separate contract before Decimal arithmetic is safe to tea
 ## Checkpoint 1: pin the promotion matrix
 
 - **Target:** `type-exercise-starter/src/promotion.rs::{NumericPromotion, NUMERIC_PROMOTIONS, promote_numeric}`.
-- **Change:** return one common logical output for every approved ordered pair.
+- **Change:** return one common logical output for every approved ordered pair; the table and
+  lookup work on logical `DataType`, and the physical family is derived with
+  `DataType::physical_type()`.
 - **Preserve:** unsupported and lossy pairs return `None`; duplicated or substituted rows fail.
 - **Run:** the Chapter 5 focused test.
 - **Passing means:** output type selection is symmetric where intended and explicit everywhere.
+
+Wire the module like Chapter 4 did:
+
+```rust,ignore
+mod promotion;
+pub use promotion::{NUMERIC_PROMOTIONS, NumericPromotion, promote_numeric};
+```
+
+Keep the public items in `promotion.rs`; this module wiring lets the copied test import them from
+the starter crate root.
 
 ## Checkpoint 2: implement generic arithmetic kernels
 

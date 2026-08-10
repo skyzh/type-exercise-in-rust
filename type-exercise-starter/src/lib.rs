@@ -20,6 +20,7 @@ mod variant_catalog;
 // };
 // Day 5, checkpoint 1: uncomment after implementing numeric promotion.
 // mod promotion;
+// pub use promotion::{NUMERIC_PROMOTIONS, NumericPromotion, promote_numeric};
 // Day 7, checkpoint 1: uncomment after implementing three-valued Boolean logic.
 // mod boolean_logic;
 // Day 9, checkpoint 1: uncomment after implementing the binder and registry.
