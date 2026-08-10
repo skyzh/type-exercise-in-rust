@@ -23,6 +23,7 @@
 // pub enum ComparisonOperator { /* ordered comparisons */ }
 // pub(crate) fn build_numeric_binary_expression(/* operator and types */) -> /* expression */;
 // pub(crate) fn build_numeric_comparison_expression(/* operator and types */) -> /* expression */;
+// pub(crate) fn build_numeric_neg_expression(/* input type */) -> /* expression */;
 //
 //! Day 6, checkpoint 1: share arity, physical-type, and length validation here.
 // pub fn validate_expression_inputs(/* expected types and inputs */) -> Result<usize, ExpressionError>;

@@ -90,5 +90,6 @@ cargo test -p type-exercise-starter chapter_5 --locked
 cargo test -p type-exercise-starter --lib --locked
 ```
 
+Next: [Chapter 6 proves that arity is systematic with a real ternary function](./chapter-6-systematic-arity.md).
 
 {{#include copyright.md}}
