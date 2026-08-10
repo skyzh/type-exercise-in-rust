@@ -517,6 +517,60 @@ fn is_result_self_invalid_index(output: &syn::ReturnType) -> bool {
         && is_simple_type(error, "InvalidIndex")
 }
 
+fn documentation_only(attributes: &[syn::Attribute]) -> bool {
+    attributes
+        .iter()
+        .all(|attribute| attribute.path().is_ident("doc"))
+}
+
+fn is_column_glob_reexport(item: &syn::ItemUse) -> bool {
+    if !matches!(item.vis, syn::Visibility::Public(_)) || !documentation_only(&item.attrs) {
+        return false;
+    }
+    let syn::UseTree::Path(column) = &item.tree else {
+        return false;
+    };
+    column.ident == "column" && matches!(column.tree.as_ref(), syn::UseTree::Glob(_))
+}
+
+fn validate_type_exercise_root_source(source: &str) -> Result<()> {
+    let syntax = syn::parse_file(source).context("failed to parse the reference crate root")?;
+    if syntax
+        .items
+        .iter()
+        .any(|item| matches!(item, syn::Item::Macro(_)))
+    {
+        bail!("the guarded crate root must not use item macros for modules or re-exports");
+    }
+
+    let mut column_modules = syntax.items.iter().filter_map(|item| match item {
+        syn::Item::Mod(module) if module.ident == "column" => Some(module),
+        _ => None,
+    });
+    let module = column_modules
+        .next()
+        .context("the crate root must declare exactly one external `mod column;`")?;
+    if column_modules.next().is_some()
+        || module.content.is_some()
+        || !matches!(module.vis, syn::Visibility::Inherited)
+        || !documentation_only(&module.attrs)
+    {
+        bail!("`mod column;` must be unique, private, external, and unconditional");
+    }
+
+    let mut reexports = syntax.items.iter().filter_map(|item| match item {
+        syn::Item::Use(item) if is_column_glob_reexport(item) => Some(item),
+        _ => None,
+    });
+    reexports
+        .next()
+        .context("the crate root must unconditionally expose `pub use column::*;`")?;
+    if reexports.next().is_some() {
+        bail!("the crate root must contain exactly one `pub use column::*;`");
+    }
+    Ok(())
+}
+
 #[derive(Default)]
 struct InvalidIndexReturnVisitor {
     count: usize,
@@ -569,7 +623,15 @@ fn validate_invalid_index_relationships(syntax: &syn::File) -> Result<()> {
         }
     }
 
-    let mut methods = syntax
+    if syntax
+        .items
+        .iter()
+        .any(|item| matches!(item, syn::Item::Macro(_)))
+    {
+        bail!("Indexed column-view source must not use item macros");
+    }
+
+    let implementations = syntax
         .items
         .iter()
         .filter_map(|item| {
@@ -579,6 +641,21 @@ fn validate_invalid_index_relationships(syntax: &syn::File) -> Result<()> {
             let self_matches = is_type_named(item.self_ty.as_ref(), "ColumnViewImpl");
             (item.trait_.is_none() && self_matches).then_some(item)
         })
+        .collect::<Vec<_>>();
+    if implementations.iter().any(|implementation| {
+        !documentation_only(&implementation.attrs)
+            || implementation
+                .items
+                .iter()
+                .any(|item| matches!(item, syn::ImplItem::Macro(_)))
+    }) {
+        bail!(
+            "ColumnViewImpl inherent implementations must be unconditional and contain no impl-item macros"
+        );
+    }
+
+    let mut methods = implementations
+        .iter()
         .flat_map(|implementation| implementation.items.iter())
         .filter_map(|item| match item {
             syn::ImplItem::Fn(method) if method.sig.ident == "indexed" => Some(method),
@@ -589,6 +666,7 @@ fn validate_invalid_index_relationships(syntax: &syn::File) -> Result<()> {
         .context("ColumnViewImpl must define one public indexed method")?;
     if methods.next().is_some()
         || !matches!(method.vis, syn::Visibility::Public(_))
+        || !documentation_only(&method.attrs)
         || !is_result_self_invalid_index(&method.sig.output)
     {
         bail!(
@@ -704,6 +782,8 @@ fn check_starter_api(root: &Path) -> Result<()> {
     validate_decimal_storage_source(&decimal_storage)?;
     let column_source = fs::read_to_string(root.join("type-exercise/src/column.rs"))?;
     validate_indexed_view_source(&column_source)?;
+    let crate_root_source = fs::read_to_string(root.join("type-exercise/src/lib.rs"))?;
+    validate_type_exercise_root_source(&crate_root_source)?;
     validate_reference_declaration_shapes(root, &manifest)?;
 
     println!("starter API roadmap matches cumulative Days 1-2 and reserves Days 3-13");
@@ -733,7 +813,7 @@ mod tests {
         validate_indexed_view_source, validate_invalid_index_relationships,
         validate_invalid_index_struct, validate_manifest_against_approved,
         validate_reference_declaration_parity, validate_reference_declaration_sources,
-        workspace_root,
+        validate_type_exercise_root_source, workspace_root,
     };
 
     fn fixture() -> TempDir {
@@ -1065,6 +1145,110 @@ pub struct DecimalArrayBuilder {
             .unwrap();
         assert!(validate_invalid_index_relationships(&redirected_syntax).is_err());
         assert!(validate_indexed_view_source(&redirected_source).is_err());
+
+        let macro_definition = r#"macro_rules! alternate_indexed {
+    () => {
+        pub fn indexed(
+            indices: &'a [Option<usize>],
+            values: &'a ArrayImpl,
+        ) -> Result<Self, IndexedViewError> {
+            if let Some((row, index)) = indices
+                .iter()
+                .copied()
+                .enumerate()
+                .filter_map(|(row, index)| index.map(|index| (row, index)))
+                .find(|(_, index)| *index >= values.len())
+            {
+                return Err(IndexedViewError {
+                    row,
+                    key: index,
+                    values_len: values.len(),
+                });
+            }
+            Ok(Self {
+                kind: ColumnViewImplKind::Indexed { indices, values },
+            })
+        }
+    };
+}
+
+"#;
+        let cfg_macro_bypass = redirected_source
+            .replacen(
+                "impl<'a> ColumnViewImpl<'a> {",
+                &format!("{macro_definition}impl<'a> ColumnViewImpl<'a> {{"),
+                1,
+            )
+            .replacen(
+                "    pub fn indexed(",
+                "    #[cfg(any())]\n    pub fn indexed(",
+                1,
+            )
+            .replacen(
+                "    pub fn len(&self) -> usize {",
+                "    alternate_indexed!();\n\n    pub fn len(&self) -> usize {",
+                1,
+            );
+        syn::parse_file(&cfg_macro_bypass).unwrap();
+        assert!(cfg_macro_bypass.contains("#[cfg(any())]"));
+        assert!(cfg_macro_bypass.contains("alternate_indexed!();"));
+        assert!(validate_indexed_view_source(&cfg_macro_bypass).is_err());
+    }
+
+    #[test]
+    fn indexed_view_guard_rejects_conditional_impls_and_macro_items() {
+        let root = workspace_root().unwrap();
+        let source = fs::read_to_string(root.join("type-exercise/src/column.rs")).unwrap();
+        validate_indexed_view_source(&source).unwrap();
+
+        let method_cfg = source.replacen(
+            "    pub fn indexed(",
+            "    #[cfg(any())]\n    pub fn indexed(",
+            1,
+        );
+        assert!(validate_indexed_view_source(&method_cfg).is_err());
+
+        let impl_cfg = source.replacen(
+            "impl<'a> ColumnViewImpl<'a> {",
+            "#[cfg(any())]\nimpl<'a> ColumnViewImpl<'a> {",
+            1,
+        );
+        assert!(validate_indexed_view_source(&impl_cfg).is_err());
+
+        let impl_macro = source.replacen(
+            "    pub fn len(&self) -> usize {",
+            "    make_indexed!();\n\n    pub fn len(&self) -> usize {",
+            1,
+        );
+        syn::parse_file(&impl_macro).unwrap();
+        assert!(validate_indexed_view_source(&impl_macro).is_err());
+
+        let item_macro = format!("macro_rules! make_indexed {{ () => {{}}; }}\n{source}");
+        syn::parse_file(&item_macro).unwrap();
+        assert!(validate_indexed_view_source(&item_macro).is_err());
+    }
+
+    #[test]
+    fn crate_root_guard_binds_the_external_column_module_and_reexport() {
+        let root = workspace_root().unwrap();
+        let source = fs::read_to_string(root.join("type-exercise/src/lib.rs")).unwrap();
+        validate_type_exercise_root_source(&source).unwrap();
+
+        for mutated in [
+            source.replacen("mod column;", "#[cfg(any())]\nmod column;", 1),
+            source.replacen("mod column;", "#[path = \"alternate.rs\"]\nmod column;", 1),
+            source.replacen("mod column;", "mod column {}", 1),
+            source.replacen("pub use column::*;", "#[cfg(any())]\npub use column::*;", 1),
+            source.replacen("pub use column::*;", "pub use array::*;", 1),
+            source.replacen(
+                "pub use column::*;",
+                "macro_rules! expose_column { () => { pub use column::*; }; }\nexpose_column!();",
+                1,
+            ),
+        ] {
+            syn::parse_file(&mutated).unwrap();
+            assert!(validate_type_exercise_root_source(&mutated).is_err());
+        }
     }
 
     #[test]
