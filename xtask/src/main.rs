@@ -276,6 +276,15 @@ fn is_simple_type(ty: &syn::Type, name: &str) -> bool {
     )
 }
 
+fn is_type_named(ty: &syn::Type, name: &str) -> bool {
+    matches!(
+        ty,
+        syn::Type::Path(path)
+            if path.qself.is_none()
+                && path.path.segments.last().is_some_and(|segment| segment.ident == name)
+    )
+}
+
 fn is_vec_of(ty: &syn::Type, element: &str) -> bool {
     let syn::Type::Path(path) = ty else {
         return false;
@@ -480,9 +489,125 @@ fn validate_invalid_index_struct(item: &syn::ItemStruct) -> Result<()> {
     Ok(())
 }
 
+fn is_result_self_invalid_index(output: &syn::ReturnType) -> bool {
+    let syn::ReturnType::Type(_, ty) = output else {
+        return false;
+    };
+    let syn::Type::Path(path) = ty.as_ref() else {
+        return false;
+    };
+    let Some(result) = path.path.segments.last() else {
+        return false;
+    };
+    if path.qself.is_some() || result.ident != "Result" {
+        return false;
+    }
+    let syn::PathArguments::AngleBracketed(arguments) = &result.arguments else {
+        return false;
+    };
+    let mut arguments = arguments.args.iter();
+    let Some(syn::GenericArgument::Type(success)) = arguments.next() else {
+        return false;
+    };
+    let Some(syn::GenericArgument::Type(error)) = arguments.next() else {
+        return false;
+    };
+    arguments.next().is_none()
+        && is_simple_type(success, "Self")
+        && is_simple_type(error, "InvalidIndex")
+}
+
+#[derive(Default)]
+struct InvalidIndexReturnVisitor {
+    count: usize,
+}
+
+impl<'ast> syn::visit::Visit<'ast> for InvalidIndexReturnVisitor {
+    fn visit_expr_return(&mut self, expression: &'ast syn::ExprReturn) {
+        let returns_invalid_index = expression.expr.as_deref().is_some_and(|returned| {
+            let syn::Expr::Call(call) = returned else {
+                return false;
+            };
+            let syn::Expr::Path(function) = call.func.as_ref() else {
+                return false;
+            };
+            function.qself.is_none()
+                && function.path.is_ident("Err")
+                && call.args.len() == 1
+                && matches!(
+                    call.args.first(),
+                    Some(syn::Expr::Struct(error))
+                        if error.qself.is_none() && error.path.is_ident("InvalidIndex")
+                )
+        });
+        if returns_invalid_index {
+            self.count += 1;
+        }
+        syn::visit::visit_expr_return(self, expression);
+    }
+}
+
+fn validate_invalid_index_relationships(syntax: &syn::File) -> Result<()> {
+    for trait_name in ["Display", "Error"] {
+        let mut implementations = syntax.items.iter().filter_map(|item| {
+            let syn::Item::Impl(item) = item else {
+                return None;
+            };
+            let trait_matches = item
+                .trait_
+                .as_ref()
+                .and_then(|(_, path, _)| path.segments.last())
+                .is_some_and(|segment| segment.ident == trait_name);
+            let self_matches = is_simple_type(item.self_ty.as_ref(), "InvalidIndex");
+            (trait_matches && self_matches).then_some(item)
+        });
+        implementations
+            .next()
+            .with_context(|| format!("InvalidIndex must implement {trait_name}"))?;
+        if implementations.next().is_some() {
+            bail!("InvalidIndex has multiple {trait_name} implementations");
+        }
+    }
+
+    let mut methods = syntax
+        .items
+        .iter()
+        .filter_map(|item| {
+            let syn::Item::Impl(item) = item else {
+                return None;
+            };
+            let self_matches = is_type_named(item.self_ty.as_ref(), "ColumnViewImpl");
+            (item.trait_.is_none() && self_matches).then_some(item)
+        })
+        .flat_map(|implementation| implementation.items.iter())
+        .filter_map(|item| match item {
+            syn::ImplItem::Fn(method) if method.sig.ident == "indexed" => Some(method),
+            _ => None,
+        });
+    let method = methods
+        .next()
+        .context("ColumnViewImpl must define one public indexed method")?;
+    if methods.next().is_some()
+        || !matches!(method.vis, syn::Visibility::Public(_))
+        || !is_result_self_invalid_index(&method.sig.output)
+    {
+        bail!(
+            "ColumnViewImpl::indexed must remain one public method returning Result<Self, InvalidIndex>"
+        );
+    }
+
+    let mut returns = InvalidIndexReturnVisitor::default();
+    syn::visit::Visit::visit_block(&mut returns, &method.block);
+    if returns.count != 1 {
+        bail!("ColumnViewImpl::indexed must return InvalidIndex on its live error path");
+    }
+    Ok(())
+}
+
 fn validate_indexed_view_source(source: &str) -> Result<()> {
     let syntax = syn::parse_file(source).context("failed to parse Indexed column-view source")?;
     validate_invalid_index_struct(unique_struct(&syntax, "InvalidIndex")?)?;
+    validate_invalid_index_relationships(&syntax)?;
     for required in [
         "pub fn indexed(",
         "ColumnViewImplKind::Indexed",
@@ -604,8 +729,9 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{
-        ApiManifest, check_starter_api, copy_test, validate_decimal_storage_source,
-        validate_indexed_view_source, validate_manifest_against_approved,
+        ApiManifest, check_starter_api, copy_test, unique_struct, validate_decimal_storage_source,
+        validate_indexed_view_source, validate_invalid_index_relationships,
+        validate_invalid_index_struct, validate_manifest_against_approved,
         validate_reference_declaration_parity, validate_reference_declaration_sources,
         workspace_root,
     };
@@ -859,7 +985,7 @@ pub struct DecimalArrayBuilder {
     }
 
     #[test]
-    fn indexed_view_guard_rejects_every_old_dictionary_symbol() {
+    fn indexed_view_guard_rejects_stale_symbols_and_error_redirects() {
         let root = workspace_root().unwrap();
         let source = fs::read_to_string(root.join("type-exercise/src/column.rs")).unwrap();
         let tests = fs::read_to_string(root.join("type-exercise/src/tests/chapter_3.rs")).unwrap();
@@ -896,6 +1022,49 @@ pub struct DecimalArrayBuilder {
         assert_eq!(mutated_tests.matches("            key:").count(), 2);
         assert!(!mutated_tests.contains("            index:"));
         assert!(validate_indexed_view_source(&mutated_source).is_err());
+
+        let redirected_source = source
+            .replacen(
+                "impl Display for InvalidIndex {",
+                "#[derive(Clone, Copy, Debug, Eq, PartialEq)]\n\
+                 pub struct IndexedViewError {\n\
+                     pub row: usize,\n\
+                     pub key: std::primitive::usize,\n\
+                     pub values_len: usize,\n\
+                 }\n\n\
+                 impl Display for IndexedViewError {",
+                1,
+            )
+            .replacen("self.index", "self.key", 1)
+            .replacen(
+                "impl Error for InvalidIndex {}",
+                "impl Error for IndexedViewError {}",
+                1,
+            )
+            .replacen(
+                "Result<Self, InvalidIndex>",
+                "Result<Self, IndexedViewError>",
+                1,
+            )
+            .replacen(
+                "return Err(InvalidIndex {",
+                "return Err(IndexedViewError {",
+                1,
+            )
+            .replacen("                index,", "                key: index,", 1);
+        let redirected_tests = tests
+            .replace("InvalidIndex", "IndexedViewError")
+            .replace("            index:", "            key:");
+        let redirected_syntax = syn::parse_file(&redirected_source).unwrap();
+        syn::parse_file(&redirected_tests).unwrap();
+        assert!(redirected_source.contains("pub struct InvalidIndex"));
+        assert!(redirected_source.contains("pub struct IndexedViewError"));
+        assert!(redirected_source.contains("Result<Self, IndexedViewError>"));
+        assert_eq!(redirected_tests.matches("IndexedViewError {").count(), 2);
+        validate_invalid_index_struct(unique_struct(&redirected_syntax, "InvalidIndex").unwrap())
+            .unwrap();
+        assert!(validate_invalid_index_relationships(&redirected_syntax).is_err());
+        assert!(validate_indexed_view_source(&redirected_source).is_err());
     }
 
     #[test]
