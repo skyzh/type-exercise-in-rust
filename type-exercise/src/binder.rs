@@ -13,6 +13,7 @@ use crate::{
 
 /// A checked failure while selecting one physical expression.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg(not(feature = "opaque-errors"))]
 pub enum BindError {
     UnknownFunction {
         name: String,
@@ -38,6 +39,95 @@ pub enum BindError {
     },
 }
 
+/// The opaque learner-layout variant used only by the compile-based
+/// compatibility fixture: no public variant can be named or matched, so any
+/// copied test that references the real layout fails to compile against it.
+#[cfg(feature = "opaque-errors")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum BindError {
+    #[doc(hidden)]
+    Hidden(String),
+}
+
+impl BindError {
+    #[cfg(not(feature = "opaque-errors"))]
+    pub(crate) fn unknown_function(name: String) -> Self {
+        Self::UnknownFunction { name }
+    }
+
+    #[cfg(feature = "opaque-errors")]
+    pub(crate) fn unknown_function(name: String) -> Self {
+        Self::Hidden(format!("unknown function `{name}`"))
+    }
+
+    #[cfg(not(feature = "opaque-errors"))]
+    pub(crate) fn arity_mismatch(name: String, expected: usize, actual: usize) -> Self {
+        Self::InputArityMismatch {
+            name,
+            expected,
+            actual,
+        }
+    }
+
+    #[cfg(feature = "opaque-errors")]
+    pub(crate) fn arity_mismatch(name: String, expected: usize, actual: usize) -> Self {
+        Self::Hidden(format!(
+            "function `{name}` expects {expected} arguments, got {actual}"
+        ))
+    }
+
+    #[cfg(not(feature = "opaque-errors"))]
+    pub(crate) fn unsupported(name: String, inputs: Vec<DataType>) -> Self {
+        Self::UnsupportedArguments { name, inputs }
+    }
+
+    #[cfg(feature = "opaque-errors")]
+    pub(crate) fn unsupported(name: String, inputs: Vec<DataType>) -> Self {
+        Self::Hidden(format!("function `{name}` does not support {inputs:?}"))
+    }
+
+    #[cfg(not(feature = "opaque-errors"))]
+    pub(crate) fn missing_physical(name: &'static str) -> Self {
+        Self::MissingPhysicalExpression { name }
+    }
+
+    #[cfg(feature = "opaque-errors")]
+    pub(crate) fn missing_physical(name: &'static str) -> Self {
+        Self::Hidden(format!("physical expression `{name}` is not registered"))
+    }
+
+    #[cfg(not(feature = "opaque-errors"))]
+    pub(crate) fn physical_mismatch(
+        name: &'static str,
+        expected_inputs: Vec<PhysicalType>,
+        actual_inputs: Vec<PhysicalType>,
+        expected_output: PhysicalType,
+        actual_output: PhysicalType,
+    ) -> Self {
+        Self::PhysicalSignatureMismatch {
+            name,
+            expected_inputs,
+            actual_inputs,
+            expected_output,
+            actual_output,
+        }
+    }
+
+    #[cfg(feature = "opaque-errors")]
+    pub(crate) fn physical_mismatch(
+        name: &'static str,
+        expected_inputs: Vec<PhysicalType>,
+        actual_inputs: Vec<PhysicalType>,
+        expected_output: PhysicalType,
+        actual_output: PhysicalType,
+    ) -> Self {
+        Self::Hidden(format!(
+            "physical signature mismatch for `{name}`: inputs {expected_inputs:?} -> {actual_inputs:?}, output {expected_output:?} -> {actual_output:?}"
+        ))
+    }
+}
+
+#[cfg(not(feature = "opaque-errors"))]
 impl Display for BindError {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -70,6 +160,19 @@ impl Display for BindError {
     }
 }
 
+#[cfg(not(feature = "opaque-errors"))]
+impl Error for BindError {}
+
+#[cfg(feature = "opaque-errors")]
+impl Display for BindError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Hidden(message) => formatter.write_str(message),
+        }
+    }
+}
+
+#[cfg(feature = "opaque-errors")]
 impl Error for BindError {}
 
 /// One runtime expression paired with its checked logical signature.
@@ -94,13 +197,13 @@ impl BoundExpression {
         let expected_output = output_type.physical_type();
         let actual_output = expression.output_type();
         if actual_inputs != expected_inputs || actual_output != expected_output {
-            return Err(BindError::PhysicalSignatureMismatch {
-                name: expression.name(),
+            return Err(BindError::physical_mismatch(
+                expression.name(),
                 expected_inputs,
                 actual_inputs,
                 expected_output,
                 actual_output,
-            });
+            ));
         }
 
         Ok(Self {
@@ -211,11 +314,11 @@ impl FunctionRegistry {
         let error_name = name.clone();
         self.register(name, move |inputs| {
             let [left, right] = inputs else {
-                return Err(BindError::InputArityMismatch {
-                    name: error_name.clone(),
-                    expected: 2,
-                    actual: inputs.len(),
-                });
+                return Err(BindError::arity_mismatch(
+                    error_name.clone(),
+                    2,
+                    inputs.len(),
+                ));
             };
             factory(left.clone(), right.clone())
         });
@@ -230,11 +333,11 @@ impl FunctionRegistry {
         let error_name = name.clone();
         self.register(name, move |inputs| {
             let [input] = inputs else {
-                return Err(BindError::InputArityMismatch {
-                    name: error_name.clone(),
-                    expected: 1,
-                    actual: inputs.len(),
-                });
+                return Err(BindError::arity_mismatch(
+                    error_name.clone(),
+                    1,
+                    inputs.len(),
+                ));
             };
             factory(input.clone())
         });
@@ -252,11 +355,11 @@ impl FunctionRegistry {
         let error_name = name.clone();
         self.register(name, move |inputs| {
             let [first, second, third] = inputs else {
-                return Err(BindError::InputArityMismatch {
-                    name: error_name.clone(),
-                    expected: 3,
-                    actual: inputs.len(),
-                });
+                return Err(BindError::arity_mismatch(
+                    error_name.clone(),
+                    3,
+                    inputs.len(),
+                ));
             };
             factory(first.clone(), second.clone(), third.clone())
         });
@@ -265,9 +368,7 @@ impl FunctionRegistry {
     pub fn bind(&self, name: &str, inputs: &[DataType]) -> Result<BoundExpression, BindError> {
         self.functions
             .get(name)
-            .ok_or_else(|| BindError::UnknownFunction {
-                name: name.to_owned(),
-            })?(inputs)
+            .ok_or_else(|| BindError::unknown_function(name.to_owned()))?(inputs)
     }
 
     /// Retain the original binary binding surface on top of the slice registry.
@@ -282,14 +383,11 @@ impl FunctionRegistry {
 }
 
 fn build_physical(name: &'static str) -> Result<Box<dyn Expression>, BindError> {
-    build_builtin_expression(name).ok_or(BindError::MissingPhysicalExpression { name })
+    build_builtin_expression(name).ok_or_else(|| BindError::missing_physical(name))
 }
 
 fn unsupported(name: &str, inputs: impl IntoIterator<Item = DataType>) -> BindError {
-    BindError::UnsupportedArguments {
-        name: name.to_owned(),
-        inputs: inputs.into_iter().collect(),
-    }
+    BindError::unsupported(name.to_owned(), inputs.into_iter().collect())
 }
 
 fn bind_arithmetic(
@@ -444,10 +542,10 @@ fn bind_contains(left: DataType, right: DataType) -> Result<BoundExpression, Bin
 
 fn bind_concat(left: DataType, right: DataType) -> Result<BoundExpression, BindError> {
     if !left.is_string() || !right.is_string() {
-        return Err(BindError::UnsupportedArguments {
-            name: "concat".to_owned(),
-            inputs: vec![left, right],
-        });
+        return Err(BindError::unsupported(
+            "concat".to_owned(),
+            vec![left, right],
+        ));
     }
     BoundExpression::new(
         build_physical("string_concat")?,
@@ -485,10 +583,13 @@ mod tests {
             ("contains", vec![decimal.clone(), DataType::Varchar]),
             ("concat", vec![DataType::Varchar, decimal.clone()]),
         ] {
+            #[cfg(not(feature = "opaque-errors"))]
             assert!(matches!(
                 registry.bind(name, &inputs),
                 Err(BindError::UnsupportedArguments { .. })
             ));
+            #[cfg(feature = "opaque-errors")]
+            assert!(registry.bind(name, &inputs).is_err());
         }
     }
 }
