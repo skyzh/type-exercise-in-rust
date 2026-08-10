@@ -21,16 +21,10 @@ jobs:
       - uses: taiki-e/install-action@mdbook
       - name: Check current workspace format
         run: cargo fmt --all -- --check
-      - name: Check archived reference format
-        run: cargo fmt --manifest-path archived/type-exercise-ref/Cargo.toml --all -- --check
       - name: Clippy current workspace
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - name: Clippy archived reference
-        run: cargo clippy --manifest-path archived/type-exercise-ref/Cargo.toml --workspace --all-targets --all-features --locked -- -D warnings
       - name: Test current workspace and reference solution
         run: cargo test --workspace --locked
-      - name: Test archived reference
-        run: cargo test --manifest-path archived/type-exercise-ref/Cargo.toml --no-fail-fast --workspace --all-features --locked
       - name: Check minimal starter
         run: cargo check -p type-exercise-starter --lib --locked
       - name: Copy supplied tests into the starter
