@@ -11,6 +11,7 @@
 //         values: &'a ArrayImpl,
 //     ) -> Result<Self, /* choose a useful error type */>;
 //     pub fn len(&self) -> usize;
+//     pub fn is_empty(&self) -> bool;
 //     pub fn physical_type(&self) -> PhysicalType;
 // }
 //
