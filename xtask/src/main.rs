@@ -252,40 +252,202 @@ fn validate_roadmap_against_approved(roadmap: &str) -> Result<()> {
     Ok(())
 }
 
-fn struct_fields<'a>(source: &'a str, name: &str) -> Result<Vec<&'a str>> {
-    let header = format!("pub struct {name} {{");
-    let body = source
-        .split_once(&header)
-        .map(|(_, rest)| rest)
-        .with_context(|| format!("Decimal storage source is missing `{header}`"))?;
-    let body = body
-        .split_once('}')
-        .map(|(fields, _)| fields)
-        .with_context(|| format!("Decimal storage source has no closing brace for `{name}`"))?;
-    Ok(body
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty() && !line.starts_with("//"))
-        .map(|line| line.strip_suffix(',').unwrap_or(line))
-        .collect())
+fn unique_struct<'a>(syntax: &'a syn::File, name: &str) -> Result<&'a syn::ItemStruct> {
+    let mut matches = syntax.items.iter().filter_map(|item| match item {
+        syn::Item::Struct(item) if item.ident == name => Some(item),
+        _ => None,
+    });
+    let item = matches
+        .next()
+        .with_context(|| format!("source is missing the real `{name}` struct item"))?;
+    if matches.next().is_some() {
+        bail!("source contains more than one real `{name}` struct item");
+    }
+    Ok(item)
+}
+
+fn is_simple_type(ty: &syn::Type, name: &str) -> bool {
+    matches!(
+        ty,
+        syn::Type::Path(path)
+            if path.qself.is_none()
+                && path.path.segments.len() == 1
+                && path.path.is_ident(name)
+    )
+}
+
+fn is_vec_of(ty: &syn::Type, element: &str) -> bool {
+    let syn::Type::Path(path) = ty else {
+        return false;
+    };
+    let Some(segment) = path.path.segments.first() else {
+        return false;
+    };
+    if path.qself.is_some() || path.path.segments.len() != 1 || segment.ident != "Vec" {
+        return false;
+    }
+    let syn::PathArguments::AngleBracketed(arguments) = &segment.arguments else {
+        return false;
+    };
+    let mut arguments = arguments.args.iter();
+    let Some(syn::GenericArgument::Type(ty)) = arguments.next() else {
+        return false;
+    };
+    arguments.next().is_none() && is_simple_type(ty, element)
+}
+
+fn validate_decimal_struct(item: &syn::ItemStruct, name: &str) -> Result<()> {
+    if !matches!(item.vis, syn::Visibility::Public(_)) || !item.generics.params.is_empty() {
+        bail!("{name} must remain one public, non-generic struct item");
+    }
+    let syn::Fields::Named(fields) = &item.fields else {
+        bail!("{name} must use named fields");
+    };
+    let fields = fields.named.iter().collect::<Vec<_>>();
+    let expected_names = ["values", "validity", "decimal_type", "null_count"];
+    if fields.len() != expected_names.len() {
+        bail!(
+            "{name} must contain exactly one flat i128 buffer, packed BitVec validity, one shared DecimalType, and the derived null count"
+        );
+    }
+    for (index, (field, expected_name)) in fields.iter().zip(expected_names).enumerate() {
+        let name_matches = field
+            .ident
+            .as_ref()
+            .is_some_and(|ident| ident == expected_name);
+        let type_matches = match index {
+            0 => is_vec_of(&field.ty, "i128"),
+            1 => is_simple_type(&field.ty, "BitVec"),
+            2 => is_simple_type(&field.ty, "DecimalType"),
+            3 => is_simple_type(&field.ty, "usize"),
+            _ => unreachable!(),
+        };
+        if !name_matches || !type_matches || !matches!(field.vis, syn::Visibility::Inherited) {
+            bail!("{name} has a noncanonical field at position {}", index + 1);
+        }
+    }
+    Ok(())
 }
 
 fn validate_decimal_storage_source(source: &str) -> Result<()> {
-    let expected = [
-        "values: Vec<i128>",
-        "validity: BitVec",
-        "decimal_type: DecimalType",
-        "null_count: usize",
-    ];
+    let syntax = syn::parse_file(source).context("failed to parse Decimal storage as Rust")?;
     for name in ["DecimalArray", "DecimalArrayBuilder"] {
-        let actual = struct_fields(source, name)?;
+        validate_decimal_struct(unique_struct(&syntax, name)?, name)?;
+    }
+    Ok(())
+}
+
+fn is_pub_crate(visibility: &syn::Visibility) -> bool {
+    matches!(
+        visibility,
+        syn::Visibility::Restricted(restricted)
+            if restricted.in_token.is_none() && restricted.path.is_ident("crate")
+    )
+}
+
+struct ReferenceDeclarationShapes {
+    list_builder: &'static str,
+    bound_evaluate_async: &'static str,
+}
+
+fn validate_reference_declaration_sources(
+    list_source: &str,
+    binder_source: &str,
+) -> Result<ReferenceDeclarationShapes> {
+    let list_syntax =
+        syn::parse_file(list_source).context("failed to parse the reference List source")?;
+    let builder = unique_struct(&list_syntax, "ListArrayBuilder")?;
+    if !is_pub_crate(&builder.vis) {
+        bail!("ListArrayBuilder must remain `pub(crate)` in the frozen reference source");
+    }
+
+    let binder_syntax =
+        syn::parse_file(binder_source).context("failed to parse the reference binder source")?;
+    let mut methods = binder_syntax.items.iter().filter_map(|item| {
+        let syn::Item::Impl(item) = item else {
+            return None;
+        };
+        let trait_matches = item
+            .trait_
+            .as_ref()
+            .and_then(|(_, path, _)| path.segments.last())
+            .is_some_and(|segment| segment.ident == "AsyncExpression");
+        let self_matches = matches!(
+            item.self_ty.as_ref(),
+            syn::Type::Path(path) if path.qself.is_none() && path.path.is_ident("BoundExpression")
+        );
+        (trait_matches && self_matches).then_some(item)
+    });
+    let implementation = methods
+        .next()
+        .context("missing `AsyncExpression for BoundExpression` implementation")?;
+    if methods.next().is_some() {
+        bail!("multiple `AsyncExpression for BoundExpression` implementations found");
+    }
+    let mut evaluate_async = implementation.items.iter().filter_map(|item| match item {
+        syn::ImplItem::Fn(method) if method.sig.ident == "evaluate_async" => Some(method),
+        _ => None,
+    });
+    let method = evaluate_async
+        .next()
+        .context("missing `BoundExpression::evaluate_async` trait method")?;
+    if evaluate_async.next().is_some() || !matches!(method.vis, syn::Visibility::Inherited) {
+        bail!("BoundExpression::evaluate_async must remain one non-public trait method");
+    }
+    Ok(ReferenceDeclarationShapes {
+        list_builder: "pub(crate) struct ListArrayBuilder",
+        bound_evaluate_async: "fn evaluate_async(",
+    })
+}
+
+fn declaration_for_item<'a>(manifest: &'a ApiManifest, item: &str) -> Result<&'a str> {
+    let mut matches = manifest.target.iter().flat_map(|target| {
+        target
+            .items
+            .iter()
+            .zip(&target.declarations)
+            .filter_map(|(candidate, declaration)| (candidate == item).then_some(declaration))
+    });
+    let declaration = matches
+        .next()
+        .with_context(|| format!("starter API roadmap is missing `{item}`"))?;
+    if matches.next().is_some() {
+        bail!("starter API roadmap contains duplicate `{item}` declarations");
+    }
+    Ok(declaration)
+}
+
+fn validate_reference_declaration_parity(
+    manifest: &ApiManifest,
+    list_source: &str,
+    binder_source: &str,
+) -> Result<()> {
+    let shapes = validate_reference_declaration_sources(list_source, binder_source)?;
+    for (item, actual, expected) in [
+        (
+            "ListArrayBuilder",
+            declaration_for_item(manifest, "ListArrayBuilder")?,
+            shapes.list_builder,
+        ),
+        (
+            "BoundExpression::evaluate_async",
+            declaration_for_item(manifest, "BoundExpression::evaluate_async")?,
+            shapes.bound_evaluate_async,
+        ),
+    ] {
         if actual != expected {
             bail!(
-                "{name} must contain exactly one flat i128 buffer, packed BitVec validity, one shared DecimalType, and the derived null count; found {actual:?}"
+                "starter API declaration for `{item}` disagrees with the parsed reference source: expected `{expected}`, found `{actual}`"
             );
         }
     }
     Ok(())
+}
+
+fn validate_reference_declaration_shapes(root: &Path, manifest: &ApiManifest) -> Result<()> {
+    let list_source = fs::read_to_string(root.join("type-exercise/src/array/list_array.rs"))?;
+    let binder_source = fs::read_to_string(root.join("type-exercise/src/binder.rs"))?;
+    validate_reference_declaration_parity(manifest, &list_source, &binder_source)
 }
 
 fn check_starter_api(root: &Path) -> Result<()> {
@@ -356,6 +518,7 @@ fn check_starter_api(root: &Path) -> Result<()> {
     let decimal_storage =
         fs::read_to_string(root.join("type-exercise/src/array/decimal_array.rs"))?;
     validate_decimal_storage_source(&decimal_storage)?;
+    validate_reference_declaration_shapes(root, &manifest)?;
 
     println!("starter API roadmap matches cumulative Days 1-2 and reserves Days 3-13");
     Ok(())
@@ -381,7 +544,8 @@ mod tests {
 
     use super::{
         ApiManifest, check_starter_api, copy_test, validate_decimal_storage_source,
-        validate_manifest_against_approved, workspace_root,
+        validate_manifest_against_approved, validate_reference_declaration_parity,
+        validate_reference_declaration_sources, workspace_root,
     };
 
     fn fixture() -> TempDir {
@@ -566,23 +730,120 @@ mod tests {
             fs::read_to_string(root.join("type-exercise/src/array/decimal_array.rs")).unwrap();
         validate_decimal_storage_source(&source).unwrap();
 
-        for forbidden in [
-            "    _row_types: Vec<DecimalType>,\n",
-            "    values: Vec<Option<Decimal>>,\n",
-            "    validity: Vec<bool>,\n",
+        for (needle, replacement) in [
+            (
+                "    validity: BitVec,\n",
+                "    validity: BitVec,\n    _row_types: Vec<DecimalType>,\n",
+            ),
+            (
+                "    validity: BitVec,\n",
+                "    validity: BitVec,\n    _row_values: Vec<Decimal>,\n",
+            ),
+            (
+                "    values: Vec<i128>,\n",
+                "    values: Vec<Option<Decimal>>,\n",
+            ),
+            ("    validity: BitVec,\n", "    validity: Vec<bool>,\n"),
+            ("    validity: BitVec,\n", "    validity: Vec<u8>,\n"),
         ] {
-            let mutated = if forbidden.contains("_row_types") {
-                source.replacen(
-                    "    validity: BitVec,\n",
-                    &format!("    validity: BitVec,\n{forbidden}"),
-                    1,
-                )
-            } else if forbidden.contains("values:") {
-                source.replacen("    values: Vec<i128>,\n", forbidden, 1)
-            } else {
-                source.replacen("    validity: BitVec,\n", forbidden, 1)
-            };
+            let mutated = source.replacen(needle, replacement, 1);
             assert!(validate_decimal_storage_source(&mutated).is_err());
         }
+    }
+
+    #[test]
+    fn decimal_layout_ignores_commented_decoys_and_checks_the_real_structs() {
+        let root = workspace_root().unwrap();
+        let source =
+            fs::read_to_string(root.join("type-exercise/src/array/decimal_array.rs")).unwrap();
+        let decoys = r#"/*
+pub struct DecimalArray {
+    values: Vec<i128>,
+    validity: BitVec,
+    decimal_type: DecimalType,
+    null_count: usize,
+}
+pub struct DecimalArrayBuilder {
+    values: Vec<i128>,
+    validity: BitVec,
+    decimal_type: DecimalType,
+    null_count: usize,
+}
+*/
+"#;
+        let mutated = source
+            .replace(
+                "    validity: BitVec,\n    decimal_type: DecimalType,\n",
+                "    validity: BitVec,\n    _row_types: Vec<DecimalType>,\n    decimal_type: DecimalType,\n",
+            )
+            .replacen(
+                "        Ok(Self {\n            values,\n",
+                "        Ok(Self {\n            _row_types: vec![decimal_type; values.len()],\n            values,\n",
+                1,
+            )
+            .replacen(
+                "        Ok(Self {\n            values: Vec::with_capacity(capacity),\n",
+                "        Ok(Self {\n            _row_types: Vec::with_capacity(capacity),\n            values: Vec::with_capacity(capacity),\n",
+                1,
+            )
+            .replacen(
+                "        DecimalArray {\n            values: self.values,\n",
+                "        DecimalArray {\n            _row_types: self._row_types,\n            values: self.values,\n",
+                1,
+            );
+        let mutated = format!("{decoys}{mutated}");
+        assert_eq!(mutated.matches("_row_types").count(), 6);
+        assert!(validate_decimal_storage_source(&mutated).is_err());
+    }
+
+    #[test]
+    fn reference_declaration_shapes_are_checked_against_real_syntax() {
+        let root = workspace_root().unwrap();
+        let list_source =
+            fs::read_to_string(root.join("type-exercise/src/array/list_array.rs")).unwrap();
+        let binder_source = fs::read_to_string(root.join("type-exercise/src/binder.rs")).unwrap();
+        validate_reference_declaration_sources(&list_source, &binder_source).unwrap();
+        let manifest: ApiManifest = toml::from_str(
+            &fs::read_to_string(root.join("type-exercise-starter/api-roadmap.toml")).unwrap(),
+        )
+        .unwrap();
+        validate_reference_declaration_parity(&manifest, &list_source, &binder_source).unwrap();
+
+        let public_builder = list_source.replacen(
+            "pub(crate) struct ListArrayBuilder",
+            "pub struct ListArrayBuilder",
+            1,
+        );
+        assert!(validate_reference_declaration_sources(&public_builder, &binder_source).is_err());
+
+        let public_async = binder_source.replacen(
+            "    fn evaluate_async<'a>",
+            "    pub fn evaluate_async<'a>",
+            1,
+        );
+        assert!(validate_reference_declaration_sources(&list_source, &public_async).is_err());
+
+        let mut coordinated_roadmap_drift = manifest.clone();
+        for target in &mut coordinated_roadmap_drift.target {
+            for (item, declaration) in target.items.iter().zip(&mut target.declarations) {
+                match item.as_str() {
+                    "ListArrayBuilder" => {
+                        *declaration = "pub struct ListArrayBuilder".to_owned();
+                    }
+                    "BoundExpression::evaluate_async" => {
+                        *declaration = "pub fn evaluate_async(".to_owned();
+                    }
+                    _ => {}
+                }
+            }
+        }
+        assert!(
+            validate_reference_declaration_parity(
+                &coordinated_roadmap_drift,
+                &list_source,
+                &binder_source,
+            )
+            .is_err()
+        );
     }
 }

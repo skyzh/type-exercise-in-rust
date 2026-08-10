@@ -37,7 +37,7 @@ cannot change day ownership or move an API to another file.
 | 9 | `src/operators.rs` | Logical comparison operators | `ComparisonOperator` → `pub enum ComparisonOperator` |
 | 10 | `src/expression.rs` | Representative primitive fast loops | `PrimitiveLoop` → `pub enum PrimitiveLoop`; `PrimitiveBinaryExpression::evaluate_with_loop` → `pub fn evaluate_with_loop(` |
 | 10 | `src/binder.rs` | Bound fast-loop forwarding | `BoundExpression::evaluate_with_loop` → `pub fn evaluate_with_loop(` |
-| 11 | `src/array/list_array.rs` | One-level List scalars and arrays | `ListError` → `pub enum ListError`; `ListScalar` → `pub struct ListScalar`; `ListScalarRef` → `pub struct ListScalarRef`; `ListArray` → `pub struct ListArray`; `ListArrayBuilder` → `pub struct ListArrayBuilder`; `ListArray::try_from_rows` → `pub fn try_from_rows`; `ListArray::try_from_raw_parts` → `pub fn try_from_raw_parts(` |
+| 11 | `src/array/list_array.rs` | One-level List scalars and arrays | `ListError` → `pub enum ListError`; `ListScalar` → `pub struct ListScalar`; `ListScalarRef` → `pub struct ListScalarRef`; `ListArray` → `pub struct ListArray`; `ListArrayBuilder` → `pub(crate) struct ListArrayBuilder`; `ListArray::try_from_rows` → `pub fn try_from_rows`; `ListArray::try_from_raw_parts` → `pub fn try_from_raw_parts(` |
 | 11 | `src/data_type.rs` | Logical List type | `DataType::List` → `List(Box<DataType>)` |
 | 11 | `src/physical_type.rs` | Physical List type | `PhysicalType::List` → `List(Box<PhysicalType>)` |
 | 11 | `src/scalar.rs` | Owned and borrowed List scalar variants | `ScalarImpl::List` → `List(ListScalar)`; `ScalarRefImpl::List` → `List(ListScalarRef<'a>)` |
@@ -49,7 +49,7 @@ cannot change day ownership or move an API to another file.
 | 12 | `src/binder.rs` | Shareable registry factories | `FunctionRegistry::register` → `pub fn register(`; `FunctionRegistry::register_unary` → `pub fn register_unary(`; `FunctionRegistry::register_binary` → `pub fn register_binary(`; `FunctionRegistry::register_ternary` → `pub fn register_ternary(` |
 | 12 | `src/column.rs` | Borrowed column-view lifetime | `ColumnViewImpl<'a>` → `pub struct ColumnViewImpl<'a>` |
 | 13 | `src/expression.rs` | Static and erased batch futures | `evaluate_static` → `pub fn evaluate_static`; `BatchFuture` → `pub type BatchFuture`; `AsyncExpression` → `pub trait AsyncExpression`; `AsyncExpressionAdapter` → `pub struct AsyncExpressionAdapter` |
-| 13 | `src/binder.rs` | Bound asynchronous forwarding | `BoundExpression::evaluate_async` → `pub fn evaluate_async(` |
+| 13 | `src/binder.rs` | Bound asynchronous forwarding | `BoundExpression::evaluate_async` → `fn evaluate_async(` |
 
 Day 5 introduces numeric comparisons beside arithmetic. Day 7 is the approved three-valued
 Boolean checkpoint; the former Chapters 7–12 therefore appear here as Days 8–13.

@@ -791,6 +791,7 @@ dependencies = [
  "anyhow",
  "clap",
  "serde",
+ "syn 2.0.119",
  "tempfile",
  "toml",
 ]

@@ -205,7 +205,7 @@ day = 11
 title = "One-level List scalars and arrays"
 file = "src/array/list_array.rs"
 items = ["ListError", "ListScalar", "ListScalarRef", "ListArray", "ListArrayBuilder", "ListArray::try_from_rows", "ListArray::try_from_raw_parts"]
-declarations = ["pub enum ListError", "pub struct ListScalar", "pub struct ListScalarRef", "pub struct ListArray", "pub struct ListArrayBuilder", "pub fn try_from_rows", "pub fn try_from_raw_parts("]
+declarations = ["pub enum ListError", "pub struct ListScalar", "pub struct ListScalarRef", "pub struct ListArray", "pub(crate) struct ListArrayBuilder", "pub fn try_from_rows", "pub fn try_from_raw_parts("]
 materialized = false
 
 [[target]]
@@ -301,5 +301,5 @@ day = 13
 title = "Bound asynchronous forwarding"
 file = "src/binder.rs"
 items = ["BoundExpression::evaluate_async"]
-declarations = ["pub fn evaluate_async("]
+declarations = ["fn evaluate_async("]
 materialized = false

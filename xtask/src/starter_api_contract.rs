@@ -440,7 +440,7 @@ pub(crate) const APPROVED_TARGETS: &[ApprovedTarget] = &[
             "pub struct ListScalar",
             "pub struct ListScalarRef",
             "pub struct ListArray",
-            "pub struct ListArrayBuilder",
+            "pub(crate) struct ListArrayBuilder",
             "pub fn try_from_rows",
             "pub fn try_from_raw_parts("
         ],
@@ -577,7 +577,7 @@ pub(crate) const APPROVED_TARGETS: &[ApprovedTarget] = &[
         "Bound asynchronous forwarding",
         "src/binder.rs",
         ["BoundExpression::evaluate_async"],
-        ["pub fn evaluate_async("],
+        ["fn evaluate_async("],
         false
     ),
 ];

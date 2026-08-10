@@ -13,11 +13,20 @@ fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
         .unwrap_or_else(|| "non-string panic payload".to_owned())
 }
 
+fn contains_exact_day_1(message: &str) -> bool {
+    message.match_indices("Day 1").any(|(start, token)| {
+        let before = message[..start].chars().next_back();
+        let after = message[start + token.len()..].chars().next();
+        let is_boundary = |character: char| !character.is_ascii_alphanumeric() && character != '_';
+        before.is_none_or(is_boundary) && after.is_none_or(is_boundary)
+    })
+}
+
 fn assert_completed_or_day_1_todo(operation: impl FnOnce() + std::panic::UnwindSafe) {
     if let Err(payload) = std::panic::catch_unwind(operation) {
         let message = panic_message(payload);
         assert!(
-            message.contains("Day 1"),
+            contains_exact_day_1(&message),
             "a retained Chapter 1 scalar boundary reached later-day work: {message}"
         );
     }
@@ -69,6 +78,20 @@ fn retained_i32_scalar_boundaries_belong_to_day_1() {
     assert_completed_or_day_1_todo(|| {
         let _ = i32::try_from(ScalarRefImpl::Int32(42));
     });
+}
+
+#[test]
+fn day_1_todo_token_does_not_accept_later_day_labels() {
+    assert!(contains_exact_day_1(
+        "not yet implemented: implement scalar borrowing in Day 1"
+    ));
+    for later_day in ["Day 10", "Day 11", "Day 12", "Day 13"] {
+        let message = format!("not yet implemented: implement scalar borrowing in {later_day}");
+        assert!(
+            !contains_exact_day_1(&message),
+            "the exact Day 1 allowance accepted {later_day}"
+        );
+    }
 }
 
 #[test]
