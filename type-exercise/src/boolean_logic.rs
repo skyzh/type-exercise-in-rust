@@ -167,7 +167,7 @@ pub const BOOLEAN_TRUTH_TABLE: &[BooleanTruthRow] = &[
 ];
 
 /// Apply one three-valued Boolean operator.
-pub fn apply_boolean(
+pub(crate) fn apply_boolean(
     operator: BooleanOperator,
     left: Option<bool>,
     right: Option<bool>,
@@ -207,6 +207,29 @@ impl BooleanExpression {
         self.policy
     }
 
+    /// The number of Boolean inputs this operator consumes.
+    pub fn arity(&self) -> usize {
+        match self.operator {
+            BooleanOperator::And | BooleanOperator::Or => 2,
+            BooleanOperator::Not => 1,
+        }
+    }
+
+    /// The physical input types in argument order.
+    pub fn input_types(&self) -> &[PhysicalType] {
+        const BOOL_PAIR: [PhysicalType; 2] = [PhysicalType::Bool, PhysicalType::Bool];
+        const BOOL_SINGLE: [PhysicalType; 1] = [PhysicalType::Bool];
+        match self.operator {
+            BooleanOperator::And | BooleanOperator::Or => &BOOL_PAIR,
+            BooleanOperator::Not => &BOOL_SINGLE,
+        }
+    }
+
+    /// The physical output type, always `Boolean`.
+    pub fn output_type(&self) -> PhysicalType {
+        PhysicalType::Bool
+    }
+
     /// Strict concrete evaluation of one three-valued Boolean operator.
     pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
         let arity = match self.operator {
@@ -228,6 +251,15 @@ impl BooleanExpression {
                 .into());
             }
         }
+        // Typed view conversion happens before length validation, so a wrong
+        // later input type can never be reported as a length-first failure
+        // even if the explicit type loop above were narrowed.
+        let left_view = ColumnView::<bool>::try_from(inputs[0].clone())?;
+        let right_view = inputs
+            .get(1)
+            .cloned()
+            .map(ColumnView::<bool>::try_from)
+            .transpose()?;
         let len = inputs.first().map_or(0, ColumnViewImpl::len);
         for (input_index, input) in inputs.iter().enumerate().skip(1) {
             if input.len() != len {
@@ -239,23 +271,21 @@ impl BooleanExpression {
             }
         }
 
-        let left_view = ColumnView::<bool>::try_from(inputs[0].clone())?;
-        let right_view = inputs
-            .get(1)
-            .cloned()
-            .map(ColumnView::<bool>::try_from)
-            .transpose()?;
-
         let mut output = BoolArrayBuilder::with_capacity(len);
         for row in 0..len {
             let left = left_view.get(row);
             let right = right_view.as_ref().and_then(|view| view.get(row));
             let value = match self.policy {
-                NullEvaluationPolicy::Strict => match (left, right) {
-                    (Some(left), Some(right)) => {
-                        apply_boolean(self.operator, Some(left), Some(right))
+                NullEvaluationPolicy::Strict => match self.operator {
+                    BooleanOperator::Not => {
+                        left.and_then(|value| apply_boolean(self.operator, Some(value), None))
                     }
-                    _ => None,
+                    BooleanOperator::And | BooleanOperator::Or => match (left, right) {
+                        (Some(left), Some(right)) => {
+                            apply_boolean(self.operator, Some(left), Some(right))
+                        }
+                        _ => None,
+                    },
                 },
                 NullEvaluationPolicy::NonStrict => apply_boolean(self.operator, left, right),
             };
@@ -280,8 +310,12 @@ impl Expression for BooleanExpression {
     }
 
     fn input_types(&self) -> &[PhysicalType] {
-        const BOOL_TYPES: [PhysicalType; 2] = [PhysicalType::Bool, PhysicalType::Bool];
-        &BOOL_TYPES
+        const BOOL_PAIR: [PhysicalType; 2] = [PhysicalType::Bool, PhysicalType::Bool];
+        const BOOL_SINGLE: [PhysicalType; 1] = [PhysicalType::Bool];
+        match self.operator {
+            BooleanOperator::And | BooleanOperator::Or => &BOOL_PAIR,
+            BooleanOperator::Not => &BOOL_SINGLE,
+        }
     }
 
     fn output_type(&self) -> PhysicalType {
@@ -290,5 +324,29 @@ impl Expression for BooleanExpression {
 
     fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
         self.evaluate(inputs)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{ColumnViewImpl, ScalarRefImpl};
+
+    /// Reference-only internal regression: physical-type validation precedes
+    /// length validation even for a later input, so a first-input-only type
+    /// loop cannot turn a wrong later type into a length-first failure.
+    #[test]
+    fn type_validation_precedes_length_validation_for_later_inputs() {
+        let and = build_boolean_expression(BooleanOperator::And);
+        let err = and
+            .evaluate(&[
+                ColumnViewImpl::constant(ScalarRefImpl::Bool(true), 1),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 3),
+            ])
+            .unwrap_err();
+        assert!(
+            matches!(err, ExpressionError::TypeMismatch(_)),
+            "expected a type-category error before any length check, got {err:?}"
+        );
     }
 }

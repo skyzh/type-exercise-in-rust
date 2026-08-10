@@ -270,6 +270,67 @@ fn strict_policy_short_circuits_before_the_truth_table() {
         ])
         .unwrap();
     assert_eq!(<&BoolArray>::try_from(&output).unwrap().get(0), Some(false));
+
+    // Strict OR must also short-circuit: a null operand yields a null row even
+    // though SQL OR would absorb it with TRUE.
+    let strict_or = BooleanExpression::new(BooleanOperator::Or, NullEvaluationPolicy::Strict);
+    let output = strict_or
+        .evaluate(&[
+            ColumnViewImpl::null(PhysicalType::Bool, 1),
+            ColumnViewImpl::constant(ScalarRefImpl::Bool(true), 1),
+        ])
+        .unwrap();
+    assert_eq!(<&BoolArray>::try_from(&output).unwrap().get(0), None);
+
+    let sql_or = BooleanExpression::new(BooleanOperator::Or, NullEvaluationPolicy::NonStrict);
+    let output = sql_or
+        .evaluate(&[
+            ColumnViewImpl::null(PhysicalType::Bool, 1),
+            ColumnViewImpl::constant(ScalarRefImpl::Bool(true), 1),
+        ])
+        .unwrap();
+    assert_eq!(<&BoolArray>::try_from(&output).unwrap().get(0), Some(true));
+}
+
+#[test]
+fn strict_not_negates_non_null_rows_and_keeps_null_rows_null() {
+    let strict_not = BooleanExpression::new(BooleanOperator::Not, NullEvaluationPolicy::Strict);
+    let input: ArrayImpl = BoolArray::from_slice(&[Some(true), Some(false), None]).into();
+    let output = strict_not
+        .evaluate(&[ColumnViewImpl::array(&input)])
+        .unwrap();
+    assert_eq!(
+        <&BoolArray>::try_from(&output)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![Some(false), Some(true), None]
+    );
+}
+
+#[test]
+fn not_has_arity_one_and_and_or_have_arity_two() {
+    assert_eq!(build_boolean_expression(BooleanOperator::Not).arity(), 1);
+    assert_eq!(build_boolean_expression(BooleanOperator::And).arity(), 2);
+    assert_eq!(build_boolean_expression(BooleanOperator::Or).arity(), 2);
+}
+
+#[test]
+fn metadata_and_getters_pin_the_public_contract() {
+    let not = build_boolean_expression(BooleanOperator::Not);
+    assert_eq!(not.operator(), BooleanOperator::Not);
+    assert_eq!(not.policy(), NullEvaluationPolicy::NonStrict);
+    assert_eq!(not.input_types(), &[PhysicalType::Bool]);
+    assert_eq!(not.output_type(), PhysicalType::Bool);
+
+    let and = build_boolean_expression(BooleanOperator::And);
+    assert_eq!(and.operator(), BooleanOperator::And);
+    assert_eq!(and.input_types(), &[PhysicalType::Bool, PhysicalType::Bool]);
+    assert_eq!(and.output_type(), PhysicalType::Bool);
+
+    let strict_or = BooleanExpression::new(BooleanOperator::Or, NullEvaluationPolicy::Strict);
+    assert_eq!(strict_or.operator(), BooleanOperator::Or);
+    assert_eq!(strict_or.policy(), NullEvaluationPolicy::Strict);
 }
 
 #[test]
@@ -310,6 +371,15 @@ fn boolean_expressions_reject_wrong_arity_types_and_lengths() {
         and.evaluate(&[
             ColumnViewImpl::constant(ScalarRefImpl::Bool(true), 1),
             ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
+        ])
+        .is_err()
+    );
+    // Type validation precedes length validation: a wrong second type with a
+    // mismatched length still fails closed.
+    assert!(
+        and.evaluate(&[
+            ColumnViewImpl::constant(ScalarRefImpl::Bool(true), 1),
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 3),
         ])
         .is_err()
     );

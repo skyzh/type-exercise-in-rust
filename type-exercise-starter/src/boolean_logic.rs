@@ -13,6 +13,9 @@
 //     /* pub fn new(operator: BooleanOperator, policy: NullEvaluationPolicy) -> Self */
 //     /* pub fn operator(&self) -> BooleanOperator */
 //     /* pub fn policy(&self) -> NullEvaluationPolicy */
+//     /* pub fn arity(&self) -> usize */
+//     /* pub fn input_types(&self) -> &[PhysicalType] */
+//     /* pub fn output_type(&self) -> PhysicalType */
 //     /* pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, /* readable batch error of your choice */> */
 // }
 // pub fn build_boolean_expression(operator: BooleanOperator) -> BooleanExpression;
