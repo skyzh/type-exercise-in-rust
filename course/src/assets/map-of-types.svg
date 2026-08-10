@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="920" viewBox="0 0 1200 920" role="img" aria-labelledby="title desc">
   <title id="title">Map of the typed expression engine</title>
-  <desc id="desc">Logical types map to physical scalar and array families. Fixed-width arrays use contiguous values, strings use contiguous UTF-8 bytes and offsets, and both use packed validity. Decimal arrays use contiguous i128 coefficients, packed validity, and one shared precision and scale descriptor. Erased values cross checked conversion boundaries. Column views normalize arrays, constants, dictionaries, and typed nulls before one selected typed row loop. A one-level List stores offsets and independent outer and child validity.</desc>
+  <desc id="desc">Logical types map to physical scalar and array families. Fixed-width arrays use contiguous values, strings use contiguous UTF-8 bytes and offsets, and both use packed validity. Decimal arrays use contiguous i128 coefficients, packed validity, and one shared precision and scale descriptor. Erased values cross checked conversion boundaries. Column views normalize arrays, constants, Indexed views, and typed nulls before one selected typed row loop. A one-level List stores offsets and independent outer and child validity.</desc>
   <defs>
     <style>
       .bg { fill: #f8fafc; }
@@ -59,7 +59,7 @@
   <rect class="group" x="280" y="360" width="180" height="78"/>
   <text class="text" x="302" y="392">constant</text><text class="small" x="302" y="418">repeat ScalarRefImpl</text>
   <rect class="group" x="490" y="360" width="180" height="78"/>
-  <text class="text" x="512" y="392">dictionary</text><text class="small" x="512" y="418">checked keys + array</text>
+  <text class="text" x="512" y="392">Indexed</text><text class="small" x="512" y="418">checked indices + array</text>
   <rect class="group" x="700" y="360" width="180" height="78"/>
   <text class="text" x="722" y="392">typed null</text><text class="small" x="722" y="418">type + length, no value</text>
   <rect class="box typed" x="920" y="350" width="210" height="98"/>

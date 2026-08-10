@@ -1,11 +1,9 @@
 # Course Starter
 
-This is the only learner implementation workspace. It begins with compileable, solution-free
-declaration scaffolds for the cumulative Days 1–2 targets. Their `todo!` bodies are the learner
-work; later APIs are documented but are not compiled into this snapshot.
-
-Read [`API_ROADMAP.md`](./API_ROADMAP.md) to find every Day 1–13 target file, item, declaration
-shape, and first implementation checkpoint without exposing a reference body.
+This is the only learner implementation workspace. It compiles before any exercise work. The
+actual files under `src/` contain the Day 1–13 checkpoints at their implementation locations:
+existing declarations have concise Day/checkpoint documentation, while future declarations and
+signatures stay commented out until their chapter tells you to uncomment and implement them.
 
 From the repository root, verify the untouched baseline:
 
@@ -22,8 +20,8 @@ cargo x copy-test --chapter 1
 cargo test -p type-exercise-starter chapter_1 --locked
 ```
 
-The copy is cumulative. The first run for a new chapter is expected to fail at that day's declared
-`todo!` or unsupported behavior—not at an unresolved target—until you implement its public
-contract. You may read the copied file under `src/tests/`, but do not edit it or
+The copy is cumulative and changes supplied tests only; it never parses or rewrites learner-owned
+source. Follow the chapter to the local Day/checkpoint comment, uncomment the named skeleton when
+needed, and implement it. You may read the copied file under `src/tests/`, but do not edit it or
 `src/tests.rs`. Work in the other files under `src/`, keep earlier tests green, and do not inspect
 `../type-exercise/` or `../archived/` for solutions.

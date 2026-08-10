@@ -17,7 +17,7 @@ The book's `SUMMARY.md` is the sole ordered chapter list.
 ## What you will build
 
 - Connect logical types, owned values, borrowed values, physical arrays, and checked erased enums.
-- Read nullable arrays, constants, and dictionaries without materializing a new column.
+- Read nullable arrays, constants, and Indexed views without materializing a new column.
 - Apply unary, binary, and ternary scalar functions through generic, erased, and bound interfaces.
 - Promote supported numeric pairs for `+`, `-`, `*`, `/`, comparisons, and string `contains`.
 - Represent one-level Lists with checked offsets and independent outer and child nullability.

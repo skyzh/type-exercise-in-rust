@@ -5,3 +5,4 @@
 
 - [Connect One Type Family by Hand](./chapter-1-type-family.md)
 - [Scale the Physical Type Family](./chapter-2-type-catalog.md)
+- [Read Nullable Columns Without Materializing Them](./chapter-3-column-views.md)

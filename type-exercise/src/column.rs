@@ -20,7 +20,7 @@ enum ColumnViewImplKind<'a> {
         physical_type: PhysicalType,
         len: usize,
     },
-    Dictionary {
+    Indexed {
         indices: &'a [Option<usize>],
         values: &'a ArrayImpl,
     },
@@ -41,25 +41,25 @@ impl NonNullI32Column<'_> {
     }
 }
 
-/// A dictionary key selected a value outside the dictionary-values array.
+/// An indexed row selected a value outside the values array.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct InvalidDictionaryKey {
+pub struct InvalidIndex {
     pub row: usize,
-    pub key: usize,
-    pub dictionary_len: usize,
+    pub index: usize,
+    pub values_len: usize,
 }
 
-impl Display for InvalidDictionaryKey {
+impl Display for InvalidIndex {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             formatter,
-            "dictionary key {} at row {} is out of bounds for a dictionary of length {}",
-            self.key, self.row, self.dictionary_len
+            "index {} at row {} is out of bounds for a values array of length {}",
+            self.index, self.row, self.values_len
         )
     }
 }
 
-impl Error for InvalidDictionaryKey {}
+impl Error for InvalidIndex {}
 
 impl<'a> ColumnViewImpl<'a> {
     pub fn array(array: &'a ArrayImpl) -> Self {
@@ -88,26 +88,26 @@ impl<'a> ColumnViewImpl<'a> {
         }
     }
 
-    pub fn dictionary(
+    pub fn indexed(
         indices: &'a [Option<usize>],
         values: &'a ArrayImpl,
-    ) -> Result<Self, InvalidDictionaryKey> {
-        if let Some((row, key)) = indices
+    ) -> Result<Self, InvalidIndex> {
+        if let Some((row, index)) = indices
             .iter()
             .copied()
             .enumerate()
-            .filter_map(|(row, key)| key.map(|key| (row, key)))
-            .find(|(_, key)| *key >= values.len())
+            .filter_map(|(row, index)| index.map(|index| (row, index)))
+            .find(|(_, index)| *index >= values.len())
         {
-            return Err(InvalidDictionaryKey {
+            return Err(InvalidIndex {
                 row,
-                key,
-                dictionary_len: values.len(),
+                index,
+                values_len: values.len(),
             });
         }
 
         Ok(Self {
-            kind: ColumnViewImplKind::Dictionary { indices, values },
+            kind: ColumnViewImplKind::Indexed { indices, values },
         })
     }
 
@@ -115,7 +115,7 @@ impl<'a> ColumnViewImpl<'a> {
         match &self.kind {
             ColumnViewImplKind::Array(array) => array.len(),
             ColumnViewImplKind::Constant { len, .. } => *len,
-            ColumnViewImplKind::Dictionary { indices, .. } => indices.len(),
+            ColumnViewImplKind::Indexed { indices, .. } => indices.len(),
         }
     }
 
@@ -127,7 +127,7 @@ impl<'a> ColumnViewImpl<'a> {
         match &self.kind {
             ColumnViewImplKind::Array(array) => array.physical_type(),
             ColumnViewImplKind::Constant { physical_type, .. } => physical_type.clone(),
-            ColumnViewImplKind::Dictionary { values, .. } => values.physical_type(),
+            ColumnViewImplKind::Indexed { values, .. } => values.physical_type(),
         }
     }
 
@@ -137,8 +137,8 @@ impl<'a> ColumnViewImpl<'a> {
         match &self.kind {
             ColumnViewImplKind::Array(array) => array.get(row),
             ColumnViewImplKind::Constant { value, .. } => *value,
-            ColumnViewImplKind::Dictionary { indices, values } => {
-                indices[row].and_then(|key| values.get(key))
+            ColumnViewImplKind::Indexed { indices, values } => {
+                indices[row].and_then(|index| values.get(index))
             }
         }
     }
@@ -189,18 +189,18 @@ impl<'a> ColumnViewImpl<'a> {
                     kind: ListColumnViewKind::Constant { value, len },
                 })
             }
-            ColumnViewImplKind::Dictionary {
+            ColumnViewImplKind::Indexed {
                 indices,
                 values: ArrayImpl::List(values),
             } => Ok(ListColumnView {
-                kind: ListColumnViewKind::Dictionary { indices, values },
+                kind: ListColumnViewKind::Indexed { indices, values },
             }),
             ColumnViewImplKind::Array(array) => Err(TypeMismatch {
                 expected,
                 actual: array.physical_type(),
             }
             .into()),
-            ColumnViewImplKind::Dictionary { values, .. } => Err(TypeMismatch {
+            ColumnViewImplKind::Indexed { values, .. } => Err(TypeMismatch {
                 expected,
                 actual: values.physical_type(),
             }
@@ -228,7 +228,7 @@ enum ListColumnViewKind<'a> {
         value: Option<ListScalarRef<'a>>,
         len: usize,
     },
-    Dictionary {
+    Indexed {
         indices: &'a [Option<usize>],
         values: &'a ListArray,
     },
@@ -239,7 +239,7 @@ impl<'a> ListColumnView<'a> {
         match &self.kind {
             ListColumnViewKind::Array(array) => array.len(),
             ListColumnViewKind::Constant { len, .. } => *len,
-            ListColumnViewKind::Dictionary { indices, .. } => indices.len(),
+            ListColumnViewKind::Indexed { indices, .. } => indices.len(),
         }
     }
 
@@ -257,8 +257,8 @@ impl<'a> ListColumnView<'a> {
         match &self.kind {
             ListColumnViewKind::Array(array) => array.get(row),
             ListColumnViewKind::Constant { value, .. } => Ok(*value),
-            ListColumnViewKind::Dictionary { indices, values } => {
-                indices[row].map_or(Ok(None), |key| values.get(key))
+            ListColumnViewKind::Indexed { indices, values } => {
+                indices[row].map_or(Ok(None), |index| values.get(index))
             }
         }
     }
@@ -277,7 +277,7 @@ enum ColumnViewKind<'a, S: Scalar> {
         value: Option<S::RefType<'a>>,
         len: usize,
     },
-    Dictionary {
+    Indexed {
         indices: &'a [Option<usize>],
         values: &'a S::ArrayType,
     },
@@ -288,7 +288,7 @@ impl<'a, S: Scalar> ColumnView<'a, S> {
         match &self.kind {
             ColumnViewKind::Array(array) => array.len(),
             ColumnViewKind::Constant { len, .. } => *len,
-            ColumnViewKind::Dictionary { indices, .. } => indices.len(),
+            ColumnViewKind::Indexed { indices, .. } => indices.len(),
         }
     }
 
@@ -304,9 +304,9 @@ impl<'a, S: Scalar> ColumnView<'a, S> {
                 array.get(row)
             }
             ColumnViewKind::Constant { value, .. } => *value,
-            ColumnViewKind::Dictionary { indices, values } => {
+            ColumnViewKind::Indexed { indices, values } => {
                 let values: &'a S::ArrayType = values;
-                indices[row].and_then(|key| values.get(key))
+                indices[row].and_then(|index| values.get(index))
             }
         }
     }
@@ -338,8 +338,8 @@ where
                     len,
                 },
             }),
-            ColumnViewImplKind::Dictionary { indices, values } => Ok(Self {
-                kind: ColumnViewKind::Dictionary {
+            ColumnViewImplKind::Indexed { indices, values } => Ok(Self {
+                kind: ColumnViewKind::Indexed {
                     indices,
                     values: values.try_into()?,
                 },
@@ -356,7 +356,7 @@ mod tests {
     };
 
     #[test]
-    fn decimal_array_constant_null_and_dictionary_keep_exact_metadata() {
+    fn decimal_array_constant_null_and_indexed_keep_exact_metadata() {
         let decimal_type = DecimalType::try_new(8, 2).unwrap();
         let value = Decimal::try_new(12_345, decimal_type).unwrap();
         let array: ArrayImpl = DecimalArray::try_from_slice(decimal_type, &[Some(value), None])
@@ -378,11 +378,11 @@ mod tests {
         assert_eq!(null.get(0), None);
 
         let indices = [Some(1), Some(0), None];
-        let dictionary = ColumnViewImpl::dictionary(&indices, &array).unwrap();
-        assert_eq!(dictionary.physical_type(), exact);
-        assert_eq!(dictionary.get(0), None);
-        assert_eq!(dictionary.get(1), Some(ScalarRefImpl::Decimal(value)));
-        assert_eq!(dictionary.get(2), None);
+        let indexed = ColumnViewImpl::indexed(&indices, &array).unwrap();
+        assert_eq!(indexed.physical_type(), exact);
+        assert_eq!(indexed.get(0), None);
+        assert_eq!(indexed.get(1), Some(ScalarRefImpl::Decimal(value)));
+        assert_eq!(indexed.get(2), None);
 
         assert_eq!(ScalarImpl::from(value).physical_type(), exact);
     }

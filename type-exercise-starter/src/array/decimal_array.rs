@@ -2,11 +2,12 @@ use bitvec::vec::BitVec;
 
 use crate::{Decimal, DecimalError, DecimalType};
 
-/// Day 2 target: flat `i128` coefficients, packed validity, shared metadata.
+/// Day 2, checkpoint 4: implement flat `i128` coefficients, packed validity, and shared metadata.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DecimalArray;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Day 2, checkpoint 4: implement rollback-safe Decimal construction.
 pub struct DecimalArrayBuilder;
 
 impl DecimalArray {

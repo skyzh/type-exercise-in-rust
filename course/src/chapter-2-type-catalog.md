@@ -18,8 +18,8 @@ cargo x copy-test --chapter 2
 cargo test -p type-exercise-starter chapter_2 --locked
 ```
 
-The first run should fail at the declared Day 2 `todo!` boundaries for the new families and
-catalog, not on a missing file or symbol.
+Follow the `Day 2, checkpoint ...` comments beside the declarations in the named starter files.
+The first focused run should fail at those `todo!` boundaries for the new families and catalog.
 
 ## Add Double explicitly before generalizing
 
@@ -99,15 +99,16 @@ All table rows and Decimal storage checks are required. Decimal arithmetic and c
 Extending the catalog with another physical family is useful practice, but it must bring the
 complete scalar, array, erasure, and mismatch surface rather than one enum variant.
 
-The starter's `type-exercise-starter/API_ROADMAP.md` names every later target through Day 13.
-Only Days 1–2 are Rust modules in this snapshot; future declarations stay
-documentation-only until their cumulative checkpoint lands. Day 5 includes numeric comparisons,
-Day 7 introduces three-valued Boolean logic, and the former Days 7–12 shift to Days 8–13.
+The starter source itself names every later target through Day 13. Future declarations and
+signatures are commented at their implementation locations until their checkpoint asks you to
+uncomment them. Day 5 includes numeric comparisons, Day 7 introduces three-valued Boolean logic,
+and the former Days 7–12 shift to Days 8–13.
 
 ```console
 cargo test -p type-exercise-starter chapter_2 --locked
 cargo test -p type-exercise-starter --lib --locked
 ```
 
+Next: [Chapter 3 reads several nullable column encodings](./chapter-3-column-views.md).
 
 {{#include copyright.md}}

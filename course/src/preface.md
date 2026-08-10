@@ -12,7 +12,7 @@ for row in 0..left.len() {
 ```
 
 The design problem appears when the engine must also borrow strings without copying, read
-constants and dictionaries, promote mixed numeric types, reject bad arity and lengths, and choose
+constants and Indexed views, promote mixed numeric types, reject bad arity and lengths, and choose
 a function from runtime names. Repeating those decisions in every loop makes each new function a
 new place for type drift, null bugs, and inconsistent errors.
 
@@ -27,7 +27,7 @@ The map has three reading directions:
 1. `DataType` tells the planner what a value means; `PhysicalType` selects storage.
 2. `Scalar`, `ScalarRef`, `Array`, and `ArrayBuilder` form one compile-time family, while erased
    enums cross runtime boundaries through checked conversions.
-3. `ColumnViewImpl` normalizes array, constant, dictionary, and typed-null encodings before one
+3. `ColumnViewImpl` normalizes array, constant, Indexed, and typed-null representations before one
    selected typed expression enters its row loop.
 
 Nullability is value state—`Option` or validity—not a `DataType::Nullable` variant. A one-level

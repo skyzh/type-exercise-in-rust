@@ -1,6 +1,7 @@
 use crate::{DecimalError, DecimalType, PhysicalType};
 
-/// Day 2 target: planner-visible logical scalar types.
+/// Day 2, checkpoint 3: implement planner-visible logical scalar types.
+/// Day 11, checkpoint 1: extend this enum with `// List(Box<DataType>),`.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum DataType {
     SmallInt,

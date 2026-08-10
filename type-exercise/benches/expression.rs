@@ -198,16 +198,16 @@ fn benchmark_expressions(criterion: &mut Criterion) {
         [HandwrittenColumn::General, HandwrittenColumn::General],
     );
 
-    let dictionary_values: ArrayImpl =
+    let indexed_values: ArrayImpl =
         I32Array::from_values((0..256).map(|value| value * 5).collect()).into();
-    let dictionary_keys = (0..ROWS)
+    let indexed_indices = (0..ROWS)
         .map(|row| (row % 29 != 0).then_some(row % 256))
         .collect::<Vec<_>>();
-    let dictionary = ColumnViewImpl::dictionary(&dictionary_keys, &dictionary_values).unwrap();
+    let indexed = ColumnViewImpl::indexed(&indexed_indices, &indexed_values).unwrap();
     benchmark_case(
         criterion,
-        "fallback/dictionary-array",
-        [dictionary, ColumnViewImpl::array(&dense_right)],
+        "fallback/indexed-array",
+        [indexed, ColumnViewImpl::array(&dense_right)],
         [HandwrittenColumn::General, HandwrittenColumn::General],
     );
 }

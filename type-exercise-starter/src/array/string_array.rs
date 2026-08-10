@@ -2,11 +2,12 @@ use bitvec::vec::BitVec;
 
 use crate::{Array, ArrayBuilder};
 
-/// Day 1 target: shared UTF-8 bytes, offsets, and packed validity.
+/// Day 1, checkpoint 2: implement shared UTF-8 bytes, offsets, and packed validity.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StringArray;
 
 #[derive(Clone, Debug, PartialEq)]
+/// Day 1, checkpoint 2: implement append-only String construction.
 pub struct StringArrayBuilder;
 
 impl StringArray {

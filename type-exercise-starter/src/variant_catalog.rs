@@ -1,4 +1,4 @@
-/// Day 2 target: the single inventory of supported non-List families.
+/// Day 2, checkpoint 2: implement the single inventory of supported non-List families.
 macro_rules! for_each_physical_family {
     ($callback:ident) => {
         $callback! {

@@ -4,7 +4,9 @@ use std::fmt::{Display, Formatter};
 use crate::DecimalType;
 use crate::variant_catalog::for_each_physical_family;
 
-/// Days 1–2 target: exact physical storage selected at runtime.
+/// Day 1, checkpoint 1: implement the Int32 and String physical rows.
+/// Day 2, checkpoints 1–4: extend this enum with the remaining scalar rows and Decimal metadata.
+/// Day 11, checkpoint 1: extend it with `// List(Box<PhysicalType>),`.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum PhysicalType {
     Int16,
@@ -17,7 +19,7 @@ pub enum PhysicalType {
     Decimal(DecimalType),
 }
 
-/// Day 2 target: descriptor-free family inventory used by the catalog.
+/// Day 2, checkpoint 2: implement the descriptor-free family inventory used by the catalog.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum PhysicalFamily {
     Int16,
@@ -49,7 +51,7 @@ macro_rules! define_family_catalog {
 
 for_each_physical_family!(define_family_catalog);
 
-/// Day 1 target: a checked erased-to-typed conversion failure.
+/// Day 1, checkpoint 1: implement a checked erased-to-typed conversion failure.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TypeMismatch {
     pub expected: PhysicalType,
