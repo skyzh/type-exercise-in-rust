@@ -82,18 +82,26 @@ materialized = true
 
 [[target]]
 day = 3
-title = "Array, constant, null, and indexed column views"
+title = "Checked column representations and typed views"
 file = "src/column.rs"
-items = ["ColumnViewImpl", "ColumnViewImpl::array", "ColumnViewImpl::constant", "ColumnViewImpl::null", "ColumnViewImpl::dictionary", "ColumnView::get", "ColumnView::len"]
-declarations = ["pub struct ColumnViewImpl", "pub fn array(", "pub fn constant(", "pub fn null(", "pub fn dictionary(", "pub fn get(", "pub fn len("]
+items = ["ColumnViewImpl", "ColumnViewImpl::array", "ColumnViewImpl::constant", "ColumnViewImpl::null", "ColumnViewImpl::dictionary", "ColumnView", "ColumnView::get", "ColumnView::len", "TryFrom<ColumnViewImpl> for ColumnView"]
+declarations = ["pub struct ColumnViewImpl", "pub fn array(", "pub fn constant(", "pub fn null(", "pub fn dictionary(", "pub struct ColumnView", "pub fn get(", "pub fn len(", "impl<'a, S> TryFrom<ColumnViewImpl<'a>> for ColumnView<'a, S>"]
 materialized = false
 
 [[target]]
 day = 4
-title = "Generic scalar functions and expression adapters"
+title = "Initial binary scalar function"
 file = "src/expression.rs"
-items = ["BinaryScalarFunction", "I32Add", "evaluate_binary", "UnaryExpression", "BinaryExpression", "Expression"]
-declarations = ["pub trait BinaryScalarFunction", "pub struct I32Add", "pub fn evaluate_binary(", "pub struct UnaryExpression", "pub struct BinaryExpression", "pub trait Expression"]
+items = ["BinaryScalarFunction", "I32Add", "evaluate_binary"]
+declarations = ["pub trait BinaryScalarFunction", "pub struct I32Add", "pub fn evaluate_binary("]
+materialized = false
+
+[[target]]
+day = 4
+title = "Checked unary and binary expression shells"
+file = "src/operators.rs"
+items = ["CheckedUnaryScalarFunction", "CheckedBinaryScalarFunction", "UnaryExpression", "CheckedBinaryExpression"]
+declarations = ["pub trait CheckedUnaryScalarFunction", "pub trait CheckedBinaryScalarFunction", "pub struct UnaryExpression", "pub struct CheckedBinaryExpression"]
 materialized = false
 
 [[target]]
@@ -108,16 +116,32 @@ materialized = false
 day = 5
 title = "Arithmetic and numeric comparison kernels"
 file = "src/operators.rs"
-items = ["ArithmeticOperator", "ComparisonOperator", "build_numeric_binary_expression", "build_numeric_comparison_expression"]
-declarations = ["pub enum ArithmeticOperator", "pub enum ComparisonOperator", "fn build_numeric_binary_expression(", "fn build_numeric_comparison_expression("]
+items = ["ArithmeticOperator", "CheckedBinaryExpression", "build_numeric_binary_expression", "ComparisonOperator", "build_numeric_comparison_expression"]
+declarations = ["pub enum ArithmeticOperator", "pub struct CheckedBinaryExpression", "pub(crate) fn build_numeric_binary_expression(", "pub enum ComparisonOperator", "pub(crate) fn build_numeric_comparison_expression("]
 materialized = false
 
 [[target]]
 day = 6
-title = "Systematic unary, binary, and ternary arity"
+title = "Shared expression input validation"
 file = "src/operators.rs"
-items = ["CheckedUnaryScalarFunction", "CheckedBinaryScalarFunction", "CheckedTernaryScalarFunction", "TernaryExpression", "ExpressionError"]
-declarations = ["pub trait CheckedUnaryScalarFunction", "pub trait CheckedBinaryScalarFunction", "pub trait CheckedTernaryScalarFunction", "pub struct TernaryExpression", "pub enum ExpressionError"]
+items = ["validate_expression_inputs"]
+declarations = ["pub fn validate_expression_inputs("]
+materialized = false
+
+[[target]]
+day = 6
+title = "Structured expression errors"
+file = "src/expression.rs"
+items = ["ExpressionError"]
+declarations = ["pub enum ExpressionError"]
+materialized = false
+
+[[target]]
+day = 6
+title = "Checked ternary expression and clamp"
+file = "src/operators.rs"
+items = ["CheckedTernaryScalarFunction", "TernaryExpression", "build_numeric_clamp_expression"]
+declarations = ["pub trait CheckedTernaryScalarFunction", "pub struct TernaryExpression", "pub(crate) fn build_numeric_clamp_expression("]
 materialized = false
 
 [[target]]
@@ -132,32 +156,88 @@ materialized = false
 day = 8
 title = "Runtime expression erasure and builtin catalog"
 file = "src/expression.rs"
-items = ["Expression", "UnaryExpression", "CheckedBinaryExpression", "TernaryExpression", "builtin_function_catalog"]
-declarations = ["pub trait Expression", "pub struct UnaryExpression", "pub struct CheckedBinaryExpression", "pub struct TernaryExpression", "macro_rules! builtin_function_catalog"]
+items = ["Expression", "ExpressionError", "BinaryExpression", "define_builtin_expressions", "build_builtin_expression", "BUILTIN_EXPRESSION_NAMES"]
+declarations = ["pub trait Expression", "pub enum ExpressionError", "pub struct BinaryExpression", "macro_rules! define_builtin_expressions", "pub fn build_builtin_expression(", "pub const BUILTIN_EXPRESSION_NAMES"]
+materialized = false
+
+[[target]]
+day = 8
+title = "Erased checked operator shells"
+file = "src/operators.rs"
+items = ["Expression for UnaryExpression", "Expression for CheckedBinaryExpression", "Expression for TernaryExpression"]
+declarations = ["Expression for UnaryExpression", "Expression for CheckedBinaryExpression", "Expression for TernaryExpression"]
 materialized = false
 
 [[target]]
 day = 9
 title = "Binder and runtime function registry"
 file = "src/binder.rs"
-items = ["BindError", "BoundExpression", "FunctionRegistry", "FunctionRegistry::register", "FunctionRegistry::bind"]
-declarations = ["pub enum BindError", "pub struct BoundExpression", "pub struct FunctionRegistry", "pub fn register(", "pub fn bind("]
+items = ["BindError", "BoundExpression", "FunctionRegistry", "FunctionRegistry::register", "FunctionRegistry::register_unary", "FunctionRegistry::register_binary", "FunctionRegistry::register_ternary", "FunctionRegistry::bind", "bind_arithmetic", "bind_comparison"]
+declarations = ["pub enum BindError", "pub struct BoundExpression", "pub struct FunctionRegistry", "pub fn register(", "pub fn register_unary(", "pub fn register_binary(", "pub fn register_ternary(", "pub fn bind(", "fn bind_arithmetic(", "fn bind_comparison("]
+materialized = false
+
+[[target]]
+day = 9
+title = "Logical comparison operators"
+file = "src/operators.rs"
+items = ["ComparisonOperator"]
+declarations = ["pub enum ComparisonOperator"]
 materialized = false
 
 [[target]]
 day = 10
 title = "Representative primitive fast loops"
 file = "src/expression.rs"
-items = ["PrimitiveLoop", "PrimitiveBinaryExpression::evaluate_with_loop", "BoundExpression::evaluate_with_loop"]
-declarations = ["pub enum PrimitiveLoop", "pub fn evaluate_with_loop(", "pub fn evaluate_with_loop("]
+items = ["PrimitiveLoop", "PrimitiveBinaryExpression::evaluate_with_loop"]
+declarations = ["pub enum PrimitiveLoop", "pub fn evaluate_with_loop("]
+materialized = false
+
+[[target]]
+day = 10
+title = "Bound fast-loop forwarding"
+file = "src/binder.rs"
+items = ["BoundExpression::evaluate_with_loop"]
+declarations = ["pub fn evaluate_with_loop("]
 materialized = false
 
 [[target]]
 day = 11
 title = "One-level List scalars and arrays"
 file = "src/array/list_array.rs"
-items = ["ListScalar", "ListScalarRef", "ListArray", "ListArray::try_from_raw_parts", "ListArray::try_from_rows", "ListArrayBuilder"]
-declarations = ["pub struct ListScalar", "pub struct ListScalarRef", "pub struct ListArray", "pub fn try_from_raw_parts(", "pub fn try_from_rows", "pub struct ListArrayBuilder"]
+items = ["ListError", "ListScalar", "ListScalarRef", "ListArray", "ListArrayBuilder", "ListArray::try_from_rows", "ListArray::try_from_raw_parts"]
+declarations = ["pub enum ListError", "pub struct ListScalar", "pub struct ListScalarRef", "pub struct ListArray", "pub struct ListArrayBuilder", "pub fn try_from_rows", "pub fn try_from_raw_parts("]
+materialized = false
+
+[[target]]
+day = 11
+title = "Logical List type"
+file = "src/data_type.rs"
+items = ["DataType::List"]
+declarations = ["List(Box<DataType>)"]
+materialized = false
+
+[[target]]
+day = 11
+title = "Physical List type"
+file = "src/physical_type.rs"
+items = ["PhysicalType::List"]
+declarations = ["List(Box<PhysicalType>)"]
+materialized = false
+
+[[target]]
+day = 11
+title = "Owned and borrowed List scalar variants"
+file = "src/scalar.rs"
+items = ["ScalarImpl::List", "ScalarRefImpl::List"]
+declarations = ["List(ListScalar)", "List(ListScalarRef<'a>)"]
+materialized = false
+
+[[target]]
+day = 11
+title = "List array erasure"
+file = "src/array.rs"
+items = ["From<ListArray> for ArrayImpl", "TryFrom<ArrayImpl> for ListArray"]
+declarations = ["impl From<ListArray> for ArrayImpl", "impl TryFrom<ArrayImpl> for ListArray"]
 materialized = false
 
 [[target]]
@@ -170,7 +250,15 @@ materialized = false
 
 [[target]]
 day = 12
-title = "Iterator and Rust trait boundaries"
+title = "Opaque array iteration"
+file = "src/array.rs"
+items = ["Array::iter"]
+declarations = ["fn iter<'a>(&'a self) -> impl Iterator"]
+materialized = true
+
+[[target]]
+day = 12
+title = "Private concrete array iterator"
 file = "src/array/iterator.rs"
 items = ["ArrayIterator"]
 declarations = ["pub struct ArrayIterator"]
@@ -185,9 +273,33 @@ declarations = ["pub trait Expression: Any + Send + Sync"]
 materialized = false
 
 [[target]]
+day = 12
+title = "Shareable registry factories"
+file = "src/binder.rs"
+items = ["FunctionRegistry::register", "FunctionRegistry::register_unary", "FunctionRegistry::register_binary", "FunctionRegistry::register_ternary"]
+declarations = ["pub fn register(", "pub fn register_unary(", "pub fn register_binary(", "pub fn register_ternary("]
+materialized = false
+
+[[target]]
+day = 12
+title = "Borrowed column-view lifetime"
+file = "src/column.rs"
+items = ["ColumnViewImpl<'a>"]
+declarations = ["pub struct ColumnViewImpl<'a>"]
+materialized = false
+
+[[target]]
 day = 13
-title = "Batch-level asynchronous adapter"
+title = "Static and erased batch futures"
 file = "src/expression.rs"
-items = ["evaluate_static", "BatchFuture", "AsyncExpression", "AsyncExpressionAdapter", "BoundExpression::evaluate_async"]
-declarations = ["pub fn evaluate_static(", "pub type BatchFuture", "pub trait AsyncExpression", "pub struct AsyncExpressionAdapter", "pub fn evaluate_async("]
+items = ["evaluate_static", "BatchFuture", "AsyncExpression", "AsyncExpressionAdapter"]
+declarations = ["pub fn evaluate_static", "pub type BatchFuture", "pub trait AsyncExpression", "pub struct AsyncExpressionAdapter"]
+materialized = false
+
+[[target]]
+day = 13
+title = "Bound asynchronous forwarding"
+file = "src/binder.rs"
+items = ["BoundExpression::evaluate_async"]
+declarations = ["pub fn evaluate_async("]
 materialized = false

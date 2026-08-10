@@ -6,6 +6,10 @@ use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 use serde::Deserialize;
 
+mod starter_api_contract;
+
+use starter_api_contract::{APPROVED_TARGETS, ApprovedTarget};
+
 #[derive(Debug, Parser)]
 #[command(author, version, about)]
 struct Args {
@@ -24,13 +28,13 @@ enum Action {
     CheckStarterApi,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 struct ApiManifest {
     version: u8,
     target: Vec<ApiTarget>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 struct ApiTarget {
     day: usize,
     title: String,
@@ -163,6 +167,127 @@ fn copy_test(root: &Path, chapter: usize) -> Result<CopyReport> {
     Ok(CopyReport { changed_files })
 }
 
+fn validate_manifest_against_approved(manifest: &ApiManifest) -> Result<()> {
+    if manifest.version != 1 {
+        bail!(
+            "unsupported starter API manifest version {}",
+            manifest.version
+        );
+    }
+    if manifest.target.len() != APPROVED_TARGETS.len() {
+        bail!(
+            "starter API manifest has {} targets; the approved source ledger has {}",
+            manifest.target.len(),
+            APPROVED_TARGETS.len()
+        );
+    }
+
+    for (index, (actual, approved)) in manifest.target.iter().zip(APPROVED_TARGETS).enumerate() {
+        if actual.day != approved.day
+            || actual.title != approved.title
+            || actual.file != approved.file
+            || actual.items.iter().map(String::as_str).collect::<Vec<_>>() != approved.items
+            || actual
+                .declarations
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+                != approved.declarations
+            || actual.materialized != approved.materialized
+        {
+            bail!(
+                "starter API target {} disagrees with the approved source ledger entry from {}: Day {} {} {}",
+                index + 1,
+                approved.source,
+                approved.day,
+                approved.file,
+                approved.title
+            );
+        }
+    }
+    Ok(())
+}
+
+fn roadmap_row(target: &ApprovedTarget) -> String {
+    let items = target
+        .items
+        .iter()
+        .zip(target.declarations)
+        .map(|(item, declaration)| format!("`{item}` → `{declaration}`"))
+        .collect::<Vec<_>>()
+        .join("; ");
+    format!(
+        "| {} | `{}` | {} | {} |",
+        target.day, target.file, target.title, items
+    )
+}
+
+fn validate_roadmap_against_approved(roadmap: &str) -> Result<()> {
+    let actual = roadmap
+        .lines()
+        .filter(|line| {
+            line.strip_prefix("| ")
+                .and_then(|rest| rest.chars().next())
+                .is_some_and(|character| character.is_ascii_digit())
+        })
+        .collect::<Vec<_>>();
+    let expected = APPROVED_TARGETS.iter().map(roadmap_row).collect::<Vec<_>>();
+    if actual.len() != expected.len() {
+        bail!(
+            "starter API roadmap has {} target rows; the approved source ledger has {}",
+            actual.len(),
+            expected.len()
+        );
+    }
+    for (index, (actual, expected)) in actual.iter().zip(&expected).enumerate() {
+        if *actual != expected {
+            bail!(
+                "starter API roadmap row {} disagrees with the approved source ledger\nexpected: {}\nactual:   {}",
+                index + 1,
+                expected,
+                actual
+            );
+        }
+    }
+    Ok(())
+}
+
+fn struct_fields<'a>(source: &'a str, name: &str) -> Result<Vec<&'a str>> {
+    let header = format!("pub struct {name} {{");
+    let body = source
+        .split_once(&header)
+        .map(|(_, rest)| rest)
+        .with_context(|| format!("Decimal storage source is missing `{header}`"))?;
+    let body = body
+        .split_once('}')
+        .map(|(fields, _)| fields)
+        .with_context(|| format!("Decimal storage source has no closing brace for `{name}`"))?;
+    Ok(body
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with("//"))
+        .map(|line| line.strip_suffix(',').unwrap_or(line))
+        .collect())
+}
+
+fn validate_decimal_storage_source(source: &str) -> Result<()> {
+    let expected = [
+        "values: Vec<i128>",
+        "validity: BitVec",
+        "decimal_type: DecimalType",
+        "null_count: usize",
+    ];
+    for name in ["DecimalArray", "DecimalArrayBuilder"] {
+        let actual = struct_fields(source, name)?;
+        if actual != expected {
+            bail!(
+                "{name} must contain exactly one flat i128 buffer, packed BitVec validity, one shared DecimalType, and the derived null count; found {actual:?}"
+            );
+        }
+    }
+    Ok(())
+}
+
 fn check_starter_api(root: &Path) -> Result<()> {
     let starter = root.join("type-exercise-starter");
     let manifest_path = starter.join("api-roadmap.toml");
@@ -170,18 +295,13 @@ fn check_starter_api(root: &Path) -> Result<()> {
         .with_context(|| format!("failed to read {}", manifest_path.display()))?;
     let manifest: ApiManifest = toml::from_str(&manifest_text)
         .with_context(|| format!("failed to parse {}", manifest_path.display()))?;
-    if manifest.version != 1 {
-        bail!(
-            "unsupported starter API manifest version {}",
-            manifest.version
-        );
-    }
+    validate_manifest_against_approved(&manifest)?;
 
     let roadmap_path = starter.join("API_ROADMAP.md");
     let roadmap = fs::read_to_string(&roadmap_path)
         .with_context(|| format!("failed to read {}", roadmap_path.display()))?;
+    validate_roadmap_against_approved(&roadmap)?;
     let mut seen = std::collections::BTreeSet::new();
-    let mut days = std::collections::BTreeSet::new();
     for target in &manifest.target {
         if !(1..=13).contains(&target.day) {
             bail!("starter API target has invalid Day {}", target.day);
@@ -201,21 +321,9 @@ fn check_starter_api(root: &Path) -> Result<()> {
                 target.title
             );
         }
-        days.insert(target.day);
-
-        let roadmap_marker = format!("| {} | `{}` | {} |", target.day, target.file, target.title);
-        if !roadmap.contains(&roadmap_marker) {
-            bail!("roadmap is missing manifest row: {roadmap_marker}");
-        }
-
         let source_path = starter.join(&target.file);
         let source = fs::read_to_string(&source_path).ok();
         for (item, declaration) in target.items.iter().zip(&target.declarations) {
-            let item_marker = format!("`{item}`");
-            let declaration_marker = format!("`{declaration}`");
-            if !roadmap.contains(&item_marker) || !roadmap.contains(&declaration_marker) {
-                bail!("roadmap is missing `{item}` or its declaration shape `{declaration}`");
-            }
             match (&source, target.materialized) {
                 (Some(source), true) if !source.contains(declaration) => bail!(
                     "materialized starter target `{item}` is missing `{declaration}` in {}",
@@ -235,18 +343,6 @@ fn check_starter_api(root: &Path) -> Result<()> {
         }
     }
 
-    let expected_days = (1..=13).collect::<std::collections::BTreeSet<_>>();
-    if days != expected_days {
-        bail!("starter API roadmap must cover every Day 1-13 exactly as a complete set");
-    }
-    if manifest
-        .target
-        .iter()
-        .any(|target| target.materialized && target.day > 2)
-    {
-        bail!("only cumulative Days 1-2 starter targets may be materialized on PR #45");
-    }
-
     let reference_manifest = fs::read_to_string(root.join("type-exercise/Cargo.toml"))?;
     if reference_manifest.contains("rust_decimal") {
         bail!("reference production dependencies must not reintroduce rust_decimal");
@@ -257,6 +353,9 @@ fn check_starter_api(root: &Path) -> Result<()> {
     {
         bail!("Decimal must remain a dedicated catalog row, never a copy primitive row");
     }
+    let decimal_storage =
+        fs::read_to_string(root.join("type-exercise/src/array/decimal_array.rs"))?;
+    validate_decimal_storage_source(&decimal_storage)?;
 
     println!("starter API roadmap matches cumulative Days 1-2 and reserves Days 3-13");
     Ok(())
@@ -280,7 +379,10 @@ mod tests {
 
     use tempfile::TempDir;
 
-    use super::{check_starter_api, copy_test, workspace_root};
+    use super::{
+        ApiManifest, check_starter_api, copy_test, validate_decimal_storage_source,
+        validate_manifest_against_approved, workspace_root,
+    };
 
     fn fixture() -> TempDir {
         let root = tempfile::tempdir().unwrap();
@@ -386,5 +488,101 @@ mod tests {
     #[test]
     fn workspace_starter_api_manifest_matches_the_cumulative_scaffold() {
         check_starter_api(&workspace_root().unwrap()).unwrap();
+    }
+
+    fn workspace_manifest() -> ApiManifest {
+        let root = workspace_root().unwrap();
+        let source =
+            fs::read_to_string(root.join("type-exercise-starter/api-roadmap.toml")).unwrap();
+        toml::from_str(&source).unwrap()
+    }
+
+    #[test]
+    fn approved_api_ledger_rejects_coordinated_semantic_drift() {
+        let manifest = workspace_manifest();
+
+        let mut missing = manifest.clone();
+        missing.target.remove(
+            missing
+                .target
+                .iter()
+                .position(|target| target.title == "Thread-safe erased expression boundary")
+                .unwrap(),
+        );
+        assert!(validate_manifest_against_approved(&missing).is_err());
+
+        let mut swapped = manifest.clone();
+        let day_12 = swapped
+            .target
+            .iter()
+            .position(|target| target.title == "Private concrete array iterator")
+            .unwrap();
+        let day_13 = swapped
+            .target
+            .iter()
+            .position(|target| target.title == "Static and erased batch futures")
+            .unwrap();
+        swapped.target[day_12].day = 13;
+        swapped.target[day_13].day = 12;
+        assert!(validate_manifest_against_approved(&swapped).is_err());
+
+        let mut duplicated = manifest.clone();
+        let duplicate_item = duplicated.target[0].items[1].clone();
+        let duplicate_declaration = duplicated.target[0].declarations[1].clone();
+        duplicated.target[0].items.push(duplicate_item);
+        duplicated.target[0]
+            .declarations
+            .push(duplicate_declaration);
+        assert!(validate_manifest_against_approved(&duplicated).is_err());
+
+        let mut wrong_file = manifest.clone();
+        wrong_file
+            .target
+            .iter_mut()
+            .find(|target| {
+                target
+                    .items
+                    .iter()
+                    .any(|item| item == "BoundExpression::evaluate_async")
+            })
+            .unwrap()
+            .file = "src/expression.rs".to_owned();
+        assert!(validate_manifest_against_approved(&wrong_file).is_err());
+
+        let mut leaked = manifest;
+        leaked
+            .target
+            .iter_mut()
+            .find(|target| target.day == 3)
+            .unwrap()
+            .materialized = true;
+        assert!(validate_manifest_against_approved(&leaked).is_err());
+    }
+
+    #[test]
+    fn decimal_storage_layout_rejects_shadow_or_widened_row_state() {
+        let root = workspace_root().unwrap();
+        let source =
+            fs::read_to_string(root.join("type-exercise/src/array/decimal_array.rs")).unwrap();
+        validate_decimal_storage_source(&source).unwrap();
+
+        for forbidden in [
+            "    _row_types: Vec<DecimalType>,\n",
+            "    values: Vec<Option<Decimal>>,\n",
+            "    validity: Vec<bool>,\n",
+        ] {
+            let mutated = if forbidden.contains("_row_types") {
+                source.replacen(
+                    "    validity: BitVec,\n",
+                    &format!("    validity: BitVec,\n{forbidden}"),
+                    1,
+                )
+            } else if forbidden.contains("values:") {
+                source.replacen("    values: Vec<i128>,\n", forbidden, 1)
+            } else {
+                source.replacen("    validity: BitVec,\n", forbidden, 1)
+            };
+            assert!(validate_decimal_storage_source(&mutated).is_err());
+        }
     }
 }

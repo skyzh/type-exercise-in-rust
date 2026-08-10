@@ -62,53 +62,56 @@ impl ScalarRefImpl<'_> {
 }
 
 macro_rules! declare_copy_scalar_family {
-    ($owned:ty, $variant:ident, $array:ident) => {
+    ($owned:ty, $variant:ident, $array:ident, $day:literal) => {
         impl Scalar for $owned {
             const PHYSICAL_TYPE: PhysicalType = PhysicalType::$variant;
             type ArrayType = crate::$array;
             type RefType<'a> = $owned;
             fn as_scalar_ref(&self) -> Self::RefType<'_> {
-                todo!("implement the scalar family in Day 2")
+                todo!(concat!("implement the scalar family in ", $day))
             }
         }
         impl ScalarRef<'_> for $owned {
             type ArrayType = crate::$array;
             type ScalarType = $owned;
             fn to_owned_scalar(self) -> Self::ScalarType {
-                todo!("implement the scalar family in Day 2")
+                todo!(concat!("implement the scalar family in ", $day))
             }
         }
         impl From<$owned> for ScalarImpl {
             fn from(_: $owned) -> Self {
-                todo!("implement scalar erasure in Day 2")
+                todo!(concat!("implement scalar erasure in ", $day))
             }
         }
         impl TryFrom<ScalarImpl> for $owned {
             type Error = TypeMismatch;
             fn try_from(_: ScalarImpl) -> Result<Self, Self::Error> {
-                todo!("implement checked scalar recovery in Day 2")
+                todo!(concat!("implement checked scalar recovery in ", $day))
             }
         }
         impl<'a> From<$owned> for ScalarRefImpl<'a> {
             fn from(_: $owned) -> Self {
-                todo!("implement borrowed scalar erasure in Day 2")
+                todo!(concat!("implement borrowed scalar erasure in ", $day))
             }
         }
         impl TryFrom<ScalarRefImpl<'_>> for $owned {
             type Error = TypeMismatch;
             fn try_from(_: ScalarRefImpl<'_>) -> Result<Self, Self::Error> {
-                todo!("implement checked borrowed-scalar recovery in Day 2")
+                todo!(concat!(
+                    "implement checked borrowed-scalar recovery in ",
+                    $day
+                ))
             }
         }
     };
 }
 
-declare_copy_scalar_family!(i16, Int16, I16Array);
-declare_copy_scalar_family!(i32, Int32, I32Array);
-declare_copy_scalar_family!(i64, Int64, I64Array);
-declare_copy_scalar_family!(bool, Bool, BoolArray);
-declare_copy_scalar_family!(f32, Float32, F32Array);
-declare_copy_scalar_family!(f64, Float64, F64Array);
+declare_copy_scalar_family!(i16, Int16, I16Array, "Day 2");
+declare_copy_scalar_family!(i32, Int32, I32Array, "Day 1");
+declare_copy_scalar_family!(i64, Int64, I64Array, "Day 2");
+declare_copy_scalar_family!(bool, Bool, BoolArray, "Day 2");
+declare_copy_scalar_family!(f32, Float32, F32Array, "Day 2");
+declare_copy_scalar_family!(f64, Float64, F64Array, "Day 2");
 
 impl Scalar for String {
     const PHYSICAL_TYPE: PhysicalType = PhysicalType::String;

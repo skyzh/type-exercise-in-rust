@@ -5,6 +5,24 @@ use crate::{
     ScalarRefImpl, StringArray, StringArrayBuilder, TypeMismatch,
 };
 
+fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
+    payload
+        .downcast_ref::<&str>()
+        .map(|message| (*message).to_owned())
+        .or_else(|| payload.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "non-string panic payload".to_owned())
+}
+
+fn assert_completed_or_day_1_todo(operation: impl FnOnce() + std::panic::UnwindSafe) {
+    if let Err(payload) = std::panic::catch_unwind(operation) {
+        let message = panic_message(payload);
+        assert!(
+            message.contains("Day 1"),
+            "a retained Chapter 1 scalar boundary reached later-day work: {message}"
+        );
+    }
+}
+
 fn assert_complete_family<S, A>()
 where
     S: Scalar<ArrayType = A>,
@@ -29,6 +47,28 @@ fn connects_the_explicit_integer_and_string_families() {
     let string_ref: <String as Scalar>::RefType<'_> = string.as_scalar_ref();
     assert_eq!(string_ref, "type system");
     assert_eq!(string_ref.to_owned_scalar(), string);
+}
+
+#[test]
+fn retained_i32_scalar_boundaries_belong_to_day_1() {
+    assert_completed_or_day_1_todo(|| {
+        let _ = 42_i32.as_scalar_ref();
+    });
+    assert_completed_or_day_1_todo(|| {
+        let _ = <i32 as ScalarRef>::to_owned_scalar(42_i32);
+    });
+    assert_completed_or_day_1_todo(|| {
+        let _ = ScalarImpl::from(42_i32);
+    });
+    assert_completed_or_day_1_todo(|| {
+        let _ = i32::try_from(ScalarImpl::Int32(42));
+    });
+    assert_completed_or_day_1_todo(|| {
+        let _ = ScalarRefImpl::from(42_i32);
+    });
+    assert_completed_or_day_1_todo(|| {
+        let _ = i32::try_from(ScalarRefImpl::Int32(42));
+    });
 }
 
 #[test]
