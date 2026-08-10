@@ -1,8 +1,7 @@
 use crate::{
     Array, ArrayImpl, BinaryScalarFunction, CheckedBinaryExpression, CheckedBinaryScalarFunction,
-    CheckedUnaryScalarFunction, ColumnViewImpl, Expression, ExpressionError, I32Add, I32Array,
-    PhysicalType, ScalarError, ScalarRefImpl, StringArray, TypeMismatch, UnaryExpression,
-    evaluate_binary,
+    CheckedUnaryScalarFunction, ColumnViewImpl, I32Add, I32Array, PhysicalType, ScalarError,
+    ScalarRefImpl, StringArray, UnaryExpression, evaluate_binary,
 };
 
 struct StringLengthAdd;
@@ -30,7 +29,7 @@ impl BinaryScalarFunction for I32PairLabel {
 }
 
 #[test]
-fn vectorizes_addition_over_arrays_constants_and_dictionaries() {
+fn vectorizes_addition_over_arrays_constants_and_indexed() {
     let left: ArrayImpl = I32Array::from_slice(&[Some(10), None, Some(30)]).into();
     let result = evaluate_binary(
         &I32Add,
@@ -111,33 +110,26 @@ fn addition_uses_explicit_wrapping_overflow() {
 
 #[test]
 fn rejects_input_lengths_before_evaluating_rows() {
-    assert_eq!(
+    assert!(
         evaluate_binary(
             &I32Add,
             ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 2),
             ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 3),
-        ),
-        Err(ExpressionError::InputLengthMismatch {
-            expected: 2,
-            actual: 3,
-            input_index: 1,
-        })
+        )
+        .is_err()
     );
 }
 
 #[test]
 fn rejects_physical_types_before_evaluating_rows() {
     let strings: ArrayImpl = StringArray::from_slice(&[Some("wrong")]).into();
-    assert_eq!(
+    assert!(
         evaluate_binary(
             &I32Add,
             ColumnViewImpl::array(&strings),
             ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
-        ),
-        Err(ExpressionError::TypeMismatch(TypeMismatch {
-            expected: PhysicalType::Int32,
-            actual: PhysicalType::String,
-        }))
+        )
+        .is_err()
     );
 }
 
@@ -171,8 +163,24 @@ impl CheckedBinaryScalarFunction for CheckedAdd {
     }
 }
 
+struct CheckedFailOnSeven;
+
+impl CheckedUnaryScalarFunction for CheckedFailOnSeven {
+    type Output = i32;
+
+    fn evaluate(&self, input: ScalarRefImpl<'_>) -> Result<i32, ScalarError> {
+        let ScalarRefImpl::Int32(input) = input else {
+            unreachable!("the expression validates its physical input")
+        };
+        if input == 7 {
+            return Err(ScalarError::DivisionByZero);
+        }
+        Ok(input)
+    }
+}
+
 #[test]
-fn concrete_unary_and_binary_shells_repeat_the_same_strict_contract() {
+fn concrete_unary_and_binary_shells_agree_on_validation_nulls_and_output() {
     let unary = UnaryExpression::new("checked_neg", [PhysicalType::Int32], CheckedNeg);
     let unary_output = unary
         .evaluate(&[ColumnViewImpl::constant(ScalarRefImpl::Int32(7), 2)])
@@ -202,5 +210,93 @@ fn concrete_unary_and_binary_shells_repeat_the_same_strict_contract() {
             .iter()
             .collect::<Vec<_>>(),
         vec![None, None]
+    );
+}
+
+#[test]
+fn shells_reject_extra_or_missing_inputs_before_indexing() {
+    let binary = CheckedBinaryExpression::new(
+        "checked_add",
+        [PhysicalType::Int32, PhysicalType::Int32],
+        CheckedAdd,
+    );
+    assert!(
+        binary
+            .evaluate(&[
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 1),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(3), 1),
+            ])
+            .is_err()
+    );
+    assert!(
+        binary
+            .evaluate(&[ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1)])
+            .is_err()
+    );
+
+    let unary = UnaryExpression::new("checked_neg", [PhysicalType::Int32], CheckedNeg);
+    assert!(
+        unary
+            .evaluate(&[
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 1),
+            ])
+            .is_err()
+    );
+    assert!(unary.evaluate(&[]).is_err());
+}
+
+#[test]
+fn shells_reject_the_second_input_physical_type() {
+    let strings: ArrayImpl = StringArray::from_slice(&[Some("wrong")]).into();
+    let binary = CheckedBinaryExpression::new(
+        "checked_add",
+        [PhysicalType::Int32, PhysicalType::Int32],
+        CheckedAdd,
+    );
+    assert!(
+        binary
+            .evaluate(&[
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
+                ColumnViewImpl::array(&strings),
+            ])
+            .is_err()
+    );
+}
+
+#[test]
+fn shells_reject_mismatched_input_lengths() {
+    let binary = CheckedBinaryExpression::new(
+        "checked_add",
+        [PhysicalType::Int32, PhysicalType::Int32],
+        CheckedAdd,
+    );
+    assert!(
+        binary
+            .evaluate(&[
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 2),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 3),
+            ])
+            .is_err()
+    );
+}
+
+#[test]
+fn scalar_errors_propagate_as_batch_errors_not_null_rows() {
+    let unary = UnaryExpression::new(
+        "checked_fail_on_seven",
+        [PhysicalType::Int32],
+        CheckedFailOnSeven,
+    );
+    assert!(
+        unary
+            .evaluate(&[ColumnViewImpl::constant(ScalarRefImpl::Int32(7), 1)])
+            .is_err()
+    );
+    assert!(
+        unary
+            .evaluate(&[ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1)])
+            .is_ok()
     );
 }

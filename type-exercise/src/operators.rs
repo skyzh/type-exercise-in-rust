@@ -134,9 +134,12 @@ macro_rules! expression_metadata {
     };
 }
 
-impl<F: CheckedUnaryScalarFunction> Expression for UnaryExpression<F> {
-    expression_metadata!(CheckedUnaryScalarFunction);
-    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+impl<F: CheckedUnaryScalarFunction> UnaryExpression<F> {
+    /// Strict concrete-loop evaluation for one checked unary function.
+    ///
+    /// This inherent method is the day-4-owned callable surface of the shell;
+    /// the erased `Expression` boundary delegates to it from day 8 onward.
+    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
         let len = validate_expression_inputs(inputs, &self.input_types)?;
         let mut output = <<F::Output as Scalar>::ArrayType as Array>::Builder::with_capacity(len);
         for row in 0..len {
@@ -156,9 +159,19 @@ impl<F: CheckedUnaryScalarFunction> Expression for UnaryExpression<F> {
     }
 }
 
-impl<F: CheckedBinaryScalarFunction> Expression for CheckedBinaryExpression<F> {
-    expression_metadata!(CheckedBinaryScalarFunction);
+impl<F: CheckedUnaryScalarFunction> Expression for UnaryExpression<F> {
+    expression_metadata!(CheckedUnaryScalarFunction);
     fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+        self.evaluate(inputs)
+    }
+}
+
+impl<F: CheckedBinaryScalarFunction> CheckedBinaryExpression<F> {
+    /// Strict concrete-loop evaluation for one checked binary function.
+    ///
+    /// This inherent method is the day-4-owned callable surface of the shell;
+    /// the erased `Expression` boundary delegates to it from day 8 onward.
+    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
         let len = validate_expression_inputs(inputs, &self.input_types)?;
         let mut output = <<F::Output as Scalar>::ArrayType as Array>::Builder::with_capacity(len);
         for row in 0..len {
@@ -177,6 +190,13 @@ impl<F: CheckedBinaryScalarFunction> Expression for CheckedBinaryExpression<F> {
             output.push(value.as_ref().map(Scalar::as_scalar_ref));
         }
         Ok(output.finish().into())
+    }
+}
+
+impl<F: CheckedBinaryScalarFunction> Expression for CheckedBinaryExpression<F> {
+    expression_metadata!(CheckedBinaryScalarFunction);
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+        self.evaluate(inputs)
     }
 }
 

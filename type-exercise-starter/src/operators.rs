@@ -1,10 +1,22 @@
 //! Learner-owned checked-operator checkpoints.
 //!
 //! Day 4, checkpoint 2: add checked unary and binary shells here.
-// pub trait CheckedUnaryScalarFunction { /* one checked scalar call */ }
-// pub trait CheckedBinaryScalarFunction { /* one checked scalar call */ }
+// pub trait CheckedUnaryScalarFunction {
+//     /* one checked scalar call: fn evaluate(&self, input: ScalarRefImpl<'_>) -> Result<Self::Output, ScalarError> */
+// }
+// pub trait CheckedBinaryScalarFunction {
+//     /* one checked scalar call: fn evaluate(&self, left: ScalarRefImpl<'_>, right: ScalarRefImpl<'_>) -> Result<Self::Output, ScalarError> */
+// }
 // pub struct UnaryExpression<F> { /* function and metadata */ }
+// impl<F> UnaryExpression<F> {
+//     /* pub fn new(name, input_types: [PhysicalType; 1], function) -> Self */
+//     /* pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, /* readable batch error of your choice */> */
+// }
 // pub struct CheckedBinaryExpression<F> { /* function and metadata */ }
+// impl<F> CheckedBinaryExpression<F> {
+//     /* pub fn new(name, input_types: [PhysicalType; 2], function) -> Self */
+//     /* pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, /* readable batch error of your choice */> */
+// }
 //
 //! Day 5, checkpoint 2: add arithmetic and numeric-comparison selection here.
 // pub enum ArithmeticOperator { Add, Subtract, Multiply, Divide }
