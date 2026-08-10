@@ -21,14 +21,8 @@ impl Expression for MetadataExpression {
         PhysicalType::Int32
     }
 
-    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
-        if inputs.len() != self.input_types.len() {
-            return Err(ExpressionError::InputArityMismatch {
-                expected: self.input_types.len(),
-                actual: inputs.len(),
-            });
-        }
-        Ok(I32Array::from_slice(&[]).into())
+    fn evaluate(&self, _inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+        unreachable!("the metadata-only expression is never evaluated")
     }
 }
 
@@ -368,4 +362,60 @@ fn bound_boolean_expressions_evaluate_with_sql_semantics() {
             .collect::<Vec<_>>(),
         vec![Some(false), None]
     );
+}
+
+#[test]
+fn bound_arithmetic_operators_keep_distinct_semantics() {
+    let registry = FunctionRegistry::with_builtins();
+    for (name, physical_name, expected) in [
+        ("+", "i32_add", 13),
+        ("-", "numeric_subtract", 5),
+        ("*", "numeric_multiply", 36),
+        ("/", "numeric_divide", 2),
+    ] {
+        let expression = registry
+            .bind_binary(name, DataType::Integer, DataType::Integer)
+            .unwrap();
+        assert_eq!(expression.physical_name(), physical_name, "logical {name}");
+        let output = expression
+            .evaluate(&[
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(9), 1),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(4), 1),
+            ])
+            .unwrap();
+        assert_eq!(
+            <&I32Array>::try_from(&output).unwrap().get(0),
+            Some(expected),
+            "logical {name}"
+        );
+    }
+}
+
+#[test]
+fn binding_rejects_lossy_promotions_for_arithmetic_and_comparisons() {
+    let registry = FunctionRegistry::with_builtins();
+    let pairs = [
+        (DataType::BigInt, DataType::Double),
+        (DataType::Double, DataType::BigInt),
+        (DataType::BigInt, DataType::Real),
+        (DataType::Real, DataType::BigInt),
+    ];
+    for operator in ["+", "<"] {
+        for (left, right) in &pairs {
+            expect_bind_error(registry.bind_binary(operator, left.clone(), right.clone()));
+        }
+    }
+
+    // Evaluation-safety control: the same registry still binds and evaluates a
+    // valid widened pair after the lossy rejections above.
+    let bound = registry
+        .bind_binary("<", DataType::Integer, DataType::BigInt)
+        .unwrap();
+    let output = bound
+        .evaluate(&[
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 1),
+            ColumnViewImpl::constant(ScalarRefImpl::Int64(3), 1),
+        ])
+        .unwrap();
+    assert_eq!(<&BoolArray>::try_from(&output).unwrap().get(0), Some(true));
 }
