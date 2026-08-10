@@ -23,6 +23,9 @@ mod variant_catalog;
 // pub use promotion::{NUMERIC_PROMOTIONS, NumericPromotion, promote_numeric};
 // Day 5, checkpoint 2: extend the operators re-export with the selection enums.
 // pub use operators::{ArithmeticOperator, ComparisonOperator};
+// Day 6, checkpoint 1: extend the expression and operators re-exports with the shared error and validator.
+// pub use expression::ExpressionError;
+// pub use operators::validate_expression_inputs;
 // Day 7, checkpoint 1: uncomment after implementing three-valued Boolean logic.
 // mod boolean_logic;
 // Day 9, checkpoint 1: uncomment after implementing the binder and registry.

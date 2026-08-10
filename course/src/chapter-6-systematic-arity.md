@@ -35,10 +35,19 @@ four- or five-input builtins.
 
 - **Target:** `type-exercise-starter/src/operators.rs::validate_expression_inputs` and
   `type-exercise-starter/src/expression.rs::ExpressionError`.
-- **Change:** report arity before indexing, type before length, and the exact mismatching input index.
+- **Change:** validate arity before indexing, physical types before length, and every length before
+  rows; the `ExpressionError` variant and field layout are your readable choice, not a prescribed
+  shape.
 - **Preserve:** no output allocation or scalar call before validation completes.
 - **Run:** the Chapter 6 focused test.
 - **Passing means:** two-, four-, and five-input slices fail closed with the same error vocabulary.
+
+Wire the new public names like the earlier chapters:
+
+```rust,ignore
+pub use expression::ExpressionError;
+pub use operators::validate_expression_inputs;
+```
 
 ## Checkpoint 2: add the ternary shell
 
@@ -51,9 +60,10 @@ four- or five-input builtins.
 
 ## Checkpoint 3: make ternary behavior observable
 
-- **Target:** `type-exercise-starter/src/operators.rs::build_numeric_clamp_expression`.
+- **Target:** `type-exercise-starter/src/operators.rs::build_numeric_clamp_expression` and
+  `build_numeric_neg_expression` (declared on Day 5 with the other arithmetic selection builders).
 - **Change:** construct a physical `clamp` shell for the already-selected common numeric family and
-  reject `lower > upper`.
+  reject `lower > upper`; reuse the unary `neg` shell from Day 5 for the strict unary path.
 - **Preserve:** physical selection happens once before the batch; the typed shell remains the only
   row loop.
 - **Run:** focused and cumulative tests.

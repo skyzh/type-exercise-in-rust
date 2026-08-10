@@ -1,6 +1,6 @@
 use crate::{
-    Array, ColumnViewImpl, ExpressionError, I64Array, PhysicalType, ScalarError, ScalarRefImpl,
-    TypeMismatch, validate_expression_inputs,
+    Array, ArrayImpl, ColumnViewImpl, I16Array, I64Array, PhysicalType, ScalarRefImpl,
+    validate_expression_inputs,
 };
 
 use crate::operators::{build_numeric_clamp_expression, build_numeric_neg_expression};
@@ -48,17 +48,30 @@ fn unary_and_real_ternary_adapters_are_strict_and_checked() {
         ])
         .unwrap();
     assert_eq!(<&I64Array>::try_from(&null_output).unwrap().get(0), None);
+
+    let values: ArrayImpl = I16Array::from_values(vec![5, 15, 25]).into();
+    let clamped = clamp
+        .evaluate(&[
+            ColumnViewImpl::array(&values),
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(10), 3),
+            ColumnViewImpl::constant(ScalarRefImpl::Int64(20), 3),
+        ])
+        .unwrap();
     assert_eq!(
-        clamp.evaluate(&[
-            ColumnViewImpl::constant(ScalarRefImpl::Int16(5), 1),
-            ColumnViewImpl::constant(ScalarRefImpl::Int32(10), 1),
-            ColumnViewImpl::constant(ScalarRefImpl::Int64(0), 1),
-        ]),
-        Err(ExpressionError::ScalarEvaluation {
-            function: "numeric_clamp",
-            row: 0,
-            error: ScalarError::InvalidClampBounds,
-        })
+        <&I64Array>::try_from(&clamped)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![Some(10), Some(15), Some(20)]
+    );
+    assert!(
+        clamp
+            .evaluate(&[
+                ColumnViewImpl::constant(ScalarRefImpl::Int16(5), 1),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(10), 1),
+                ColumnViewImpl::constant(ScalarRefImpl::Int64(0), 1),
+            ])
+            .is_err()
     );
 }
 
@@ -75,31 +88,16 @@ fn validation_is_arity_first_and_works_for_four_or_five_inputs() {
         ColumnViewImpl::constant(ScalarRefImpl::String("wrong"), 3),
         ColumnViewImpl::constant(ScalarRefImpl::Int16(1), 1),
     ];
-    assert_eq!(
-        add.evaluate(&wrong_type_and_length[..1]),
-        Err(ExpressionError::InputArityMismatch {
-            expected: 2,
-            actual: 1,
-        })
-    );
-    assert_eq!(
+    assert!(add.evaluate(&wrong_type_and_length[..1]).is_err());
+    assert!(
         add.evaluate(&[
             ColumnViewImpl::constant(ScalarRefImpl::Int16(1), 1),
             ColumnViewImpl::constant(ScalarRefImpl::Int16(2), 1),
             ColumnViewImpl::constant(ScalarRefImpl::Int16(3), 1),
-        ]),
-        Err(ExpressionError::InputArityMismatch {
-            expected: 2,
-            actual: 3,
-        })
+        ])
+        .is_err()
     );
-    assert_eq!(
-        add.evaluate(&wrong_type_and_length),
-        Err(ExpressionError::TypeMismatch(TypeMismatch {
-            expected: PhysicalType::Int16,
-            actual: PhysicalType::String,
-        }))
-    );
+    assert!(add.evaluate(&wrong_type_and_length).is_err());
 
     let columns = [
         ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 2),
@@ -112,12 +110,17 @@ fn validation_is_arity_first_and_works_for_four_or_five_inputs() {
         validate_expression_inputs(&columns[..4], &[const { PhysicalType::Int32 }; 4]),
         Ok(2)
     );
-    assert_eq!(
-        validate_expression_inputs(&columns, &[const { PhysicalType::Int32 }; 5]),
-        Err(ExpressionError::InputLengthMismatch {
-            expected: 2,
-            actual: 1,
-            input_index: 4,
-        })
-    );
+    assert!(validate_expression_inputs(&columns, &[const { PhysicalType::Int32 }; 5]).is_err());
+
+    // The fifth of six inputs has the wrong physical type with a valid length:
+    // physical-type validation must cover every input, not only the first pair.
+    let six_inputs = [
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 2),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 2),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(3), 2),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(4), 2),
+        ColumnViewImpl::constant(ScalarRefImpl::String("wrong"), 2),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(6), 2),
+    ];
+    assert!(validate_expression_inputs(&six_inputs, &[const { PhysicalType::Int32 }; 6]).is_err());
 }
