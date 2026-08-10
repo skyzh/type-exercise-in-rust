@@ -12,7 +12,7 @@ for row in 0..left.len() {
 ```
 
 The design problem appears when the engine must also borrow strings without copying, read
-constants and dictionaries, promote mixed numeric types, reject bad arity and lengths, and choose
+constants and Indexed views, promote mixed numeric types, reject bad arity and lengths, and choose
 a function from runtime names. Repeating those decisions in every loop makes each new function a
 new place for type drift, null bugs, and inconsistent errors.
 

@@ -131,9 +131,16 @@ fn rejects_a_physical_type_mismatch_before_reading_rows() {
 #[test]
 fn course_name_is_indexed_and_dictionary_is_only_the_industry_comparison() {
     let chapter = include_str!("../../../course/src/chapter-3-column-views.md");
+    let readme = include_str!("../../../README.md");
+    let preface = include_str!("../../../course/src/preface.md");
     let (lesson, comparison) = chapter.split_once("## Test your understanding").unwrap();
-    assert!(!lesson.to_ascii_lowercase().contains("dictionary"));
+    for front_door in [readme, preface, lesson] {
+        assert!(!front_door.to_ascii_lowercase().contains("dictionary"));
+        assert!(front_door.contains("Indexed"));
+    }
     assert!(lesson.contains("ColumnViewImpl::{array, constant, null, indexed}"));
+    assert!(lesson.contains("mod column;"));
+    assert!(lesson.contains("pub use column::{ColumnView, ColumnViewImpl, InvalidIndex};"));
     assert!(comparison.contains("DictionaryArray<K>"));
     assert!(comparison.contains("ArrayRef"));
     assert!(comparison.contains("ColumnarValue"));

@@ -450,14 +450,44 @@ fn validate_reference_declaration_shapes(root: &Path, manifest: &ApiManifest) ->
     validate_reference_declaration_parity(manifest, &list_source, &binder_source)
 }
 
+fn validate_invalid_index_struct(item: &syn::ItemStruct) -> Result<()> {
+    if !matches!(item.vis, syn::Visibility::Public(_)) || !item.generics.params.is_empty() {
+        bail!("InvalidIndex must remain one public, non-generic struct item");
+    }
+    let syn::Fields::Named(fields) = &item.fields else {
+        bail!("InvalidIndex must use named fields");
+    };
+    let fields = fields.named.iter().collect::<Vec<_>>();
+    let expected = ["row", "index", "values_len"];
+    if fields.len() != expected.len() {
+        bail!("InvalidIndex must contain exactly public row, index, and values_len fields");
+    }
+    for (position, (field, expected_name)) in fields.iter().zip(expected).enumerate() {
+        let name_matches = field
+            .ident
+            .as_ref()
+            .is_some_and(|ident| ident == expected_name);
+        if !name_matches
+            || !is_simple_type(&field.ty, "usize")
+            || !matches!(field.vis, syn::Visibility::Public(_))
+        {
+            bail!(
+                "InvalidIndex has a noncanonical public field at position {}",
+                position + 1
+            );
+        }
+    }
+    Ok(())
+}
+
 fn validate_indexed_view_source(source: &str) -> Result<()> {
+    let syntax = syn::parse_file(source).context("failed to parse Indexed column-view source")?;
+    validate_invalid_index_struct(unique_struct(&syntax, "InvalidIndex")?)?;
     for required in [
-        "pub struct InvalidIndex",
         "pub fn indexed(",
         "ColumnViewImplKind::Indexed",
         "ListColumnViewKind::Indexed",
         "ColumnViewKind::Indexed",
-        "values_len: usize",
     ] {
         if !source.contains(required) {
             bail!("Indexed column-view source is missing `{required}`");
@@ -470,6 +500,7 @@ fn validate_indexed_view_source(source: &str) -> Result<()> {
         "ListColumnViewKind::Dictionary",
         "ColumnViewKind::Dictionary",
         "dictionary_len",
+        "pub key: usize",
     ] {
         if source.contains(stale) {
             bail!("Indexed column-view source retains stale symbol `{stale}`");
@@ -831,6 +862,7 @@ pub struct DecimalArrayBuilder {
     fn indexed_view_guard_rejects_every_old_dictionary_symbol() {
         let root = workspace_root().unwrap();
         let source = fs::read_to_string(root.join("type-exercise/src/column.rs")).unwrap();
+        let tests = fs::read_to_string(root.join("type-exercise/src/tests/chapter_3.rs")).unwrap();
         validate_indexed_view_source(&source).unwrap();
 
         for (current, stale) in [
@@ -850,6 +882,20 @@ pub struct DecimalArrayBuilder {
             let mutated = source.replacen(current, stale, 1);
             assert!(validate_indexed_view_source(&mutated).is_err(), "{stale}");
         }
+
+        let mutated_source = source
+            .replacen("pub index: usize", "pub key: usize", 1)
+            .replacen("self.index", "self.key", 1)
+            .replacen(
+                "                index,\n                values_len:",
+                "                key: index,\n                values_len:",
+                1,
+            );
+        let mutated_tests = tests.replace("            index:", "            key:");
+        assert!(mutated_source.contains("pub key: usize"));
+        assert_eq!(mutated_tests.matches("            key:").count(), 2);
+        assert!(!mutated_tests.contains("            index:"));
+        assert!(validate_indexed_view_source(&mutated_source).is_err());
     }
 
     #[test]

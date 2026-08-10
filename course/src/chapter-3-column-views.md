@@ -12,6 +12,17 @@ interface.
 - preserve null rows without materializing another array; and
 - reject every invalid index before a view becomes usable.
 
+Create `type-exercise-starter/src/column.rs` for the Day 3 declarations and implementation. Then
+register the module and expose its public API from `type-exercise-starter/src/lib.rs`:
+
+```rust,ignore
+mod column;
+pub use column::{ColumnView, ColumnViewImpl, InvalidIndex};
+```
+
+Keep the three public types in `column.rs`; this module wiring lets the copied test import them from
+the starter crate root.
+
 ```console
 cargo x copy-test --chapter 3
 cargo test -p type-exercise-starter chapter_3 --locked
