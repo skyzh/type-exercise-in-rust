@@ -37,7 +37,7 @@ require an `Err` result, not a particular error representation.
 
 Wire the new modules like Chapter 3 did for `column`:
 
-```rust
+```rust,ignore
 mod expression;
 mod operators;
 pub use expression::{BinaryScalarFunction, I32Add, ScalarError, evaluate_binary};
