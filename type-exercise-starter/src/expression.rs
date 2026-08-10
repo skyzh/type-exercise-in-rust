@@ -12,8 +12,15 @@
 // pub enum ExpressionError { /* arity, type, length, and scalar failures */ }
 //
 //! Day 8, checkpoint 1: add the object-safe runtime expression boundary here.
-// pub trait Expression { /* metadata and batch evaluation */ }
+// pub trait Expression: Any + Send + Sync {
+//     /* fn name(&self) -> &'static str */
+//     /* fn arity(&self) -> usize */
+//     /* fn input_types(&self) -> &[PhysicalType] */
+//     /* fn output_type(&self) -> PhysicalType */
+//     /* fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> */
+// }
 // pub struct BinaryExpression<F> { /* typed function plus runtime metadata */ }
+// impl<F> BinaryExpression<F> { /* pub fn new(name, function) -> Self */ }
 //
 //! Day 8, checkpoint 3: add the builtin catalog here.
 // macro_rules! define_builtin_expressions { /* names and constructors */ }
@@ -27,8 +34,8 @@
 //         -> Result<ArrayImpl, ExpressionError>;
 // }
 //
-//! Day 12, checkpoint 2: strengthen the existing erased boundary here.
-// pub trait Expression: Any + Send + Sync { /* checked Any recovery and evaluation */ }
+//! Day 12, checkpoint 2: add checked Any recovery and downcast helpers to the erased boundary here.
+// impl dyn Expression { /* checked Any recovery */ }
 //
 //! Day 13, checkpoint 1: add one static batch future here.
 // pub fn evaluate_static<'a, E>(expression: &'a E, inputs: &'a [ColumnViewImpl<'a>])
