@@ -39,3 +39,4 @@
 // impl<F> Expression for UnaryExpression<F> { /* metadata and evaluation */ }
 // impl<F> Expression for CheckedBinaryExpression<F> { /* metadata and evaluation */ }
 // impl<F> Expression for TernaryExpression<F> { /* metadata and evaluation */ }
+// impl Expression for BooleanExpression { /* metadata and evaluation */ }

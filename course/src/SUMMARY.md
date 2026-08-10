@@ -10,3 +10,4 @@
 - [Make Numeric Evaluation Generic](./chapter-5-generic-arithmetic.md)
 - [Make Arity Systematic](./chapter-6-systematic-arity.md)
 - [Implement Three-Valued Boolean Logic](./chapter-7-boolean-logic.md)
+- [Erase Typed Expressions at Runtime](./chapter-8-runtime-erasure.md)

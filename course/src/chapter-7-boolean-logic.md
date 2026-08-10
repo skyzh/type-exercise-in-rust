@@ -61,4 +61,6 @@ cargo test -p type-exercise-starter --lib --locked
 ```
 
 
+Next: [Chapter 8 erases typed expressions behind one object-safe boundary](./chapter-8-runtime-erasure.md).
+
 {{#include copyright.md}}

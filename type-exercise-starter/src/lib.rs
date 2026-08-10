@@ -32,6 +32,10 @@ mod variant_catalog;
 //     BOOLEAN_TRUTH_TABLE, BooleanExpression, BooleanOperator, BooleanTruthRow,
 //     NullEvaluationPolicy, build_boolean_expression,
 // };
+// Day 8, checkpoint 1: extend the expression re-exports with the erased boundary and catalog.
+// pub use expression::{
+//     BinaryExpression, BUILTIN_EXPRESSION_NAMES, Expression, build_builtin_expression,
+// };
 // Day 9, checkpoint 1: uncomment after implementing the binder and registry.
 // mod binder;
 
