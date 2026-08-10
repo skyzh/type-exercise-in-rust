@@ -1,3 +1,6 @@
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use crate::{
     Array, ArrayImpl, BinaryScalarFunction, CheckedBinaryExpression, CheckedBinaryScalarFunction,
     CheckedUnaryScalarFunction, ColumnViewImpl, I32Add, I32Array, PhysicalType, ScalarError,
@@ -179,6 +182,28 @@ impl CheckedUnaryScalarFunction for CheckedFailOnSeven {
     }
 }
 
+struct CheckedAddFailOnSecondCall {
+    calls: Arc<AtomicUsize>,
+}
+
+impl CheckedBinaryScalarFunction for CheckedAddFailOnSecondCall {
+    type Output = i32;
+
+    fn evaluate(
+        &self,
+        left: ScalarRefImpl<'_>,
+        right: ScalarRefImpl<'_>,
+    ) -> Result<i32, ScalarError> {
+        let (ScalarRefImpl::Int32(left), ScalarRefImpl::Int32(right)) = (left, right) else {
+            unreachable!("the expression validates both physical inputs")
+        };
+        if self.calls.fetch_add(1, Ordering::SeqCst) == 1 {
+            return Err(ScalarError::DivisionByZero);
+        }
+        Ok(left.wrapping_add(right))
+    }
+}
+
 #[test]
 fn concrete_unary_and_binary_shells_agree_on_validation_nulls_and_output() {
     let unary = UnaryExpression::new("checked_neg", [PhysicalType::Int32], CheckedNeg);
@@ -299,4 +324,26 @@ fn scalar_errors_propagate_as_batch_errors_not_null_rows() {
             .evaluate(&[ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1)])
             .is_ok()
     );
+}
+
+#[test]
+fn binary_scalar_errors_propagate_and_stop_later_rows() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let binary = CheckedBinaryExpression::new(
+        "checked_add_fail_on_second_call",
+        [PhysicalType::Int32, PhysicalType::Int32],
+        CheckedAddFailOnSecondCall {
+            calls: Arc::clone(&calls),
+        },
+    );
+    assert!(
+        binary
+            .evaluate(&[
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 3),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 3),
+            ])
+            .is_err()
+    );
+    // The error stops the row loop: the third row is never evaluated.
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
 }
