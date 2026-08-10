@@ -326,7 +326,7 @@ macro_rules! impl_float_numeric {
 impl_float_numeric!(f32);
 impl_float_numeric!(f64);
 
-struct NumericBinary<O> {
+pub(crate) struct NumericBinary<O> {
     operator: ArithmeticOperator,
     marker: PhantomData<O>,
 }
@@ -351,7 +351,7 @@ where
     }
 }
 
-struct NumericNeg<O>(PhantomData<O>);
+pub(crate) struct NumericNeg<O>(PhantomData<O>);
 impl<O: Numeric> CheckedUnaryScalarFunction for NumericNeg<O> {
     type Output = O;
     fn evaluate(&self, input: ScalarRefImpl<'_>) -> Result<O, ScalarError> {
@@ -359,7 +359,7 @@ impl<O: Numeric> CheckedUnaryScalarFunction for NumericNeg<O> {
     }
 }
 
-struct NumericClamp<O>(PhantomData<O>);
+pub(crate) struct NumericClamp<O>(PhantomData<O>);
 impl<O: Numeric> CheckedTernaryScalarFunction for NumericClamp<O> {
     type Output = O;
     fn evaluate(
@@ -388,7 +388,7 @@ impl<O: Numeric> CheckedTernaryScalarFunction for NumericClamp<O> {
     }
 }
 
-struct NumericCompare<O> {
+pub(crate) struct NumericCompare<O> {
     operator: ComparisonOperator,
     marker: PhantomData<O>,
 }
@@ -411,10 +411,10 @@ impl<O: Numeric> CheckedBinaryScalarFunction for NumericCompare<O> {
     }
 }
 
-struct StringBinary {
+pub(crate) struct StringBinary {
     operator: StringOperator,
 }
-enum StringOperator {
+pub(crate) enum StringOperator {
     Compare(ComparisonOperator),
     Contains,
 }
@@ -442,7 +442,7 @@ impl CheckedBinaryScalarFunction for StringBinary {
     }
 }
 
-struct BoolCompare(ComparisonOperator);
+pub(crate) struct BoolCompare(ComparisonOperator);
 impl CheckedBinaryScalarFunction for BoolCompare {
     type Output = bool;
     fn evaluate(
@@ -462,19 +462,100 @@ impl CheckedBinaryScalarFunction for BoolCompare {
 }
 
 macro_rules! dispatch_numeric_output {
-    ($output:expr, $constructor:expr) => {
+    ($output:expr, $enum:ident, $constructor:expr) => {
         match $output {
-            PhysicalType::Int16 => {
-                Box::new($constructor(PhantomData::<i16>)) as Box<dyn Expression>
-            }
-            PhysicalType::Int32 => Box::new($constructor(PhantomData::<i32>)),
-            PhysicalType::Int64 => Box::new($constructor(PhantomData::<i64>)),
-            PhysicalType::Float32 => Box::new($constructor(PhantomData::<f32>)),
-            PhysicalType::Float64 => Box::new($constructor(PhantomData::<f64>)),
+            PhysicalType::Int16 => $enum::Int16($constructor(PhantomData::<i16>)),
+            PhysicalType::Int32 => $enum::Int32($constructor(PhantomData::<i32>)),
+            PhysicalType::Int64 => $enum::Int64($constructor(PhantomData::<i64>)),
+            PhysicalType::Float32 => $enum::Float32($constructor(PhantomData::<f32>)),
+            PhysicalType::Float64 => $enum::Float64($constructor(PhantomData::<f64>)),
             _ => unreachable!("numeric promotion output"),
         }
     };
 }
+
+/// One concrete checked shell per numeric output family, selected at build time.
+///
+/// The concrete shells expose their day-4-owned inherent `evaluate`; the erased
+/// `Expression` boundary delegates through the enum from day 8 onward.
+macro_rules! numeric_shell_enum {
+    ($name:ident, $shell:ident, $function:ident) => {
+        pub(crate) enum $name {
+            Int16($shell<$function<i16>>),
+            Int32($shell<$function<i32>>),
+            Int64($shell<$function<i64>>),
+            Float32($shell<$function<f32>>),
+            Float64($shell<$function<f64>>),
+        }
+
+        impl $name {
+            pub(crate) fn evaluate(
+                &self,
+                inputs: &[ColumnViewImpl<'_>],
+            ) -> Result<ArrayImpl, ExpressionError> {
+                match self {
+                    Self::Int16(expression) => expression.evaluate(inputs),
+                    Self::Int32(expression) => expression.evaluate(inputs),
+                    Self::Int64(expression) => expression.evaluate(inputs),
+                    Self::Float32(expression) => expression.evaluate(inputs),
+                    Self::Float64(expression) => expression.evaluate(inputs),
+                }
+            }
+        }
+
+        impl Expression for $name {
+            fn name(&self) -> &'static str {
+                match self {
+                    Self::Int16(expression) => expression.name(),
+                    Self::Int32(expression) => expression.name(),
+                    Self::Int64(expression) => expression.name(),
+                    Self::Float32(expression) => expression.name(),
+                    Self::Float64(expression) => expression.name(),
+                }
+            }
+
+            fn input_types(&self) -> &[PhysicalType] {
+                match self {
+                    Self::Int16(expression) => expression.input_types(),
+                    Self::Int32(expression) => expression.input_types(),
+                    Self::Int64(expression) => expression.input_types(),
+                    Self::Float32(expression) => expression.input_types(),
+                    Self::Float64(expression) => expression.input_types(),
+                }
+            }
+
+            fn output_type(&self) -> PhysicalType {
+                match self {
+                    Self::Int16(expression) => expression.output_type(),
+                    Self::Int32(expression) => expression.output_type(),
+                    Self::Int64(expression) => expression.output_type(),
+                    Self::Float32(expression) => expression.output_type(),
+                    Self::Float64(expression) => expression.output_type(),
+                }
+            }
+
+            fn evaluate(
+                &self,
+                inputs: &[ColumnViewImpl<'_>],
+            ) -> Result<ArrayImpl, ExpressionError> {
+                self.evaluate(inputs)
+            }
+        }
+    };
+}
+
+numeric_shell_enum!(
+    NumericBinaryExpression,
+    CheckedBinaryExpression,
+    NumericBinary
+);
+numeric_shell_enum!(
+    NumericComparisonExpression,
+    CheckedBinaryExpression,
+    NumericCompare
+);
+numeric_shell_enum!(NumericNegExpression, UnaryExpression, NumericNeg);
+numeric_shell_enum!(NumericClampExpression, TernaryExpression, NumericClamp);
 
 pub(crate) fn build_numeric_binary_expression(
     name: &'static str,
@@ -482,20 +563,18 @@ pub(crate) fn build_numeric_binary_expression(
     left: PhysicalType,
     right: PhysicalType,
     output: PhysicalType,
-) -> Box<dyn Expression> {
+) -> NumericBinaryExpression {
     let inputs = [left, right];
-    dispatch_numeric_output!(output, |marker| CheckedBinaryExpression::new(
-        name,
-        inputs,
-        NumericBinary { operator, marker }
-    ))
+    dispatch_numeric_output!(output, NumericBinaryExpression, |marker| {
+        CheckedBinaryExpression::new(name, inputs, NumericBinary { operator, marker })
+    })
 }
 
 pub(crate) fn build_numeric_neg_expression(
     name: &'static str,
     input: PhysicalType,
-) -> Box<dyn Expression> {
-    dispatch_numeric_output!(input, |marker| UnaryExpression::new(
+) -> NumericNegExpression {
+    dispatch_numeric_output!(input, NumericNegExpression, |marker| UnaryExpression::new(
         name,
         [input],
         NumericNeg(marker)
@@ -506,12 +585,10 @@ pub(crate) fn build_numeric_clamp_expression(
     name: &'static str,
     inputs: [PhysicalType; 3],
     output: PhysicalType,
-) -> Box<dyn Expression> {
-    dispatch_numeric_output!(output, |marker| TernaryExpression::new(
-        name,
-        inputs,
-        NumericClamp(marker)
-    ))
+) -> NumericClampExpression {
+    dispatch_numeric_output!(output, NumericClampExpression, |marker| {
+        TernaryExpression::new(name, inputs, NumericClamp(marker))
+    })
 }
 
 pub(crate) fn build_numeric_comparison_expression(
@@ -520,45 +597,45 @@ pub(crate) fn build_numeric_comparison_expression(
     left: PhysicalType,
     right: PhysicalType,
     common: PhysicalType,
-) -> Box<dyn Expression> {
+) -> NumericComparisonExpression {
     let inputs = [left, right];
-    dispatch_numeric_output!(common, |marker| CheckedBinaryExpression::new(
-        name,
-        inputs,
-        NumericCompare { operator, marker }
-    ))
+    dispatch_numeric_output!(common, NumericComparisonExpression, |marker| {
+        CheckedBinaryExpression::new(name, inputs, NumericCompare { operator, marker })
+    })
 }
 
 pub(crate) fn build_string_comparison_expression(
     name: &'static str,
     operator: ComparisonOperator,
-) -> Box<dyn Expression> {
-    Box::new(CheckedBinaryExpression::new(
+) -> CheckedBinaryExpression<StringBinary> {
+    CheckedBinaryExpression::new(
         name,
         [const { PhysicalType::String }; 2],
         StringBinary {
             operator: StringOperator::Compare(operator),
         },
-    ))
+    )
 }
 
-pub(crate) fn build_string_contains_expression(name: &'static str) -> Box<dyn Expression> {
-    Box::new(CheckedBinaryExpression::new(
+pub(crate) fn build_string_contains_expression(
+    name: &'static str,
+) -> CheckedBinaryExpression<StringBinary> {
+    CheckedBinaryExpression::new(
         name,
         [const { PhysicalType::String }; 2],
         StringBinary {
             operator: StringOperator::Contains,
         },
-    ))
+    )
 }
 
 pub(crate) fn build_bool_comparison_expression(
     name: &'static str,
     operator: ComparisonOperator,
-) -> Box<dyn Expression> {
-    Box::new(CheckedBinaryExpression::new(
+) -> CheckedBinaryExpression<BoolCompare> {
+    CheckedBinaryExpression::new(
         name,
         [const { PhysicalType::Bool }; 2],
         BoolCompare(operator),
-    ))
+    )
 }
