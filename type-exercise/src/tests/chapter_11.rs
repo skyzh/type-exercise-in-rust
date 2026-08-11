@@ -81,8 +81,26 @@ fn raw_parts_reject_bad_types_offsets_and_null_spans() {
         ListArray::try_from_raw_parts(
             PhysicalType::Int32,
             values.clone(),
+            vec![0, 2],
+            vec![true, true],
+        )
+        .is_err()
+    );
+    assert!(
+        ListArray::try_from_raw_parts(
+            PhysicalType::Int32,
+            values.clone(),
             vec![0, 2, 1],
             vec![true, true],
+        )
+        .is_err()
+    );
+    assert!(
+        ListArray::try_from_raw_parts(
+            PhysicalType::Int32,
+            values.clone(),
+            vec![0, 2, 1, 2],
+            vec![true, true, true],
         )
         .is_err()
     );
