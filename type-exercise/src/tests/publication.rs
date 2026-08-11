@@ -42,6 +42,7 @@ impl PublicationFixture {
         for relative in [
             "README.md",
             ".github/workflows/ci.yml",
+            "course/theme/head.hbs",
             "course/src/SUMMARY.md",
             "course/src/sitemap.txt",
             "course/src/sitemap.xml",
@@ -237,6 +238,22 @@ fn validate_public_contract_text(
     Ok(())
 }
 
+fn validate_social_metadata(theme_head: &str) -> Result<(), String> {
+    let description = "A twelve-chapter Rust course on type families, generic expressions, checked binding, one-level Lists, and stronger Rust type boundaries.";
+    for tag in [
+        format!(r#"<meta property="og:description" content="{description}">"#),
+        format!(r#"<meta name="twitter:description" content="{description}">"#),
+    ] {
+        if count(theme_head, &tag) != 1 {
+            return Err(format!(
+                "course/theme/head.hbs must contain {tag:?} exactly once"
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 fn validate_publication_sync(root: &Path) -> Result<(), String> {
     let root_readme = read(root.join("README.md"));
     let summary = read(root.join("course/src/SUMMARY.md"));
@@ -248,6 +265,7 @@ fn validate_publication_sync(root: &Path) -> Result<(), String> {
     let chapter_3 = read(root.join("course/src/chapter-3-column-views.md"));
     let starter_readme = read(root.join("type-exercise-starter/README.md"));
     let starter_agents = read(root.join("type-exercise-starter/AGENTS.md"));
+    let theme_head = read(root.join("course/theme/head.hbs"));
 
     validate_summary(&summary)?;
     validate_public_contract_text(
@@ -257,6 +275,7 @@ fn validate_publication_sync(root: &Path) -> Result<(), String> {
         &starter_readme,
         &starter_agents,
     )?;
+    validate_social_metadata(&theme_head)?;
     for &(chapter, file) in CHAPTERS {
         let chapter_path = root.join("course/src").join(file);
         let chapter_source = read(&chapter_path);
@@ -647,6 +666,24 @@ fn publication_sync_top_level_guard_rejects_root_readme_drift() {
     let error = validate_publication_sync(&fixture.root).unwrap_err();
     assert!(error.contains("README.md"));
     assert!(error.contains("reserved for future"));
+}
+
+#[test]
+fn publication_sync_top_level_guard_rejects_social_metadata_drift() {
+    let fixture = PublicationFixture::copy_from(&workspace_root());
+    let theme_path = fixture.root.join("course/theme/head.hbs");
+    let theme = read(&theme_path);
+    let drifted = theme.replace(
+        "one-level Lists, and stronger Rust type boundaries.",
+        "one-level Lists, and batch futures.",
+    );
+    assert_ne!(theme, drifted);
+    fs::write(&theme_path, drifted)
+        .unwrap_or_else(|error| panic!("failed to mutate {}: {error}", theme_path.display()));
+
+    let error = validate_publication_sync(&fixture.root).unwrap_err();
+    assert!(error.contains("course/theme/head.hbs"));
+    assert!(error.contains("stronger Rust type boundaries"));
 }
 
 #[test]
