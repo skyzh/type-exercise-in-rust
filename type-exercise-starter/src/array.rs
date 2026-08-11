@@ -2,7 +2,8 @@ mod decimal_array;
 mod primitive_array;
 mod string_array;
 
-// Day 11, checkpoints 1–2: uncomment after implementing `array/list_array.rs`.
+// Day 11, checkpoints 1–2: uncomment this module and its public surface after implementing
+// `array/list_array.rs`; keep `ListArrayBuilder` private to the module.
 // mod list_array;
 // pub use list_array::{ListArray, ListError, ListScalar, ListScalarRef};
 // Day 12, checkpoint 1: uncomment when replacing `Array::iter` with the private iterator.
@@ -55,7 +56,8 @@ pub trait ArrayBuilder: Sized {
 
 /// Day 1, checkpoint 3: implement runtime erasure for Int32 and String.
 /// Day 2, checkpoints 1–4: extend the same enum and conversions with the remaining scalar rows.
-/// Day 11, checkpoint 3: extend this enum with `// List(ListArray),` and add checked List erasure.
+/// Day 11, checkpoint 3: extend this enum with `List(ListArray)` and add `From<ListArray>` plus
+/// owned and borrowed checked `TryFrom` recovery for List arrays.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ArrayImpl {
     Int16(I16Array),

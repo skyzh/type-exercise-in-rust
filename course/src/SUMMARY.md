@@ -13,3 +13,4 @@
 - [Erase Typed Expressions at Runtime](./chapter-8-runtime-erasure.md)
 - [Bind and Coerce Logical Calls](./chapter-9-binding-coercion.md)
 - [Specialize One Primitive Loop](./chapter-10-primitive-loops.md)
+- [Build a One-Level List Column](./chapter-11-list.md)

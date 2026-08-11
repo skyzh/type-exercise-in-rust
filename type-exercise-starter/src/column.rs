@@ -25,6 +25,13 @@
 //
 //! Day 11, checkpoint 3: extend this file with checked one-level List views.
 // pub struct ListColumnView<'a> { /* checked List state */ }
+// impl<'a> ListColumnView<'a> {
+//     pub fn len(&self) -> usize;
+//     pub fn get(&self, row: usize) -> Result<Option<ListScalarRef<'a>>, ListError>;
+// }
 // impl<'a> ColumnViewImpl<'a> {
-//     pub fn try_as_list(self, element_type: PhysicalType) -> Result<ListColumnView<'a>, /* error */>;
+//     pub fn try_as_list(
+//         self,
+//         element_type: PhysicalType,
+//     ) -> Result<ListColumnView<'a>, ListError>;
 // }
