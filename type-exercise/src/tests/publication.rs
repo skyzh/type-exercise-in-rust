@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 const CHAPTERS: &[(usize, &str)] = &[
     (1, "chapter-1-type-family.md"),
@@ -17,6 +18,11 @@ const CHAPTERS: &[(usize, &str)] = &[
     (12, "chapter-12-rust-boundaries.md"),
 ];
 
+const FIXTURE_THREADS: usize = 16;
+static FIXTURE_NONCE: AtomicU64 = AtomicU64::new(0);
+const SOCIAL_DESCRIPTION: &str = "A twelve-chapter Rust course on type families, generic expressions, checked binding, one-level Lists, and stronger Rust type boundaries.";
+const SOCIAL_DESCRIPTION_SUFFIX: &str = "one-level Lists, and stronger Rust type boundaries.";
+
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -30,14 +36,7 @@ struct PublicationFixture {
 
 impl PublicationFixture {
     fn copy_from(source_root: &Path) -> Self {
-        let unique = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("system clock must follow the Unix epoch")
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!(
-            "type-exercise-publication-{}-{unique}",
-            std::process::id()
-        ));
+        let root = allocate_fixture_root();
 
         for relative in [
             "README.md",
@@ -62,6 +61,24 @@ impl PublicationFixture {
         }
 
         Self { root }
+    }
+}
+
+fn allocate_fixture_root() -> PathBuf {
+    loop {
+        let nonce = FIXTURE_NONCE.fetch_add(1, Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!(
+            "type-exercise-publication-{}-{nonce}",
+            std::process::id()
+        ));
+        match fs::create_dir(&root) {
+            Ok(()) => return root,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => panic!(
+                "failed to allocate publication fixture {}: {error}",
+                root.display()
+            ),
+        }
     }
 }
 
@@ -238,19 +255,36 @@ fn validate_public_contract_text(
     Ok(())
 }
 
-fn validate_social_metadata(theme_head: &str) -> Result<(), String> {
-    let description = "A twelve-chapter Rust course on type families, generic expressions, checked binding, one-level Lists, and stronger Rust type boundaries.";
-    for tag in [
-        format!(r#"<meta property="og:description" content="{description}">"#),
-        format!(r#"<meta name="twitter:description" content="{description}">"#),
-    ] {
-        if count(theme_head, &tag) != 1 {
-            return Err(format!(
-                "course/theme/head.hbs must contain {tag:?} exactly once"
-            ));
-        }
+fn validate_description_tag(theme_head: &str, key: &str, expected_tag: &str) -> Result<(), String> {
+    if count(theme_head, key) != 1 {
+        return Err(format!(
+            "course/theme/head.hbs must contain exactly one {key} key"
+        ));
+    }
+    let keyed_tag = theme_head
+        .lines()
+        .find(|line| line.contains(key))
+        .expect("one description key must have a containing line");
+    if keyed_tag.trim() != expected_tag {
+        return Err(format!(
+            "course/theme/head.hbs {key} must equal {expected_tag:?}"
+        ));
     }
 
+    Ok(())
+}
+
+fn validate_social_metadata(theme_head: &str) -> Result<(), String> {
+    validate_description_tag(
+        theme_head,
+        r#"property="og:description""#,
+        &format!(r#"<meta property="og:description" content="{SOCIAL_DESCRIPTION}">"#),
+    )?;
+    validate_description_tag(
+        theme_head,
+        r#"name="twitter:description""#,
+        &format!(r#"<meta name="twitter:description" content="{SOCIAL_DESCRIPTION}">"#),
+    )?;
     Ok(())
 }
 
@@ -668,22 +702,109 @@ fn publication_sync_top_level_guard_rejects_root_readme_drift() {
     assert!(error.contains("reserved for future"));
 }
 
-#[test]
-fn publication_sync_top_level_guard_rejects_social_metadata_drift() {
+fn mutate_fixture_theme(replace: impl FnOnce(&str) -> String) -> Result<(), String> {
     let fixture = PublicationFixture::copy_from(&workspace_root());
     let theme_path = fixture.root.join("course/theme/head.hbs");
     let theme = read(&theme_path);
-    let drifted = theme.replace(
-        "one-level Lists, and stronger Rust type boundaries.",
-        "one-level Lists, and batch futures.",
-    );
+    let drifted = replace(&theme);
     assert_ne!(theme, drifted);
     fs::write(&theme_path, drifted)
         .unwrap_or_else(|error| panic!("failed to mutate {}: {error}", theme_path.display()));
 
-    let error = validate_publication_sync(&fixture.root).unwrap_err();
-    assert!(error.contains("course/theme/head.hbs"));
+    validate_publication_sync(&fixture.root)
+}
+
+#[test]
+fn publication_sync_top_level_guard_rejects_og_metadata_drift() {
+    let error = mutate_fixture_theme(|theme| {
+        theme.replacen(
+            "one-level Lists, and stronger Rust type boundaries.",
+            "one-level Lists, and batch futures.",
+            1,
+        )
+    })
+    .unwrap_err();
+    assert!(error.contains(r#"property="og:description""#));
     assert!(error.contains("stronger Rust type boundaries"));
+}
+
+#[test]
+fn publication_sync_top_level_guard_rejects_twitter_metadata_drift() {
+    let error = mutate_fixture_theme(|theme| {
+        let description_offset = theme
+            .rfind("one-level Lists, and stronger Rust type boundaries.")
+            .expect("Twitter description must exist");
+        let mut drifted = theme.to_owned();
+        drifted.replace_range(
+            description_offset..description_offset + SOCIAL_DESCRIPTION_SUFFIX.len(),
+            "one-level Lists, and batch futures.",
+        );
+        drifted
+    })
+    .unwrap_err();
+    assert!(error.contains(r#"name="twitter:description""#));
+    assert!(error.contains("stronger Rust type boundaries"));
+}
+
+#[test]
+fn publication_sync_top_level_guard_rejects_duplicate_stale_og_tag() {
+    let error = mutate_fixture_theme(|theme| {
+        theme.replace(
+            r#"<meta property="og:description" content="#,
+            concat!(
+                r#"<meta property="og:description" content="stale batch futures">"#,
+                "\n",
+                r#"<meta property="og:description" content="#,
+            ),
+        )
+    })
+    .unwrap_err();
+    assert!(error.contains("exactly one"));
+    assert!(error.contains(r#"property="og:description""#));
+}
+
+#[test]
+fn publication_sync_top_level_guard_rejects_duplicate_stale_twitter_tag() {
+    let error = mutate_fixture_theme(|theme| {
+        theme.replace(
+            r#"<meta name="twitter:description" content="#,
+            concat!(
+                r#"<meta name="twitter:description" content="stale batch futures">"#,
+                "\n",
+                r#"<meta name="twitter:description" content="#,
+            ),
+        )
+    })
+    .unwrap_err();
+    assert!(error.contains("exactly one"));
+    assert!(error.contains(r#"name="twitter:description""#));
+}
+
+#[test]
+fn publication_fixture_allocation_is_collision_proof_under_concurrency() {
+    let start = std::sync::Arc::new(std::sync::Barrier::new(FIXTURE_THREADS));
+    let source_root = std::sync::Arc::new(workspace_root());
+    let roots = std::thread::scope(|scope| {
+        let handles = (0..FIXTURE_THREADS)
+            .map(|_| {
+                let start = std::sync::Arc::clone(&start);
+                let source_root = std::sync::Arc::clone(&source_root);
+                scope.spawn(move || {
+                    start.wait();
+                    let fixture = PublicationFixture::copy_from(&source_root);
+                    validate_publication_sync(&fixture.root).unwrap();
+                    fixture.root.clone()
+                })
+            })
+            .collect::<Vec<_>>();
+
+        handles
+            .into_iter()
+            .map(|handle| handle.join().expect("fixture worker must not panic"))
+            .collect::<BTreeSet<_>>()
+    });
+
+    assert_eq!(roots.len(), FIXTURE_THREADS);
 }
 
 #[test]
