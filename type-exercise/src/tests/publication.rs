@@ -255,19 +255,168 @@ fn validate_public_contract_text(
     Ok(())
 }
 
-fn validate_description_tag(theme_head: &str, key: &str, expected_tag: &str) -> Result<(), String> {
-    if count(theme_head, key) != 1 {
+type HtmlAttributes = Vec<(String, String)>;
+
+fn parse_html_attributes(source: &str) -> Result<HtmlAttributes, String> {
+    let bytes = source.as_bytes();
+    let mut attributes = Vec::new();
+    let mut offset = 0;
+    while offset < bytes.len() {
+        while offset < bytes.len() && bytes[offset].is_ascii_whitespace() {
+            offset += 1;
+        }
+        if offset == bytes.len() || bytes[offset] == b'/' {
+            break;
+        }
+
+        let name_start = offset;
+        while offset < bytes.len()
+            && !bytes[offset].is_ascii_whitespace()
+            && !matches!(bytes[offset], b'=' | b'/')
+        {
+            offset += 1;
+        }
+        if name_start == offset {
+            return Err("course/theme/head.hbs contains malformed meta attributes".to_owned());
+        }
+        let name = source[name_start..offset].to_ascii_lowercase();
+
+        while offset < bytes.len() && bytes[offset].is_ascii_whitespace() {
+            offset += 1;
+        }
+        let value = if offset < bytes.len() && bytes[offset] == b'=' {
+            offset += 1;
+            while offset < bytes.len() && bytes[offset].is_ascii_whitespace() {
+                offset += 1;
+            }
+            if offset == bytes.len() {
+                return Err(format!(
+                    "course/theme/head.hbs meta attribute {name:?} is missing a value"
+                ));
+            }
+
+            if matches!(bytes[offset], b'\'' | b'"') {
+                let quote = bytes[offset];
+                offset += 1;
+                let value_start = offset;
+                while offset < bytes.len() && bytes[offset] != quote {
+                    offset += 1;
+                }
+                if offset == bytes.len() {
+                    return Err(format!(
+                        "course/theme/head.hbs meta attribute {name:?} has an unterminated value"
+                    ));
+                }
+                let value = source[value_start..offset].to_owned();
+                offset += 1;
+                value
+            } else {
+                let value_start = offset;
+                while offset < bytes.len() && !bytes[offset].is_ascii_whitespace() {
+                    offset += 1;
+                }
+                source[value_start..offset].to_owned()
+            }
+        } else {
+            String::new()
+        };
+        attributes.push((name, value));
+    }
+
+    Ok(attributes)
+}
+
+fn parse_meta_tags(theme_head: &str) -> Result<Vec<HtmlAttributes>, String> {
+    let bytes = theme_head.as_bytes();
+    let mut tags = Vec::new();
+    let mut offset = 0;
+    while offset < bytes.len() {
+        let Some(relative_start) = theme_head[offset..].find('<') else {
+            break;
+        };
+        let tag_start = offset + relative_start;
+        if theme_head[tag_start..].starts_with("<!--") {
+            let comment = &theme_head[tag_start + 4..];
+            let comment_end = comment.find("-->").ok_or_else(|| {
+                "course/theme/head.hbs contains an unterminated HTML comment".to_owned()
+            })?;
+            offset = tag_start + 4 + comment_end + 3;
+            continue;
+        }
+
+        let mut name_end = tag_start + 1;
+        while name_end < bytes.len() && bytes[name_end].is_ascii_alphanumeric() {
+            name_end += 1;
+        }
+        if name_end == tag_start + 1 {
+            offset = tag_start + 1;
+            continue;
+        }
+
+        let mut tag_end = name_end;
+        let mut quote = None;
+        while tag_end < bytes.len() {
+            match (quote, bytes[tag_end]) {
+                (Some(active), current) if current == active => quote = None,
+                (None, current @ (b'\'' | b'"')) => quote = Some(current),
+                (None, b'>') => break,
+                _ => {}
+            }
+            tag_end += 1;
+        }
+        if tag_end == bytes.len() {
+            return Err("course/theme/head.hbs contains an unterminated HTML tag".to_owned());
+        }
+
+        if theme_head[tag_start + 1..name_end].eq_ignore_ascii_case("meta") {
+            tags.push(parse_html_attributes(&theme_head[name_end..tag_end])?);
+        }
+        offset = tag_end + 1;
+    }
+
+    Ok(tags)
+}
+
+fn attribute_value<'a>(
+    attributes: &'a HtmlAttributes,
+    name: &str,
+) -> Result<Option<&'a str>, String> {
+    let mut values = attributes
+        .iter()
+        .filter(|(candidate, _)| candidate == name)
+        .map(|(_, value)| value.as_str());
+    let value = values.next();
+    if values.next().is_some() {
         return Err(format!(
-            "course/theme/head.hbs must contain exactly one {key} key"
+            "course/theme/head.hbs meta tag repeats the {name:?} attribute"
         ));
     }
-    let keyed_tag = theme_head
-        .lines()
-        .find(|line| line.contains(key))
-        .expect("one description key must have a containing line");
-    if keyed_tag.trim() != expected_tag {
+    Ok(value)
+}
+
+fn validate_description_tag(
+    meta_tags: &[HtmlAttributes],
+    key_attribute: &str,
+    key_value: &str,
+) -> Result<(), String> {
+    let display_key = format!(r#"{key_attribute}="{key_value}""#);
+    let mut descriptions = Vec::new();
+    for attributes in meta_tags {
+        if attribute_value(attributes, key_attribute)? == Some(key_value) {
+            let content = attribute_value(attributes, "content")?
+                .ok_or_else(|| format!("course/theme/head.hbs {display_key} is missing content"))?;
+            descriptions.push(content);
+        }
+    }
+
+    if descriptions.len() != 1 {
         return Err(format!(
-            "course/theme/head.hbs {key} must equal {expected_tag:?}"
+            "course/theme/head.hbs must contain exactly one semantic {display_key} tag"
+        ));
+    }
+    if descriptions[0] != SOCIAL_DESCRIPTION {
+        return Err(format!(
+            "course/theme/head.hbs {display_key} content must equal {SOCIAL_DESCRIPTION:?}"
         ));
     }
 
@@ -275,16 +424,9 @@ fn validate_description_tag(theme_head: &str, key: &str, expected_tag: &str) -> 
 }
 
 fn validate_social_metadata(theme_head: &str) -> Result<(), String> {
-    validate_description_tag(
-        theme_head,
-        r#"property="og:description""#,
-        &format!(r#"<meta property="og:description" content="{SOCIAL_DESCRIPTION}">"#),
-    )?;
-    validate_description_tag(
-        theme_head,
-        r#"name="twitter:description""#,
-        &format!(r#"<meta name="twitter:description" content="{SOCIAL_DESCRIPTION}">"#),
-    )?;
+    let meta_tags = parse_meta_tags(theme_head)?;
+    validate_description_tag(&meta_tags, "property", "og:description")?;
+    validate_description_tag(&meta_tags, "name", "twitter:description")?;
     Ok(())
 }
 
@@ -777,6 +919,74 @@ fn publication_sync_top_level_guard_rejects_duplicate_stale_twitter_tag() {
     })
     .unwrap_err();
     assert!(error.contains("exactly one"));
+    assert!(error.contains(r#"name="twitter:description""#));
+}
+
+#[test]
+fn publication_sync_top_level_guard_rejects_whitespace_duplicate_og_tag() {
+    let error = mutate_fixture_theme(|theme| {
+        theme.replace(
+            r#"<meta property="og:description" content="#,
+            concat!(
+                r#"<meta property = "og:description" content = "stale batch futures">"#,
+                "\n",
+                r#"<meta property="og:description" content="#,
+            ),
+        )
+    })
+    .unwrap_err();
+    assert!(error.contains("exactly one semantic"));
+    assert!(error.contains(r#"property="og:description""#));
+}
+
+#[test]
+fn publication_sync_top_level_guard_rejects_single_quote_duplicate_og_tag() {
+    let error = mutate_fixture_theme(|theme| {
+        theme.replace(
+            r#"<meta property="og:description" content="#,
+            concat!(
+                "<meta property='og:description' content='stale batch futures'>",
+                "\n",
+                r#"<meta property="og:description" content="#,
+            ),
+        )
+    })
+    .unwrap_err();
+    assert!(error.contains("exactly one semantic"));
+    assert!(error.contains(r#"property="og:description""#));
+}
+
+#[test]
+fn publication_sync_top_level_guard_rejects_whitespace_duplicate_twitter_tag() {
+    let error = mutate_fixture_theme(|theme| {
+        theme.replace(
+            r#"<meta name="twitter:description" content="#,
+            concat!(
+                r#"<meta name = "twitter:description" content = "stale batch futures">"#,
+                "\n",
+                r#"<meta name="twitter:description" content="#,
+            ),
+        )
+    })
+    .unwrap_err();
+    assert!(error.contains("exactly one semantic"));
+    assert!(error.contains(r#"name="twitter:description""#));
+}
+
+#[test]
+fn publication_sync_top_level_guard_rejects_single_quote_duplicate_twitter_tag() {
+    let error = mutate_fixture_theme(|theme| {
+        theme.replace(
+            r#"<meta name="twitter:description" content="#,
+            concat!(
+                "<meta name='twitter:description' content='stale batch futures'>",
+                "\n",
+                r#"<meta name="twitter:description" content="#,
+            ),
+        )
+    })
+    .unwrap_err();
+    assert!(error.contains("exactly one semantic"));
     assert!(error.contains(r#"name="twitter:description""#));
 }
 
