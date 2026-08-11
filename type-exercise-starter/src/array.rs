@@ -14,6 +14,7 @@ pub use primitive_array::{
     I16ArrayBuilder, I32Array, I32ArrayBuilder, I64Array, I64ArrayBuilder, PrimitiveArray,
     PrimitiveArrayBuilder,
 };
+// Day 10, checkpoint 1: extend the primitive re-export above with `NonNullPrimitiveArray`.
 pub use string_array::{StringArray, StringArrayBuilder};
 
 use std::fmt::Debug;

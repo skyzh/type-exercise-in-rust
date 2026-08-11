@@ -100,5 +100,6 @@ cargo test -p type-exercise-starter chapter_9 --locked
 cargo test -p type-exercise-starter --lib --locked
 ```
 
+Next: [Chapter 10 specializes one representative dense loop](./chapter-10-primitive-loops.md).
 
 {{#include copyright.md}}

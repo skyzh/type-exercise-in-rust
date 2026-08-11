@@ -29,9 +29,15 @@
 //
 //! Day 10, checkpoint 1: add one representative batch loop choice here.
 // pub enum PrimitiveLoop { /* supported dense loops plus general fallback */ }
+// pub struct PrimitiveBinaryExpression<F> { /* typed i32 function plus runtime metadata */ }
 // impl<F> PrimitiveBinaryExpression<F> {
-//     pub fn evaluate_with_loop(&self, inputs: &[ColumnViewImpl<'_>], loop_kind: PrimitiveLoop)
-//         -> Result<ArrayImpl, ExpressionError>;
+//     pub fn new(name: &'static str, function: F) -> Self;
+// }
+// impl<F> PrimitiveBinaryExpression<F> {
+//     pub fn evaluate_with_loop(
+//         &self,
+//         inputs: &[ColumnViewImpl<'_>],
+//     ) -> Result<(ArrayImpl, PrimitiveLoop), ExpressionError>;
 // }
 //
 //! Day 12, checkpoint 2: add checked Any recovery and downcast helpers to the erased boundary here.

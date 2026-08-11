@@ -31,7 +31,10 @@
 //
 //! Day 10, checkpoint 2: forward a preselected primitive loop here.
 // impl BoundExpression {
-//     pub fn evaluate_with_loop(/* inputs and loop choice */) -> Result<ArrayImpl, ExpressionError>;
+//     pub fn evaluate_with_loop(
+//         &self,
+//         inputs: &[ColumnViewImpl<'_>],
+//     ) -> Result<(ArrayImpl, PrimitiveLoop), ExpressionError>;
 // }
 //
 //! Day 12, checkpoint 3: require registered factories to be Send + Sync + 'static here.

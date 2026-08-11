@@ -17,6 +17,13 @@ pub struct PrimitiveArrayBuilder<T> {
     marker: PhantomData<T>,
 }
 
+// Day 10, checkpoint 1: add a checked borrowed proof for an all-valid primitive array.
+// #[derive(Clone, Copy, Debug)]
+// pub struct NonNullPrimitiveArray<'a, T> { /* one borrowed primitive array */ }
+// impl<'a, T> NonNullPrimitiveArray<'a, T> {
+//     pub fn values(self) -> &'a [T];
+// }
+
 pub type I16Array = PrimitiveArray<i16>;
 pub type I16ArrayBuilder = PrimitiveArrayBuilder<i16>;
 pub type I32Array = PrimitiveArray<i32>;
@@ -37,6 +44,9 @@ impl<T> PrimitiveArray<T> {
     pub fn validity(&self) -> &BitVec {
         todo!("store packed validity in Days 1–2")
     }
+    // Day 10, checkpoint 1: count nulls during construction, then expose these checked queries.
+    // pub fn null_count(&self) -> usize;
+    // pub fn as_non_null(&self) -> Option<NonNullPrimitiveArray<'_, T>>;
 }
 
 macro_rules! declare_primitive_array {
