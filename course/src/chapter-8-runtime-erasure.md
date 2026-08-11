@@ -81,4 +81,6 @@ cargo test -p type-exercise-starter --lib --locked
 ```
 
 
+Next: [Chapter 9 binds logical calls to one physical kernel](./chapter-9-binding-coercion.md).
+
 {{#include copyright.md}}

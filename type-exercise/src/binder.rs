@@ -3,12 +3,12 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 
 use crate::{
-    ArithmeticOperator, ArrayImpl, AsyncExpression, BatchFuture, ColumnViewImpl,
+    ArithmeticOperator, ArrayImpl, AsyncExpression, BatchFuture, BooleanOperator, ColumnViewImpl,
     ComparisonOperator, DataType, Expression, ExpressionError, PhysicalType, PrimitiveLoop,
-    build_bool_comparison_expression, build_builtin_expression, build_numeric_binary_expression,
-    build_numeric_clamp_expression, build_numeric_comparison_expression,
-    build_numeric_neg_expression, build_string_comparison_expression,
-    build_string_contains_expression, promote_numeric,
+    build_bool_comparison_expression, build_boolean_expression, build_builtin_expression,
+    build_numeric_binary_expression, build_numeric_clamp_expression,
+    build_numeric_comparison_expression, build_numeric_neg_expression,
+    build_string_comparison_expression, build_string_contains_expression, promote_numeric,
 };
 
 /// A checked failure while selecting one physical expression.
@@ -178,6 +178,15 @@ impl FunctionRegistry {
         }
         registry.register_binary("contains", bind_contains);
         registry.register_binary("concat", bind_concat);
+        registry.register_binary("boolean_and", |left, right| {
+            bind_boolean("boolean_and", BooleanOperator::And, left, Some(right))
+        });
+        registry.register_binary("boolean_or", |left, right| {
+            bind_boolean("boolean_or", BooleanOperator::Or, left, Some(right))
+        });
+        registry.register_unary("boolean_not", |input| {
+            bind_boolean("boolean_not", BooleanOperator::Not, input, None)
+        });
         registry
     }
 
@@ -400,6 +409,26 @@ fn bind_comparison(
         return Err(unsupported(name, [left, right]));
     };
     BoundExpression::new(expression, [left, right], DataType::Boolean)
+}
+
+fn bind_boolean(
+    name: &'static str,
+    operator: BooleanOperator,
+    left: DataType,
+    right: Option<DataType>,
+) -> Result<BoundExpression, BindError> {
+    let inputs = match right {
+        Some(right) => vec![left, right],
+        None => vec![left],
+    };
+    if !inputs.iter().all(|input| *input == DataType::Boolean) {
+        return Err(unsupported(name, inputs));
+    }
+    BoundExpression::new(
+        Box::new(build_boolean_expression(operator)),
+        inputs,
+        DataType::Boolean,
+    )
 }
 
 fn bind_contains(left: DataType, right: DataType) -> Result<BoundExpression, BindError> {

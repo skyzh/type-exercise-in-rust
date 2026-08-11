@@ -19,9 +19,9 @@ fn reference_test_manifest_is_cumulative_and_contiguous() {
             chapters.push(number);
         }
     }
-    let expected = (1..=8).collect::<Vec<_>>();
+    let expected = (1..=9).collect::<Vec<_>>();
     assert_eq!(
         chapters, expected,
-        "reference test manifest must be Chapters 1..=8 exactly"
+        "reference test manifest must be Chapters 1..=9 exactly"
     );
 }
