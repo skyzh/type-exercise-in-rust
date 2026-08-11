@@ -20,9 +20,9 @@ fn reference_test_manifest_is_cumulative_and_contiguous() {
         }
     }
     chapters.sort_unstable();
-    let expected = (1..=11).collect::<Vec<_>>();
+    let expected = (1..=12).collect::<Vec<_>>();
     assert_eq!(
         chapters, expected,
-        "reference test manifest must be Chapters 1..=11 exactly"
+        "reference test manifest must be Chapters 1..=12 exactly"
     );
 }

@@ -14,6 +14,7 @@ const CHAPTERS: &[(usize, &str)] = &[
     (9, "chapter-9-binding-coercion.md"),
     (10, "chapter-10-primitive-loops.md"),
     (11, "chapter-11-list.md"),
+    (12, "chapter-12-rust-boundaries.md"),
 ];
 
 fn workspace_root() -> PathBuf {
@@ -122,17 +123,16 @@ fn validate_publication_sync(root: &Path) -> Result<(), String> {
         }
     }
 
-    for future in [12, 13] {
-        let test_module = format!("mod chapter_{future};");
-        let copy_command = format!("cargo x copy-test --chapter {future}");
-        if reference_manifest.contains(&test_module) || workflow.contains(&copy_command) {
-            return Err(format!(
-                "future Chapter {future} leaked into the published prefix"
-            ));
-        }
+    let future = 13;
+    let test_module = format!("mod chapter_{future};");
+    let copy_command = format!("cargo x copy-test --chapter {future}");
+    if reference_manifest.contains(&test_module) || workflow.contains(&copy_command) {
+        return Err(format!(
+            "future Chapter {future} leaked into the published prefix"
+        ));
     }
 
-    for chapter in [10, 11] {
+    for chapter in [10, 11, 12] {
         let copied_test = read(root.join(format!("type-exercise/src/tests/chapter_{chapter}.rs")));
         for reference_variant in ["ListError::", "ExpressionError::"] {
             if copied_test.contains(reference_variant) {
@@ -205,6 +205,11 @@ fn validate_solution_free_source(relative: &str, source: &str) -> Result<(), Str
         "ListColumnView",
         "try_as_list",
         "list_array",
+        "ArrayIterator",
+        "Any",
+        "Send",
+        "Sync",
+        "downcast_ref",
     ];
     for identifier in forbidden {
         if identifiers.contains(identifier) {
@@ -277,6 +282,39 @@ fn validate_starter_scaffold(root: &Path) -> Result<(), String> {
             ]
             .as_slice(),
         ),
+        (
+            "type-exercise-starter/src/array.rs",
+            [
+                "// mod iterator;",
+                "/// Day 12, checkpoint 1: replace this adapter with the private iterator from",
+                "/// use type_exercise_starter::ArrayIterator;",
+            ]
+            .as_slice(),
+        ),
+        (
+            "type-exercise-starter/src/array/iterator.rs",
+            ["// pub(crate) struct ArrayIterator<'a, A: Array> {"].as_slice(),
+        ),
+        (
+            "type-exercise-starter/src/expression.rs",
+            [
+                "// pub trait Expression: Any + Send + Sync {",
+                "// impl dyn Expression { /* checked Any recovery */ }",
+            ]
+            .as_slice(),
+        ),
+        (
+            "type-exercise-starter/src/binder.rs",
+            [
+                "//! Day 12, checkpoint 3: require registered factories to be Send + Sync + 'static here.",
+                "// impl FunctionRegistry { /* strengthen register, register_unary, register_binary, register_ternary */ }",
+            ]
+            .as_slice(),
+        ),
+        (
+            "type-exercise-starter/src/column.rs",
+            ["// pub struct ColumnViewImpl<'a> {"].as_slice(),
+        ),
     ];
 
     for (relative, anchors) in required {
@@ -294,12 +332,12 @@ fn validate_starter_scaffold(root: &Path) -> Result<(), String> {
 }
 
 #[test]
-fn public_course_and_test_surfaces_are_synchronized_through_day_11() {
+fn public_course_and_test_surfaces_are_synchronized_through_day_12() {
     validate_publication_sync(&workspace_root()).unwrap();
 }
 
 #[test]
-fn day_10_and_11_starter_scaffolds_are_complete_but_solution_free() {
+fn day_10_through_12_starter_scaffolds_are_complete_but_solution_free() {
     validate_starter_scaffold(&workspace_root()).unwrap();
 }
 
@@ -309,12 +347,12 @@ fn publication_sync_guard_fails_on_real_surface_drift() {
     let summary_path = root.join("course/src/SUMMARY.md");
     let summary = read(&summary_path);
     let drifted = summary.replace(
-        "- [Build a One-Level List Column](./chapter-11-list.md)\n",
+        "- [Strengthen Rust Type Boundaries](./chapter-12-rust-boundaries.md)\n",
         "",
     );
     assert_ne!(summary, drifted);
     let error = validate_summary(&drifted).unwrap_err();
-    assert!(error.contains("chapter-11-list.md"));
+    assert!(error.contains("chapter-12-rust-boundaries.md"));
 }
 
 #[test]
@@ -339,4 +377,28 @@ fn starter_guard_fails_on_missing_scaffold_and_active_solution_symbols() {
         validate_solution_free_source("type-exercise-starter/src/array/list_array.rs", &leaked)
             .unwrap_err();
     assert!(leakage_error.contains("ListArray"));
+
+    let iterator_path = root.join("type-exercise-starter/src/array/iterator.rs");
+    let iterator_source = read(&iterator_path);
+    let missing_iterator = iterator_source.replace("ArrayIterator", "RenamedArrayIterator");
+    assert_ne!(iterator_source, missing_iterator);
+    let missing_iterator_error = validate_scaffold_anchors(
+        "type-exercise-starter/src/array/iterator.rs",
+        &missing_iterator,
+        &["// pub(crate) struct ArrayIterator<'a, A: Array> {"],
+    )
+    .unwrap_err();
+    assert!(missing_iterator_error.contains("ArrayIterator"));
+
+    let leaked_iterator = iterator_source.replace(
+        "// pub(crate) struct ArrayIterator",
+        "pub(crate) struct ArrayIterator",
+    );
+    assert_ne!(iterator_source, leaked_iterator);
+    let iterator_leakage_error = validate_solution_free_source(
+        "type-exercise-starter/src/array/iterator.rs",
+        &leaked_iterator,
+    )
+    .unwrap_err();
+    assert!(iterator_leakage_error.contains("ArrayIterator"));
 }
