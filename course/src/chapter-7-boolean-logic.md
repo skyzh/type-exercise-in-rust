@@ -1,3 +1,5 @@
+{{#include wip-banner.md}}
+
 # Chapter 7: Implement Three-Valued Boolean Logic
 
 SQL engines do not stop at two truth values. A missing value makes `NULL AND FALSE` false and

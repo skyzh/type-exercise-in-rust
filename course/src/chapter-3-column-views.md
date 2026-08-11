@@ -1,3 +1,5 @@
+{{#include wip-banner.md}}
+
 # Chapter 3: Read Nullable Columns Without Materializing Them
 
 A scalar kernel should not care whether a logical row comes from an array, one repeated constant,

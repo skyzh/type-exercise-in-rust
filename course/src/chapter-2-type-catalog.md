@@ -1,3 +1,5 @@
+{{#include wip-banner.md}}
+
 # Chapter 2: Scale the Physical Type Family
 
 Adding `f64` beside the two Chapter 1 rows repeats physical variants, scalar variants, array
