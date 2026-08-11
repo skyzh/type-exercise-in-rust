@@ -1,3 +1,5 @@
+{{#include wip-banner.md}}
+
 # Chapter 1: Connect One Type Family by Hand
 
 An `i32` can be copied out of an array. A `String` should be read as an `&str` that borrows the

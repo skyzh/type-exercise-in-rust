@@ -1,3 +1,5 @@
+{{#include wip-banner.md}}
+
 # Chapter 8: Erase Typed Expressions at Runtime
 
 The engine now has typed kernels, but a runtime function name cannot carry a Rust generic parameter.

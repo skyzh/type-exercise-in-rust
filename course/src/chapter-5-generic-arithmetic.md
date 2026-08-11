@@ -1,3 +1,5 @@
+{{#include wip-banner.md}}
+
 # Chapter 5: Make Numeric Evaluation Generic
 
 The type family now earns its cost: one binary adapter can evaluate four arithmetic operations

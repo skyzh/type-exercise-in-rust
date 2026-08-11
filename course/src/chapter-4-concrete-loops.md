@@ -1,3 +1,5 @@
+{{#include wip-banner.md}}
+
 # Chapter 4: Expose the Cost of Concrete Loops
 
 Write one strict typed binary evaluator and one strict unary and binary shell before trying to

@@ -1,3 +1,5 @@
+{{#include wip-banner.md}}
+
 # Chapter 9: Bind and Coerce Logical Calls
 
 Physical kernels exist, but a parsed call contains logical types and a name. The binder must choose

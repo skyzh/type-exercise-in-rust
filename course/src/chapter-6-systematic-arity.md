@@ -1,3 +1,5 @@
+{{#include wip-banner.md}}
+
 # Chapter 6: Make Arity Systematic
 
 Two correct loops can still be a special case. A real three-input function proves that validation,
