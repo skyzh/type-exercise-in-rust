@@ -36,9 +36,16 @@ mod variant_catalog;
 // pub use expression::{
 //     BinaryExpression, BUILTIN_EXPRESSION_NAMES, Expression, build_builtin_expression,
 // };
+// Day 10, checkpoint 1: extend the expression re-export with `PrimitiveBinaryExpression` and
+// `PrimitiveLoop`; extend the primitive-array re-export with `NonNullPrimitiveArray`.
 // Day 9, checkpoint 1: uncomment after implementing the binder and registry.
 // mod binder;
 // pub use binder::{BindError, BoundExpression, FunctionRegistry};
+
+// Day 11, checkpoints 1–3: the active `pub use array::*` below exports `ListArray`, `ListError`,
+// `ListScalar`, and `ListScalarRef` after their module is enabled. Replace the Day 3 column
+// re-export with the extended line below; `try_as_list` remains a `ColumnViewImpl` method.
+// pub use column::{ColumnView, ColumnViewImpl, ListColumnView};
 
 #[cfg(test)]
 mod tests;

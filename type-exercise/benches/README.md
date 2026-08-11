@@ -1,4 +1,4 @@
-# Chapter 6 benchmark method
+# Chapter 10 benchmark method
 
 This benchmark measures the maintained `type-exercise` reference solution, not learner code in
 `type-exercise-starter`. Run it with:
