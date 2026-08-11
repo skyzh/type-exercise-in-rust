@@ -11,7 +11,6 @@ use crate::{
 };
 
 /// A checked failure at an expression boundary.
-#[cfg(not(feature = "opaque-errors"))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ExpressionError {
     TypeMismatch(TypeMismatch),
@@ -29,90 +28,6 @@ pub enum ExpressionError {
         row: usize,
         error: ScalarError,
     },
-}
-
-/// The opaque learner-layout variant used only by the compile-based
-/// compatibility fixture: no public variant can be named or matched, so any
-/// copied test that references the real layout fails to compile against it.
-#[cfg(feature = "opaque-errors")]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ExpressionError {
-    #[doc(hidden)]
-    Hidden(String),
-}
-
-impl ExpressionError {
-    #[cfg(not(feature = "opaque-errors"))]
-    pub(crate) fn type_mismatch(expected: PhysicalType, actual: PhysicalType) -> Self {
-        TypeMismatch { expected, actual }.into()
-    }
-
-    #[cfg(feature = "opaque-errors")]
-    pub(crate) fn type_mismatch(expected: PhysicalType, actual: PhysicalType) -> Self {
-        Self::Hidden(format!(
-            "type mismatch: expected {expected:?}, got {actual:?}"
-        ))
-    }
-
-    #[cfg(not(feature = "opaque-errors"))]
-    pub(crate) fn input_arity_mismatch(expected: usize, actual: usize) -> Self {
-        Self::InputArityMismatch { expected, actual }
-    }
-
-    #[cfg(feature = "opaque-errors")]
-    pub(crate) fn input_arity_mismatch(expected: usize, actual: usize) -> Self {
-        Self::Hidden(format!(
-            "input arity mismatch: expected {expected}, got {actual}"
-        ))
-    }
-
-    #[cfg(not(feature = "opaque-errors"))]
-    pub(crate) fn input_length_mismatch(
-        expected: usize,
-        actual: usize,
-        input_index: usize,
-    ) -> Self {
-        Self::InputLengthMismatch {
-            expected,
-            actual,
-            input_index,
-        }
-    }
-
-    #[cfg(feature = "opaque-errors")]
-    pub(crate) fn input_length_mismatch(
-        expected: usize,
-        actual: usize,
-        input_index: usize,
-    ) -> Self {
-        Self::Hidden(format!(
-            "input {input_index} length mismatch: expected {expected}, got {actual}"
-        ))
-    }
-
-    #[cfg(not(feature = "opaque-errors"))]
-    pub(crate) fn scalar_evaluation(
-        function: &'static str,
-        row: usize,
-        error: ScalarError,
-    ) -> Self {
-        Self::ScalarEvaluation {
-            function,
-            row,
-            error,
-        }
-    }
-
-    #[cfg(feature = "opaque-errors")]
-    pub(crate) fn scalar_evaluation(
-        function: &'static str,
-        row: usize,
-        error: ScalarError,
-    ) -> Self {
-        Self::Hidden(format!(
-            "function `{function}` failed at row {row}: {error}"
-        ))
-    }
 }
 
 /// A checked failure produced by one non-null scalar evaluation.
@@ -133,7 +48,6 @@ impl Display for ScalarError {
     }
 }
 
-#[cfg(not(feature = "opaque-errors"))]
 impl Display for ExpressionError {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -166,32 +80,11 @@ impl Display for ExpressionError {
     }
 }
 
-#[cfg(feature = "opaque-errors")]
-impl Display for ExpressionError {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Hidden(message) => formatter.write_str(message),
-        }
-    }
-}
-
-#[cfg(not(feature = "opaque-errors"))]
 impl Error for ExpressionError {}
 
-#[cfg(feature = "opaque-errors")]
-impl Error for ExpressionError {}
-
-#[cfg(not(feature = "opaque-errors"))]
 impl From<TypeMismatch> for ExpressionError {
     fn from(error: TypeMismatch) -> Self {
         Self::TypeMismatch(error)
-    }
-}
-
-#[cfg(feature = "opaque-errors")]
-impl From<TypeMismatch> for ExpressionError {
-    fn from(error: TypeMismatch) -> Self {
-        Self::Hidden(format!("{error}"))
     }
 }
 
@@ -334,11 +227,11 @@ where
     F: BinaryScalarFunction,
 {
     if left.len() != right.len() {
-        return Err(ExpressionError::input_length_mismatch(
-            left.len(),
-            right.len(),
-            1,
-        ));
+        return Err(ExpressionError::InputLengthMismatch {
+            expected: left.len(),
+            actual: right.len(),
+            input_index: 1,
+        });
     }
 
     let mut output =
@@ -377,27 +270,28 @@ where
         inputs: &[ColumnViewImpl<'_>],
     ) -> Result<(ArrayImpl, PrimitiveLoop), ExpressionError> {
         if inputs.len() != self.input_types.len() {
-            return Err(ExpressionError::input_arity_mismatch(
-                self.input_types.len(),
-                inputs.len(),
-            ));
+            return Err(ExpressionError::InputArityMismatch {
+                expected: self.input_types.len(),
+                actual: inputs.len(),
+            });
         }
 
         for (input, expected) in inputs.iter().zip(&self.input_types) {
             if input.physical_type() != *expected {
-                return Err(ExpressionError::type_mismatch(
-                    expected.clone(),
-                    input.physical_type(),
-                ));
+                return Err(TypeMismatch {
+                    expected: expected.clone(),
+                    actual: input.physical_type(),
+                }
+                .into());
             }
         }
 
         if inputs[0].len() != inputs[1].len() {
-            return Err(ExpressionError::input_length_mismatch(
-                inputs[0].len(),
-                inputs[1].len(),
-                1,
-            ));
+            return Err(ExpressionError::InputLengthMismatch {
+                expected: inputs[0].len(),
+                actual: inputs[1].len(),
+                input_index: 1,
+            });
         }
 
         let Some(left) = inputs[0].as_non_null_i32() else {
@@ -525,10 +419,10 @@ where
 
     fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
         if inputs.len() != self.arity() {
-            return Err(ExpressionError::input_arity_mismatch(
-                self.arity(),
-                inputs.len(),
-            ));
+            return Err(ExpressionError::InputArityMismatch {
+                expected: self.arity(),
+                actual: inputs.len(),
+            });
         }
         evaluate_binary(&self.function, inputs[0].clone(), inputs[1].clone())
     }

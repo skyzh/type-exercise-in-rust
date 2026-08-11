@@ -19,10 +19,6 @@ enum Action {
         #[arg(long)]
         chapter: usize,
     },
-    /// Compile the supplied tests and the compat fixtures against the opaque
-    /// error layout, proving copied learner tests never pin BindError or
-    /// ExpressionError variants.
-    CheckOpaqueCompat {},
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -156,85 +152,6 @@ fn main() -> Result<()> {
         Action::CopyTest { chapter } => {
             copy_test(&workspace_root()?, chapter)?;
         }
-        Action::CheckOpaqueCompat {} => {
-            check_opaque_compat(&workspace_root()?)?;
-        }
-    }
-    Ok(())
-}
-
-/// Compile-based learner-compatibility check.
-///
-/// The supplied tests are compiled against an opaque, unpinnable
-/// `BindError`/`ExpressionError` layout (feature `opaque-errors`). If any
-/// copied test references a real variant, that build fails. The focused
-/// fixture files then prove the mechanism both ways: the clean fixture must
-/// compile against the opaque rlib, and the broken fixture must not.
-fn check_opaque_compat(root: &Path) -> Result<()> {
-    let status = std::process::Command::new("cargo")
-        .args([
-            "check",
-            "-p",
-            "type-exercise",
-            "--features",
-            "opaque-errors",
-            "--tests",
-            "--locked",
-        ])
-        .current_dir(root)
-        .status()
-        .context("failed to run cargo check for the opaque-error build")?;
-    if !status.success() {
-        bail!(
-            "supplied tests do not compile against the opaque error layout; \
-             a copied test must be pinning a BindError/ExpressionError variant"
-        );
-    }
-
-    let build = std::process::Command::new("cargo")
-        .args([
-            "build",
-            "-p",
-            "type-exercise",
-            "--features",
-            "opaque-errors",
-            "--locked",
-        ])
-        .current_dir(root)
-        .status()
-        .context("failed to build the opaque-error rlib")?;
-    if !build.success() {
-        bail!("failed to build the opaque-error rlib");
-    }
-    let rlib = root.join("target/debug/libtype_exercise.rlib");
-    if !rlib.exists() {
-        bail!("opaque-error rlib not found at {}", rlib.display());
-    }
-
-    let compile_fixture = |name: &str| -> Result<bool> {
-        let file = root.join("compat-fixture").join(name);
-        let out_dir = root.join("target/compat-fixture-out");
-        fs::create_dir_all(&out_dir)?;
-        let status = std::process::Command::new("rustc")
-            .args(["--edition", "2024", "--crate-type", "lib", "--out-dir"])
-            .arg(&out_dir)
-            .args(["-L", "dependency=target/debug/deps", "--extern"])
-            .arg(format!("type_exercise={}", rlib.display()))
-            .arg(&file)
-            .current_dir(root)
-            .status()
-            .with_context(|| format!("failed to run rustc on {name}"))?;
-        Ok(status.success())
-    };
-
-    if !compile_fixture("clean.rs")? {
-        bail!("the clean compat fixture must compile against the opaque layout");
-    }
-    if compile_fixture("broken.rs")? {
-        bail!(
-            "the broken compat fixture must NOT compile against the opaque layout; \
-             the opaque layout still exposes a pinnable error variant"
-        );
     }
     Ok(())
 }

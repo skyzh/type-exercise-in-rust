@@ -2,7 +2,7 @@
 
 use crate::{
     ArrayBuilder, ArrayImpl, BoolArrayBuilder, ColumnView, ColumnViewImpl, Expression,
-    ExpressionError, PhysicalType, Scalar,
+    ExpressionError, PhysicalType, Scalar, TypeMismatch,
 };
 
 /// How null inputs reach the scalar Boolean function.
@@ -237,14 +237,18 @@ impl BooleanExpression {
             BooleanOperator::Not => 1,
         };
         if inputs.len() != arity {
-            return Err(ExpressionError::input_arity_mismatch(arity, inputs.len()));
+            return Err(ExpressionError::InputArityMismatch {
+                expected: arity,
+                actual: inputs.len(),
+            });
         }
         for input in inputs {
             if input.physical_type() != PhysicalType::Bool {
-                return Err(ExpressionError::type_mismatch(
-                    PhysicalType::Bool,
-                    input.physical_type(),
-                ));
+                return Err(TypeMismatch {
+                    expected: PhysicalType::Bool,
+                    actual: input.physical_type(),
+                }
+                .into());
             }
         }
         // Typed view conversion happens before length validation, so a wrong
@@ -259,11 +263,11 @@ impl BooleanExpression {
         let len = inputs.first().map_or(0, ColumnViewImpl::len);
         for (input_index, input) in inputs.iter().enumerate().skip(1) {
             if input.len() != len {
-                return Err(ExpressionError::input_length_mismatch(
-                    len,
-                    input.len(),
+                return Err(ExpressionError::InputLengthMismatch {
+                    expected: len,
+                    actual: input.len(),
                     input_index,
-                ));
+                });
             }
         }
 
@@ -331,7 +335,6 @@ mod tests {
     /// Reference-only internal regression: physical-type validation precedes
     /// length validation even for a later input, so a first-input-only type
     /// loop cannot turn a wrong later type into a length-first failure.
-    #[cfg(not(feature = "opaque-errors"))]
     #[test]
     fn type_validation_precedes_length_validation_for_later_inputs() {
         let and = build_boolean_expression(BooleanOperator::And);
