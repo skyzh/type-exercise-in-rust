@@ -10,9 +10,11 @@ These instructions apply to work inside `type-exercise-starter/`.
 
 ## Starter and tests
 
-- The untouched starter must remain a compiling crate. Day 1–13 ownership lives beside the actual
-  implementation location: existing declarations carry Day/checkpoint documentation, and future
-  declarations/signatures remain commented out until their chapter asks you to uncomment them.
+- The untouched starter must remain a compiling crate. Published and required Day 1–12 ownership
+  lives beside the actual implementation location: existing declarations carry Day/checkpoint
+  documentation, and future declarations/signatures remain commented until their chapter asks you
+  to uncomment them. Reserved Day 13 async scaffolds remain commented for a future chapter and are
+  not current requirements.
 - Implement chapter work under `src/`, but do not modify `src/tests.rs` or files under `src/tests/`; those are supplied checks managed by `cargo x copy-test`.
 - Preserve the public names and behavior required by the copied tests. Do not weaken, skip, delete, or rewrite tests to make an implementation pass.
 - Keep the implementation in safe Rust. Do not uncomment or materialize expression, binder, List,

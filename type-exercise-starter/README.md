@@ -1,9 +1,11 @@
 # Course Starter
 
 This is the only learner implementation workspace. It compiles before any exercise work. The
-actual files under `src/` contain the Day 1–13 checkpoints at their implementation locations:
-existing declarations have concise Day/checkpoint documentation, while future declarations and
-signatures stay commented out until their chapter tells you to uncomment and implement them.
+published course currently requires Day 1–12 checkpoints at their implementation locations under
+`src/`: existing declarations have concise Day/checkpoint documentation, while future declarations
+and signatures stay commented until their chapter tells you to uncomment and implement them.
+Reserved Day 13 async scaffolds stay commented for a future chapter and are not currently published
+or required.
 
 From the repository root, verify the untouched baseline:
 

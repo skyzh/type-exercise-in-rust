@@ -82,7 +82,8 @@ do not require a particular public error type, field layout, or display text.
 ## Required and extension work
 
 The four representations and fail-closed Indexed constructor are required. Run-length encoding
-and nested columns are extensions. List will reuse the same representation boundary in Chapter 10.
+and nested columns are extensions. Primitive specialization remains Chapter 10. List reuses the
+same representation boundary in Chapter 11.
 
 ```console
 cargo test -p type-exercise-starter chapter_3 --locked

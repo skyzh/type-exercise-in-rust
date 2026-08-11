@@ -59,14 +59,108 @@ fn validate_summary(summary: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn validate_public_contract_text(
+    chapter_2: &str,
+    chapter_3: &str,
+    starter_readme: &str,
+    starter_agents: &str,
+) -> Result<(), String> {
+    let required = [
+        (
+            "course/src/chapter-2-type-catalog.md",
+            chapter_2,
+            [
+                "published course currently requires Chapters 1–12",
+                "Reserved Day 13 async scaffolds",
+                "currently published or required prefix",
+            ]
+            .as_slice(),
+        ),
+        (
+            "course/src/chapter-3-column-views.md",
+            chapter_3,
+            [
+                "Primitive specialization remains Chapter 10.",
+                "same representation boundary in Chapter 11.",
+            ]
+            .as_slice(),
+        ),
+        (
+            "type-exercise-starter/README.md",
+            starter_readme,
+            [
+                "published course currently requires Day 1–12 checkpoints",
+                "Reserved Day 13 async scaffolds",
+                "are not currently published",
+            ]
+            .as_slice(),
+        ),
+        (
+            "type-exercise-starter/AGENTS.md",
+            starter_agents,
+            [
+                "Published and required Day 1–12 ownership",
+                "Reserved Day 13 async scaffolds",
+                "not current requirements",
+            ]
+            .as_slice(),
+        ),
+    ];
+    for (relative, source, anchors) in required {
+        validate_scaffold_anchors(relative, source, anchors)?;
+    }
+
+    let stale = [
+        (
+            "course/src/chapter-3-column-views.md",
+            chapter_3,
+            "List will reuse the same representation boundary in Chapter 10",
+        ),
+        (
+            "course/src/chapter-2-type-catalog.md",
+            chapter_2,
+            "every later target through Day 13",
+        ),
+        (
+            "course/src/chapter-2-type-catalog.md",
+            chapter_2,
+            "Days 8–13",
+        ),
+        (
+            "type-exercise-starter/README.md",
+            starter_readme,
+            "Day 1–13 checkpoints",
+        ),
+        (
+            "type-exercise-starter/AGENTS.md",
+            starter_agents,
+            "Day 1–13 ownership",
+        ),
+    ];
+    for (relative, source, forbidden) in stale {
+        if source.contains(forbidden) {
+            return Err(format!(
+                "{relative} contains stale public contract {forbidden:?}"
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 fn validate_publication_sync(root: &Path) -> Result<(), String> {
     let summary = read(root.join("course/src/SUMMARY.md"));
     let reference_manifest = read(root.join("type-exercise/src/tests.rs"));
     let workflow = read(root.join(".github/workflows/ci.yml"));
     let sitemap_text = read(root.join("course/src/sitemap.txt"));
     let sitemap_xml = read(root.join("course/src/sitemap.xml"));
+    let chapter_2 = read(root.join("course/src/chapter-2-type-catalog.md"));
+    let chapter_3 = read(root.join("course/src/chapter-3-column-views.md"));
+    let starter_readme = read(root.join("type-exercise-starter/README.md"));
+    let starter_agents = read(root.join("type-exercise-starter/AGENTS.md"));
 
     validate_summary(&summary)?;
+    validate_public_contract_text(&chapter_2, &chapter_3, &starter_readme, &starter_agents)?;
     for &(chapter, file) in CHAPTERS {
         let chapter_path = root.join("course/src").join(file);
         let chapter_source = read(&chapter_path);
@@ -353,6 +447,59 @@ fn publication_sync_guard_fails_on_real_surface_drift() {
     assert_ne!(summary, drifted);
     let error = validate_summary(&drifted).unwrap_err();
     assert!(error.contains("chapter-12-rust-boundaries.md"));
+}
+
+#[test]
+fn public_contract_guard_rejects_stale_list_destination_and_day_13_conflation() {
+    let root = workspace_root();
+    let chapter_2 = read(root.join("course/src/chapter-2-type-catalog.md"));
+    let chapter_3 = read(root.join("course/src/chapter-3-column-views.md"));
+    let starter_readme = read(root.join("type-exercise-starter/README.md"));
+    let starter_agents = read(root.join("type-exercise-starter/AGENTS.md"));
+
+    let stale_list = chapter_3.replace(
+        "same representation boundary in Chapter 11.",
+        "same representation boundary in Chapter 10.",
+    );
+    assert_ne!(chapter_3, stale_list);
+    let list_error =
+        validate_public_contract_text(&chapter_2, &stale_list, &starter_readme, &starter_agents)
+            .unwrap_err();
+    assert!(list_error.contains("Chapter 11"));
+
+    let stale_chapter_2 = chapter_2.replace(
+        "published course currently requires Chapters 1–12",
+        "starter source names every later target through Day 13",
+    );
+    assert_ne!(chapter_2, stale_chapter_2);
+    let chapter_2_error = validate_public_contract_text(
+        &stale_chapter_2,
+        &chapter_3,
+        &starter_readme,
+        &starter_agents,
+    )
+    .unwrap_err();
+    assert!(chapter_2_error.contains("Chapters 1–12"));
+
+    let stale_readme = starter_readme.replace(
+        "published course currently requires Day 1–12 checkpoints",
+        "actual files contain the Day 1–13 checkpoints",
+    );
+    assert_ne!(starter_readme, stale_readme);
+    let readme_error =
+        validate_public_contract_text(&chapter_2, &chapter_3, &stale_readme, &starter_agents)
+            .unwrap_err();
+    assert!(readme_error.contains("Day 1–12 checkpoints"));
+
+    let stale_agents = starter_agents.replace(
+        "Published and required Day 1–12 ownership",
+        "Day 1–13 ownership",
+    );
+    assert_ne!(starter_agents, stale_agents);
+    let agents_error =
+        validate_public_contract_text(&chapter_2, &chapter_3, &starter_readme, &stale_agents)
+            .unwrap_err();
+    assert!(agents_error.contains("Day 1–12 ownership"));
 }
 
 #[test]
