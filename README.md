@@ -16,13 +16,17 @@ The book's `SUMMARY.md` is the sole ordered chapter list.
 
 ## What you will build
 
+The currently published Chapters 1–12 build these outcomes:
+
 - Connect logical types, owned values, borrowed values, physical arrays, and checked erased enums.
 - Read nullable arrays, constants, and Indexed views without materializing a new column.
 - Apply unary, binary, and ternary scalar functions through generic, erased, and bound interfaces.
 - Promote supported numeric pairs for `+`, `-`, `*`, `/`, comparisons, and string `contains`.
 - Represent one-level Lists with checked offsets and independent outer and child nullability.
-- Preserve the same results and errors through one representative fast path and a batch-level
-  asynchronous adapter.
+- Preserve the same results and errors through one representative fast path.
+
+A batch-level asynchronous adapter is reserved for future, non-required Day 13 work.
+It is not part of the currently published course.
 
 The course deliberately stops short of Decimal arithmetic, casts, and rounding, implicit
 narrowing or lossy casts, nested or list-producing functions, concrete four- and five-input

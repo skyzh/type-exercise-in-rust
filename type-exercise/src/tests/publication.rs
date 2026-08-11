@@ -24,6 +24,79 @@ fn workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
+struct PublicationFixture {
+    root: PathBuf,
+}
+
+impl PublicationFixture {
+    fn copy_from(source_root: &Path) -> Self {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock must follow the Unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "type-exercise-publication-{}-{unique}",
+            std::process::id()
+        ));
+
+        for relative in [
+            "README.md",
+            ".github/workflows/ci.yml",
+            "course/src/SUMMARY.md",
+            "course/src/sitemap.txt",
+            "course/src/sitemap.xml",
+            "type-exercise/src/tests.rs",
+            "type-exercise-starter/README.md",
+            "type-exercise-starter/AGENTS.md",
+        ] {
+            copy_fixture_file(source_root, &root, relative);
+        }
+        for &(chapter, file) in CHAPTERS {
+            copy_fixture_file(source_root, &root, format!("course/src/{file}"));
+            copy_fixture_file(
+                source_root,
+                &root,
+                format!("type-exercise/src/tests/chapter_{chapter}.rs"),
+            );
+        }
+
+        Self { root }
+    }
+}
+
+impl Drop for PublicationFixture {
+    fn drop(&mut self) {
+        fs::remove_dir_all(&self.root).unwrap_or_else(|error| {
+            panic!(
+                "failed to remove publication fixture {}: {error}",
+                self.root.display()
+            )
+        });
+    }
+}
+
+fn copy_fixture_file(source_root: &Path, fixture_root: &Path, relative: impl AsRef<Path>) {
+    let relative = relative.as_ref();
+    let destination = fixture_root.join(relative);
+    fs::create_dir_all(
+        destination
+            .parent()
+            .expect("fixture file must have a parent directory"),
+    )
+    .unwrap_or_else(|error| {
+        panic!(
+            "failed to create fixture parent for {}: {error}",
+            destination.display()
+        )
+    });
+    fs::copy(source_root.join(relative), &destination).unwrap_or_else(|error| {
+        panic!(
+            "failed to copy fixture file {}: {error}",
+            relative.display()
+        )
+    });
+}
+
 fn read(path: impl AsRef<Path>) -> String {
     let path = path.as_ref();
     fs::read_to_string(path)
@@ -60,12 +133,23 @@ fn validate_summary(summary: &str) -> Result<(), String> {
 }
 
 fn validate_public_contract_text(
+    root_readme: &str,
     chapter_2: &str,
     chapter_3: &str,
     starter_readme: &str,
     starter_agents: &str,
 ) -> Result<(), String> {
     let required = [
+        (
+            "README.md",
+            root_readme,
+            [
+                "currently published Chapters 1–12 build these outcomes",
+                "batch-level asynchronous adapter is reserved for future, non-required Day 13 work",
+                "It is not part of the currently published course",
+            ]
+            .as_slice(),
+        ),
         (
             "course/src/chapter-2-type-catalog.md",
             chapter_2,
@@ -112,6 +196,11 @@ fn validate_public_contract_text(
 
     let stale = [
         (
+            "README.md",
+            root_readme,
+            "fast path and a batch-level\n  asynchronous adapter",
+        ),
+        (
             "course/src/chapter-3-column-views.md",
             chapter_3,
             "List will reuse the same representation boundary in Chapter 10",
@@ -149,6 +238,7 @@ fn validate_public_contract_text(
 }
 
 fn validate_publication_sync(root: &Path) -> Result<(), String> {
+    let root_readme = read(root.join("README.md"));
     let summary = read(root.join("course/src/SUMMARY.md"));
     let reference_manifest = read(root.join("type-exercise/src/tests.rs"));
     let workflow = read(root.join(".github/workflows/ci.yml"));
@@ -160,7 +250,13 @@ fn validate_publication_sync(root: &Path) -> Result<(), String> {
     let starter_agents = read(root.join("type-exercise-starter/AGENTS.md"));
 
     validate_summary(&summary)?;
-    validate_public_contract_text(&chapter_2, &chapter_3, &starter_readme, &starter_agents)?;
+    validate_public_contract_text(
+        &root_readme,
+        &chapter_2,
+        &chapter_3,
+        &starter_readme,
+        &starter_agents,
+    )?;
     for &(chapter, file) in CHAPTERS {
         let chapter_path = root.join("course/src").join(file);
         let chapter_source = read(&chapter_path);
@@ -452,6 +548,7 @@ fn publication_sync_guard_fails_on_real_surface_drift() {
 #[test]
 fn public_contract_guard_rejects_stale_list_destination_and_day_13_conflation() {
     let root = workspace_root();
+    let root_readme = read(root.join("README.md"));
     let chapter_2 = read(root.join("course/src/chapter-2-type-catalog.md"));
     let chapter_3 = read(root.join("course/src/chapter-3-column-views.md"));
     let starter_readme = read(root.join("type-exercise-starter/README.md"));
@@ -462,9 +559,14 @@ fn public_contract_guard_rejects_stale_list_destination_and_day_13_conflation() 
         "same representation boundary in Chapter 10.",
     );
     assert_ne!(chapter_3, stale_list);
-    let list_error =
-        validate_public_contract_text(&chapter_2, &stale_list, &starter_readme, &starter_agents)
-            .unwrap_err();
+    let list_error = validate_public_contract_text(
+        &root_readme,
+        &chapter_2,
+        &stale_list,
+        &starter_readme,
+        &starter_agents,
+    )
+    .unwrap_err();
     assert!(list_error.contains("Chapter 11"));
 
     let stale_chapter_2 = chapter_2.replace(
@@ -473,6 +575,7 @@ fn public_contract_guard_rejects_stale_list_destination_and_day_13_conflation() 
     );
     assert_ne!(chapter_2, stale_chapter_2);
     let chapter_2_error = validate_public_contract_text(
+        &root_readme,
         &stale_chapter_2,
         &chapter_3,
         &starter_readme,
@@ -486,9 +589,14 @@ fn public_contract_guard_rejects_stale_list_destination_and_day_13_conflation() 
         "actual files contain the Day 1–13 checkpoints",
     );
     assert_ne!(starter_readme, stale_readme);
-    let readme_error =
-        validate_public_contract_text(&chapter_2, &chapter_3, &stale_readme, &starter_agents)
-            .unwrap_err();
+    let readme_error = validate_public_contract_text(
+        &root_readme,
+        &chapter_2,
+        &chapter_3,
+        &stale_readme,
+        &starter_agents,
+    )
+    .unwrap_err();
     assert!(readme_error.contains("Day 1–12 checkpoints"));
 
     let stale_agents = starter_agents.replace(
@@ -496,10 +604,49 @@ fn public_contract_guard_rejects_stale_list_destination_and_day_13_conflation() 
         "Day 1–13 ownership",
     );
     assert_ne!(starter_agents, stale_agents);
-    let agents_error =
-        validate_public_contract_text(&chapter_2, &chapter_3, &starter_readme, &stale_agents)
-            .unwrap_err();
+    let agents_error = validate_public_contract_text(
+        &root_readme,
+        &chapter_2,
+        &chapter_3,
+        &starter_readme,
+        &stale_agents,
+    )
+    .unwrap_err();
     assert!(agents_error.contains("Day 1–12 ownership"));
+
+    let stale_root_readme = root_readme.replace(
+        "A batch-level asynchronous adapter is reserved for future, non-required Day 13 work",
+        "Preserve the same results and errors through one representative fast path and a batch-level\n  asynchronous adapter",
+    );
+    assert_ne!(root_readme, stale_root_readme);
+    let root_readme_error = validate_public_contract_text(
+        &stale_root_readme,
+        &chapter_2,
+        &chapter_3,
+        &starter_readme,
+        &starter_agents,
+    )
+    .unwrap_err();
+    assert!(root_readme_error.contains("README.md"));
+    assert!(root_readme_error.contains("reserved for future"));
+}
+
+#[test]
+fn publication_sync_top_level_guard_rejects_root_readme_drift() {
+    let fixture = PublicationFixture::copy_from(&workspace_root());
+    let readme_path = fixture.root.join("README.md");
+    let readme = read(&readme_path);
+    let stale = readme.replace(
+        "is reserved for future, non-required Day 13 work.\nIt is not part of the currently published course",
+        "is part of the currently published course",
+    );
+    assert_ne!(readme, stale);
+    fs::write(&readme_path, stale)
+        .unwrap_or_else(|error| panic!("failed to mutate {}: {error}", readme_path.display()));
+
+    let error = validate_publication_sync(&fixture.root).unwrap_err();
+    assert!(error.contains("README.md"));
+    assert!(error.contains("reserved for future"));
 }
 
 #[test]
