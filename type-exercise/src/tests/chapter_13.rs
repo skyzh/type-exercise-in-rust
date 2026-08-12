@@ -5,9 +5,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::task::{Context, Poll, Waker};
 
 use crate::{
-    Array, ArrayImpl, AsyncExpression, AsyncExpressionAdapter, BatchFuture, ColumnViewImpl,
-    DataType, Expression, ExpressionError, FunctionRegistry, I32Array, PhysicalType, ScalarRefImpl,
-    StringArray, TypeMismatch, build_builtin_expression, evaluate_static,
+    ArithmeticOperator, Array, ArrayImpl, AsyncExpression, AsyncExpressionAdapter, BatchFuture,
+    BoundExpression, ColumnViewImpl, DataType, Expression, ExpressionError, FunctionRegistry,
+    I32Array, PhysicalType, ScalarError, ScalarRefImpl, StringArray, TypeMismatch,
+    build_builtin_expression, build_numeric_binary_expression, evaluate_static,
 };
 
 fn poll_ready<F: Future + ?Sized>(mut future: Pin<&mut F>) -> F::Output {
@@ -118,7 +119,32 @@ impl Expression for CountingExpression {
 }
 
 #[test]
-fn one_ready_future_invokes_synchronous_evaluation_once() {
+fn static_future_invokes_synchronous_evaluation_once() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let expression = CountingExpression {
+        calls: Arc::clone(&calls),
+        inner: build_builtin_expression("i32_add").unwrap(),
+    };
+    let inputs = [
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(3), 2),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(4), 2),
+    ];
+
+    let mut future = std::pin::pin!(evaluate_static(&expression, &inputs));
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    let output = poll_ready(future.as_mut()).unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        <&I32Array>::try_from(&output)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![Some(7), Some(7)]
+    );
+}
+
+#[test]
+fn erased_future_invokes_synchronous_evaluation_once() {
     let calls = Arc::new(AtomicUsize::new(0));
     let expression = AsyncExpressionAdapter::new(Box::new(CountingExpression {
         calls: Arc::clone(&calls),
@@ -140,6 +166,83 @@ fn one_ready_future_invokes_synchronous_evaluation_once() {
             .collect::<Vec<_>>(),
         vec![Some(7), Some(7)]
     );
+}
+
+#[test]
+fn bound_future_invokes_synchronous_evaluation_once() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let expression = BoundExpression::new(
+        Box::new(CountingExpression {
+            calls: Arc::clone(&calls),
+            inner: build_builtin_expression("i32_add").unwrap(),
+        }),
+        [DataType::Integer, DataType::Integer],
+        DataType::Integer,
+    )
+    .unwrap();
+    let inputs = [
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(3), 2),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(4), 2),
+    ];
+
+    let mut future = expression.evaluate_async(&inputs);
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    let output = poll_ready(future.as_mut()).unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        <&I32Array>::try_from(&output)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![Some(7), Some(7)]
+    );
+}
+
+fn scalar_failing_expression() -> Box<dyn Expression> {
+    Box::new(build_numeric_binary_expression(
+        "scalar_failing",
+        ArithmeticOperator::Divide,
+        PhysicalType::Int32,
+        PhysicalType::Int32,
+        PhysicalType::Int32,
+    ))
+}
+
+#[test]
+fn every_async_path_preserves_the_exact_scalar_evaluation_error() {
+    let inputs = [
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(4), 1),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(0), 1),
+    ];
+    let expected = Err(ExpressionError::ScalarEvaluation {
+        function: "scalar_failing",
+        row: 0,
+        error: ScalarError::DivisionByZero,
+    });
+
+    assert_eq!(scalar_failing_expression().evaluate(&inputs), expected);
+
+    let static_expression = scalar_failing_expression();
+    let mut static_future = std::pin::pin!(evaluate_static(static_expression.as_ref(), &inputs));
+    assert_eq!(poll_ready(static_future.as_mut()), expected);
+
+    let erased = AsyncExpressionAdapter::new(scalar_failing_expression());
+    let mut erased_future = erased.evaluate_async(&inputs);
+    assert_eq!(poll_ready(erased_future.as_mut()), expected);
+
+    let mut registry = FunctionRegistry::default();
+    registry.register_binary("scalar_failing", |left, right| {
+        BoundExpression::new(
+            scalar_failing_expression(),
+            [left, right],
+            DataType::Integer,
+        )
+    });
+    let bound = registry
+        .bind_binary("scalar_failing", DataType::Integer, DataType::Integer)
+        .unwrap();
+    let mut bound_future = bound.evaluate_async(&inputs);
+    assert_eq!(poll_ready(bound_future.as_mut()), expected);
 }
 
 #[test]
