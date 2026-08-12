@@ -61,4 +61,6 @@ cargo test -p type-exercise-starter --doc --locked
 cargo test -p type-exercise-starter --lib --locked
 ```
 
+Next: [Chapter 13 adds a batch async boundary](./chapter-13-async-boundary.md).
+
 {{#include copyright.md}}
