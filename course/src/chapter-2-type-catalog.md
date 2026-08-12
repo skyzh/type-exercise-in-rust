@@ -101,10 +101,12 @@ All table rows and Decimal storage checks are required. Decimal arithmetic and c
 Extending the catalog with another physical family is useful practice, but it must bring the
 complete scalar, array, erasure, and mismatch surface rather than one enum variant.
 
-The starter source itself names every later target through Day 13. Future declarations and
-signatures are commented at their implementation locations until their checkpoint asks you to
-uncomment them. Day 5 includes numeric comparisons, Day 7 introduces three-valued Boolean logic,
-and the former Days 7–12 shift to Days 8–13.
+The published course currently requires Chapters 1–12. The starter source names each target in
+that published prefix at its implementation location. Declarations and signatures stay commented
+until their checkpoint asks you to uncomment them. Day 5 includes numeric comparisons, Day 7
+introduces three-valued Boolean logic, and the former Days 7–11 shift to Days 8–12.
+Reserved Day 13 async scaffolds remain commented for a future chapter. They are not part of the
+currently published or required prefix.
 
 ```console
 cargo test -p type-exercise-starter chapter_2 --locked

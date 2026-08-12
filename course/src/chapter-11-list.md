@@ -76,4 +76,6 @@ cargo test -p type-exercise-starter chapter_11 --locked
 cargo test -p type-exercise-starter --lib --locked
 ```
 
+Next: [Chapter 12 strengthens Rust type boundaries](./chapter-12-rust-boundaries.md).
+
 {{#include copyright.md}}

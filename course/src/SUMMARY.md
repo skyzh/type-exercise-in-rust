@@ -14,3 +14,4 @@
 - [Bind and Coerce Logical Calls](./chapter-9-binding-coercion.md)
 - [Specialize One Primitive Loop](./chapter-10-primitive-loops.md)
 - [Build a One-Level List Column](./chapter-11-list.md)
+- [Strengthen Rust Type Boundaries](./chapter-12-rust-boundaries.md)

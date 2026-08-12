@@ -38,6 +38,10 @@ where
     }
     /// Day 12, checkpoint 1: replace this adapter with the private iterator from
     /// `array/iterator.rs` while preserving this opaque return signature.
+    ///
+    /// ```compile_fail
+    /// use type_exercise_starter::ArrayIterator;
+    /// ```
     fn iter<'a>(&'a self) -> impl Iterator<Item = Option<Self::RefItem<'a>>> + 'a {
         (0..self.len()).map(|row| self.get(row))
     }
