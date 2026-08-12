@@ -15,3 +15,4 @@
 - [Specialize One Primitive Loop](./chapter-10-primitive-loops.md)
 - [Build a One-Level List Column](./chapter-11-list.md)
 - [Strengthen Rust Type Boundaries](./chapter-12-rust-boundaries.md)
+- [Add a Batch Async Boundary](./chapter-13-async-boundary.md)

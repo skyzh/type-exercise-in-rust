@@ -49,5 +49,10 @@
 //
 //! Day 13, checkpoint 2: add the object-safe async adapter here.
 // pub type BatchFuture<'a> = Pin<Box<dyn Future<Output = Result<ArrayImpl, ExpressionError>> + Send + 'a>>;
-// pub trait AsyncExpression: Send + Sync { /* evaluate_async */ }
+// pub trait AsyncExpression: Send + Sync {
+//     fn evaluate_async<'a>(&'a self, inputs: &'a [ColumnViewImpl<'a>]) -> BatchFuture<'a>;
+// }
 // pub struct AsyncExpressionAdapter { /* one owned synchronous expression */ }
+// impl AsyncExpressionAdapter {
+//     pub fn new(expression: Box<dyn Expression>) -> Self;
+// }

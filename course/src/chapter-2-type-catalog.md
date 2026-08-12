@@ -101,12 +101,11 @@ All table rows and Decimal storage checks are required. Decimal arithmetic and c
 Extending the catalog with another physical family is useful practice, but it must bring the
 complete scalar, array, erasure, and mismatch surface rather than one enum variant.
 
-The published course currently requires Chapters 1–12. The starter source names each target in
+The published course currently requires Chapters 1–13. The starter source names each target in
 that published prefix at its implementation location. Declarations and signatures stay commented
 until their checkpoint asks you to uncomment them. Day 5 includes numeric comparisons, Day 7
 introduces three-valued Boolean logic, and the former Days 7–11 shift to Days 8–12.
-Reserved Day 13 async scaffolds remain commented for a future chapter. They are not part of the
-currently published or required prefix.
+Day 13 adds one batch-level asynchronous adapter without moving work into the row loop.
 
 ```console
 cargo test -p type-exercise-starter chapter_2 --locked

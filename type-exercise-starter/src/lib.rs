@@ -41,6 +41,9 @@ mod variant_catalog;
 // Day 9, checkpoint 1: uncomment after implementing the binder and registry.
 // mod binder;
 // pub use binder::{BindError, BoundExpression, FunctionRegistry};
+// Day 13, checkpoints 1–3: extend the expression re-export with `AsyncExpression`,
+// `AsyncExpressionAdapter`, `BatchFuture`, and `evaluate_static`; `BoundExpression` implements the
+// async adapter through the enabled binder module.
 
 // Day 11, checkpoints 1–3: the active `pub use array::*` below exports `ListArray`, `ListError`,
 // `ListScalar`, and `ListScalarRef` after their module is enabled. Replace the Day 3 column
