@@ -1,0 +1,9 @@
+.course-footer {
+    margin: 2.5rem 0 1rem;
+    text-align: center;
+    color: var(--fg, #666);
+}
+
+.course-footer a {
+    color: inherit;
+}

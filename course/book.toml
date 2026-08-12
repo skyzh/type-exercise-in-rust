@@ -6,4 +6,5 @@ src = "src"
 title = "Build a Typed Database Expression Engine in Rust"
 
 [output.html]
+additional-css = ["custom.css"]
 git-repository-url = "https://github.com/skyzh/type-exercise-in-rust"
