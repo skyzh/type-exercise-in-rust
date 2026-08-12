@@ -55,7 +55,7 @@ table decides.
 ## Required and extension work
 
 Both policies, all three operators, the exact truth table, and the checked builder are required.
-Nested expressions, short-circuit execution plans, and Boolean column production are later work.
+Nested expression trees and short-circuit execution plans are extensions outside this course.
 
 ```console
 cargo test -p type-exercise-starter chapter_7 --locked
