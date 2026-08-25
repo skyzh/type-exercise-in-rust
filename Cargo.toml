@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
-members = ["type-exercise", "type-exercise-starter", "xtask"]
+members = ["type-exercise", "type-exercise-starter", "xtask", "checkpoint/day-*"]
+default-members = ["type-exercise", "type-exercise-starter", "xtask"]
 exclude = ["archived/type-exercise-ref", "archived/legacy-days/*"]
 
 [workspace.package]
