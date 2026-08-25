@@ -29,8 +29,8 @@ Connect `DataType::Double`, `PhysicalType::Float64`, `f64`, `F64Array`, and its 
 Use the same checkpoints as Chapter 1. The copied test includes NaN, infinity, and signed zero so
 the family cannot accidentally require total equality.
 
-This explicit row is evidence: the repeated edits are real. Now a single family catalog can own
-the remaining non-List rows:
+This explicit row is evidence: the repeated edits are real. Now extend Chapter 1's two-row family
+catalog so it owns every non-List row:
 
 | Logical type | Physical family | Owned / borrowed scalar |
 | --- | --- | --- |
@@ -56,12 +56,12 @@ arrays. Use `DecimalType::try_new(precision, scale)` and enforce `1 <= precision
 - **Run:** the Chapter 2 focused test.
 - **Passing means:** every primitive family satisfies the same reciprocal type equations.
 
-## Checkpoint 2: add the family catalog
+## Checkpoint 2: extend the family catalog
 
 - **Target:** `type-exercise-starter/src/variant_catalog.rs::for_each_physical_family`, plus generated arms in
   `type-exercise-starter/src/physical_type.rs`, `type-exercise-starter/src/scalar.rs`, and `type-exercise-starter/src/array.rs`.
-- **Change:** make one row define the physical variant, array, builder, owned scalar, and borrowed
-  scalar.
+- **Change:** expand the two-row Chapter 1 catalog so one row defines each physical variant, array,
+  builder, owned scalar, and borrowed scalar.
 - **Preserve:** `String` remains the one borrowed row and every downcast remains checked.
 - **Run:** the focused test and inspect `PHYSICAL_FAMILY_CATALOG` failures.
 - **Passing means:** omitting or duplicating a family becomes a compile or test failure.

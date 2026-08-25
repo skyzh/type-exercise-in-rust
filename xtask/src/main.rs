@@ -18,6 +18,9 @@ enum Action {
     CopyTest {
         #[arg(long)]
         chapter: usize,
+        /// Copy only the cumulative tests through one checkpoint of Chapter 1.
+        #[arg(long)]
+        checkpoint: Option<usize>,
     },
 }
 
@@ -74,7 +77,22 @@ fn write_if_changed(path: &Path, bytes: &[u8]) -> Result<bool> {
     Ok(true)
 }
 
-fn copy_test(root: &Path, chapter: usize) -> Result<CopyReport> {
+const CHAPTER_1_CHECKPOINTS: usize = 4;
+
+fn chapter_1_checkpoint_path(root: &Path, checkpoint: usize) -> Result<PathBuf> {
+    if !(1..=CHAPTER_1_CHECKPOINTS).contains(&checkpoint) {
+        bail!("no tests are available for Chapter 1 checkpoint {checkpoint}");
+    }
+    let path = if checkpoint == CHAPTER_1_CHECKPOINTS {
+        root.join("type-exercise/src/tests/chapter_1.rs")
+    } else {
+        root.join("supplied-tests/chapter_1")
+            .join(format!("checkpoint_{checkpoint}.rs"))
+    };
+    Ok(path)
+}
+
+fn copy_test(root: &Path, chapter: usize, checkpoint: Option<usize>) -> Result<CopyReport> {
     let source_dir = root.join("type-exercise/src/tests");
     let available = available_chapters(&source_dir)?;
     let last_chapter = available
@@ -84,12 +102,22 @@ fn copy_test(root: &Path, chapter: usize) -> Result<CopyReport> {
     if chapter == 0 || chapter > last_chapter {
         bail!("no tests are available for chapter {chapter}");
     }
+    if checkpoint.is_some() && chapter != 1 {
+        bail!("--checkpoint is available only with --chapter 1");
+    }
 
     // Read the complete cumulative source set before writing any supplied tests.
     let sources = (1..=chapter)
         .map(|number| {
             let name = format!("chapter_{number}.rs");
-            let path = source_dir.join(&name);
+            let path = if number == 1 {
+                checkpoint
+                    .map(|checkpoint| chapter_1_checkpoint_path(root, checkpoint))
+                    .transpose()?
+                    .unwrap_or_else(|| source_dir.join(&name))
+            } else {
+                source_dir.join(&name)
+            };
             let bytes = fs::read(&path)
                 .with_context(|| format!("failed to read cumulative source {}", path.display()))?;
             Ok((name, bytes))
@@ -142,15 +170,24 @@ fn copy_test(root: &Path, chapter: usize) -> Result<CopyReport> {
         }
     }
 
-    println!("copied cumulative Chapters 1-{chapter} tests into type-exercise-starter");
+    if let Some(checkpoint) = checkpoint {
+        println!(
+            "copied cumulative Chapter 1 checkpoint {checkpoint} tests into type-exercise-starter"
+        );
+    } else {
+        println!("copied cumulative Chapters 1-{chapter} tests into type-exercise-starter");
+    }
     Ok(CopyReport { changed_files })
 }
 
 fn main() -> Result<()> {
     let args = Args::parse();
     match args.action {
-        Action::CopyTest { chapter } => {
-            copy_test(&workspace_root()?, chapter)?;
+        Action::CopyTest {
+            chapter,
+            checkpoint,
+        } => {
+            copy_test(&workspace_root()?, chapter, checkpoint)?;
         }
     }
     Ok(())
@@ -168,8 +205,18 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let source = root.path().join("type-exercise/src/tests");
         fs::create_dir_all(&source).unwrap();
+        fs::create_dir_all(root.path().join("supplied-tests/chapter_1")).unwrap();
         fs::create_dir_all(root.path().join("type-exercise-starter/src")).unwrap();
-        fs::write(source.join("chapter_1.rs"), b"// one\r\n#[test]\n").unwrap();
+        fs::write(source.join("chapter_1.rs"), b"fn four() {}\n").unwrap();
+        for checkpoint in 1..=3 {
+            fs::write(
+                root.path()
+                    .join("supplied-tests/chapter_1")
+                    .join(format!("checkpoint_{checkpoint}.rs")),
+                format!("fn checkpoint_{checkpoint}() {{}}\n"),
+            )
+            .unwrap();
+        }
         fs::write(source.join("chapter_2.rs"), b"// two\n").unwrap();
         fs::write(source.join("chapter_3.rs"), b"// three\n").unwrap();
         root
@@ -179,7 +226,7 @@ mod tests {
     fn rejects_invalid_chapters_before_mutating_the_starter() {
         let root = fixture();
         for chapter in [0, 4, usize::MAX] {
-            let error = copy_test(root.path(), chapter).unwrap_err();
+            let error = copy_test(root.path(), chapter, None).unwrap_err();
             assert!(
                 error
                     .to_string()
@@ -198,7 +245,7 @@ mod tests {
     #[test]
     fn copies_an_exact_cumulative_prefix_and_removes_later_supplied_tests() {
         let root = fixture();
-        copy_test(root.path(), 3).unwrap();
+        copy_test(root.path(), 3, None).unwrap();
 
         for chapter in 1..=3 {
             let source = root
@@ -210,7 +257,7 @@ mod tests {
             assert_eq!(fs::read(target).unwrap(), fs::read(source).unwrap());
         }
 
-        copy_test(root.path(), 2).unwrap();
+        copy_test(root.path(), 2, None).unwrap();
         assert!(
             !root
                 .path()
@@ -229,15 +276,15 @@ mod tests {
     #[test]
     fn repeated_copy_is_byte_identical_and_does_not_rewrite_files() {
         let root = fixture();
-        assert_eq!(copy_test(root.path(), 3).unwrap().changed_files, 4);
-        assert_eq!(copy_test(root.path(), 3).unwrap().changed_files, 0);
+        assert_eq!(copy_test(root.path(), 3, None).unwrap().changed_files, 4);
+        assert_eq!(copy_test(root.path(), 3, None).unwrap().changed_files, 0);
         assert_eq!(
             fs::read(
                 root.path()
                     .join("type-exercise-starter/src/tests/chapter_1.rs")
             )
             .unwrap(),
-            b"// one\r\n#[test]\n"
+            fs::read(root.path().join("type-exercise/src/tests/chapter_1.rs")).unwrap()
         );
     }
 
@@ -258,7 +305,7 @@ mod tests {
         )
         .unwrap();
 
-        let report = copy_test(root.path(), 2).unwrap();
+        let report = copy_test(root.path(), 2, None).unwrap();
         assert_eq!(report.changed_files, 3);
         assert_eq!(
             fs::read(target.join("chapter_1.rs")).unwrap(),

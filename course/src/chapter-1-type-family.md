@@ -2,100 +2,196 @@
 
 # Chapter 1: Connect One Type Family by Hand
 
-An `i32` can be copied out of an array. A `String` should be read as an `&str` that borrows the
-array. This chapter connects both cases without forcing one into the other's ownership model.
+In this chapter, you will use generic associated types (GATs) to connect the different representations of one database value: an owned scalar, a borrowed scalar reference, and a nullable array. We will make those connections for `i32` and `String`. The same relationships will later let us implement primitive arrays once and write generic expression code without repeating it for every physical type.
 
-**Prerequisites:** enums, traits, references, associated types, and `Option`.
+A database execution engine rarely works with one Rust representation of a value. A string may arrive as an owned `String`, be read from an array as an `&str`, and live inside a compact column with thousands of other strings. These are different Rust types, but the engine must know that they belong to the same logical family.
 
-**By the end of this chapter, you will:**
+The relationships we will build look like this:
 
-- connect owned values, borrowed values, arrays, and builders for `i32` and `String`;
-- use a generic associated type for the borrowed member of each family; and
-- upcast typed values with `From` and downcast erased enums with checked `TryFrom` conversions.
+```text
+owned scalar S  ── RefType<'a> ──> borrowed scalar S::RefType<'a>
+      │                                      │
+      └──────────── ArrayType ───────────────┘
+                             │
+                             ▼
+                       concrete array
+```
 
-## See the missing connections
+For the integer family, the owned and borrowed representations are both `i32` because copying an integer is cheap. For the string family, the owned representation is `String`, while the borrowed representation is `&'a str`. The lifetime `'a` ties the borrowed string to the scalar or array that stores its bytes.
 
-Copy the cumulative contract and run it once:
+## What is in the starter
+
+The Day 1 starter is deliberately small. It exposes only the two families used in this chapter: Int32 and String. `PhysicalType` and `PhysicalFamily` contain those two variants; `ScalarImpl`, `ScalarRefImpl`, and `ArrayImpl` contain their two erased variants. The starter also provides placeholder `PrimitiveArray<T>` and `StringArray` types and their builders. These declarations let the crate compile, but they do not implement the family relationships or store any values yet.
+
+The `Scalar`, `ScalarRef`, `Array`, and `ArrayBuilder` traits begin as unbounded shells. They name the associated types and operations you will connect, but their supertraits, `where` clauses, and reciprocal associated-type bounds are learner work. Later physical types and later-day relationships appear only in comments or docstrings; they are not executable scaffolding for you to work around.
+
+The comments beside each missing relationship name the checkpoint that owns it. Treat those comments as the implementation boundary: complete the two Day 1 families, but do not add the later families yet.
+
+Copy the supplied Chapter 1 test and run it once before editing the starter:
 
 ```console
-cargo x copy-test --chapter 1
+cargo x copy-test --chapter 1 --checkpoint 1
 cargo test -p type-exercise-starter chapter_1 --locked
 ```
 
-The untouched starter compiles. Follow the `Day 1, checkpoint ...` comments beside the declarations
-in the named starter files; the focused test should then fail at the corresponding `todo!` boundary
-until you implement it. Do not edit the copied test.
+The test is cumulative course material; do not edit the copied file. Work only in the learner files named below.
 
-The family you are building has reciprocal arrows:
+## Checkpoint 1: Implement the `Scalar` and `ScalarRef` traits
+
+Open `src/scalar.rs`. The starter already distinguishes owned Int32 and String values in `ScalarImpl` and borrowed Int32 and String values in `ScalarRefImpl<'a>`. What it does not yet express is that each owned type has exactly one borrowed type and one array type, and that the borrowed type points back to the same family.
+
+Complete only the owned↔borrowed bounds and associated-type relationship on `Scalar` and `ScalarRef`. `Scalar::ArrayType` and `ScalarRef::ArrayType` remain unconstrained associated-type placeholders in this checkpoint; do not require them to implement `Array` or tie them reciprocally yet. Use `RefType<'a>` and `ScalarType` to make the owned and borrowed directions agree: if `String::RefType<'a>` is `&'a str`, then that reference must identify `String` as its owned scalar. Checkpoint 3 will connect both scalar forms to the concrete array and builder once those implementations exist.
+
+Then implement the owned↔borrowed relationship for the two families. The array names remain placeholders until Checkpoint 3:
 
 ```text
-Scalar ──RefType<'a>──> ScalarRef<'a>
-  │                         │
-ArrayType                ArrayType
-  ▼                         ▼
-Array ─────Builder─────> ArrayBuilder
+i32    <──owned/borrowed──> i32       <──array──> I32Array
+String <──owned/borrowed──> &'a str   <──array──> StringArray
 ```
 
-For `i32`, the borrowed scalar is another `i32`. For `String`, it is `&'a str`. `Array::get`
-therefore returns `Option<i32>` for `I32Array` and `Option<&str>` for `StringArray` without an
-allocation on the string read.
+This is where the GAT matters. A normal associated type could say that `String` has some reference type, but it could not produce a different `&'a str` for every lifetime chosen by the caller. `type RefType<'a>` preserves that caller-chosen lifetime.
 
-## Checkpoint 1: describe the two physical families
+Why spend this effort on relationships before implementing an expression engine? Consider nullable equality, a common database scalar operation:
 
-- **Target:** `type-exercise-starter/src/physical_type.rs::{PhysicalType, TypeMismatch}` and
-  `type-exercise-starter/src/scalar.rs::{Scalar, ScalarRef, ScalarImpl, ScalarRefImpl}`.
-- **Change:** add only the `Int32` and `String` physical rows and their reciprocal associated
-  types.
-- **Preserve:** the original two `ScalarImpl` variants and safe Rust.
-- **Run:** the Chapter 1 focused test.
-- **Passing means:** owned and borrowed values point to the correct array family.
+```rust,ignore
+use crate::Scalar;
 
-`for<'a>` on a bound means the relationship holds for every caller-chosen borrow lifetime. The
-integer implementation may ignore that lifetime; the string implementation cannot.
+fn nullable_eq<'a, S>(
+    left: Option<S::RefType<'a>>,
+    right: Option<S::RefType<'a>>,
+) -> Option<bool>
+where
+    S: Scalar,
+    S::RefType<'a>: PartialEq,
+{
+    match (left, right) {
+        (Some(left), Some(right)) => Some(left == right),
+        _ => None,
+    }
+}
 
-## Checkpoint 2: store nullable rows
+assert_eq!(nullable_eq::<i32>(Some(7), Some(7)), Some(true));
+assert_eq!(nullable_eq::<String>(Some("db"), Some("rust")), Some(false));
+assert_eq!(nullable_eq::<String>(None, Some("rust")), None);
+```
 
-- **Target:** `type-exercise-starter/src/array.rs::{Array, ArrayBuilder, ArrayImpl}`,
-  `type-exercise-starter/src/array/primitive_array.rs::{PrimitiveArray, PrimitiveArrayBuilder}`, and
-  `type-exercise-starter/src/array/string_array.rs::{StringArray, StringArrayBuilder}`.
-- **Change:** implement `get`, `len`, `iter`, `from_slice`, builder `push`, and `finish` for the two
-  families. Expose read-only `values`/`validity` accessors on `PrimitiveArray` and
-  `data`/`offsets`/`validity` accessors on `StringArray` so the buffer contract is visible.
-- **Preserve:** row count and null positions; returned strings must borrow array storage; offsets
-  count UTF-8 bytes rather than characters.
-- **Run:** the same focused test.
-- **Passing means:** normal, null, and empty arrays read through one generic contract.
+The function describes the database rule once: compare two non-null values, otherwise produce `NULL`. The type family decides whether the compared values are copied integers or borrowed strings:
 
-Use the Arrow-like layout required by the supplied test. A fixed-width array stores one flat
-`Vec<T>` with exactly one slot per row. A string array stores all UTF-8 bytes in one flat `Vec<u8>`
-and uses `rows + 1` monotone offsets: the first is zero, the last is the byte-buffer length, and a
-null or empty row repeats an offset. Both arrays store row validity in the packed
-`bitvec::vec::BitVec` already declared in the starter. A null row returns `None`, but it is never an
-`Option<T>` payload slot; strings are not stored as one owned `String` per row.
+Chapter 1 does not build the generic expression framework yet. The supplied Checkpoint 1 compile witness uses this same idea to prove that each owned scalar and borrowed scalar point back to one another. When this checkpoint passes, generic code can name `S::RefType<'a>` without separately teaching it the Int32 and String cases; no `Array` or builder relationship is required yet.
 
-## Checkpoint 3: erase and recover values
-
-- **Target:** `From`/`TryFrom` implementations in `type-exercise-starter/src/scalar.rs` and
-  `type-exercise-starter/src/array.rs`, plus exports in `type-exercise-starter/src/lib.rs`.
-- **Change:** upcast typed values into erased enums and recover the requested type.
-- **Preserve:** wrong variants return `Err`; they do not panic. The starter's readable
-  `TypeMismatch` is available, but copied tests do not require a particular field layout or message.
-- **Run:** the focused and cumulative starter tests.
-- **Passing means:** correct variants round-trip and wrong variants fail at the boundary.
-
-## Required and extension work
-
-Required work is exactly the explicit `i32` and `String` rows. Additional physical types, macros,
-columns, and expressions belong to later chapters. As an extension, sketch a third family on paper
-and mark every enum arm and conversion it would require; do not implement it yet.
+Run the focused test again:
 
 ```console
+cargo x copy-test --chapter 1 --checkpoint 1
+cargo test -p type-exercise-starter chapter_1 --locked
+```
+
+## Checkpoint 2: Add scalar type erasure
+
+The traits from Checkpoint 1 work when Rust knows the concrete type `S` at compile time. A database plan does not always have that information in its Rust type. A scan may read a runtime schema, or an expression node may hold a value whose physical type is known only after binding. We therefore need one runtime container for all scalar families supported so far.
+
+That is the role of `ScalarImpl` and `ScalarRefImpl<'a>` in `src/scalar.rs`. The first owns a value; the second can borrow one. For Day 1, each enum contains only Int32 and String. The enums erase the concrete Rust type at the runtime boundary while their variants preserve enough information to recover it safely.
+
+Implement the Day 1 erased methods and conversions in `src/scalar.rs` and the display/error behavior of the existing `TypeMismatch` carrier in `src/physical_type.rs`:
+
+- `ScalarImpl::physical_type` and `ScalarRefImpl::physical_type` report the variant's `PhysicalType`.
+- `ScalarRefImpl::to_owned_scalar` turns an erased borrowed value into the matching erased owned value.
+- `From<T>` moves a correctly typed value into its erased enum and cannot fail.
+- `TryFrom<ScalarImpl>` and `TryFrom<ScalarRefImpl<'a>>` recover a requested concrete type.
+- A matching variant returns the value.
+- A nonmatching variant returns `TypeMismatch`; it must not panic or reinterpret the value.
+
+For example, converting `42_i32` into `ScalarImpl` and back to `i32` succeeds. Asking for a `String` from that same `ScalarImpl::Int32` returns an error. This fallibility is why the generic traits alone are not enough: generics prevent a mismatch inside statically typed code, while an erased runtime boundary must check the variant it receives.
+
+Keep the distinction between owned and borrowed erasure visible. `ScalarImpl::String` owns a `String`; `ScalarRefImpl::String` holds an `&str` with the caller's lifetime. Do not allocate a new `String` merely to erase a borrowed value.
+
+Run the same focused test. Its scalar-erasure checkpoint should now round-trip both families and reject a cross-family downcast.
+
+```console
+cargo x copy-test --chapter 1 --checkpoint 2
+cargo test -p type-exercise-starter chapter_1 --locked
+```
+
+## Checkpoint 3: Implement primitive and string arrays
+
+Now connect the array-type placeholders from Checkpoint 1 to concrete arrays. Open `src/array.rs`, `src/array/primitive_array.rs`, and `src/array/string_array.rs`. Add the reciprocal Scalar↔Array and Array↔ArrayBuilder bounds here, then implement the storage and access methods for `I32Array` and `StringArray`.
+
+Why arrays? Database execution engines usually process columns in batches instead of dispatching one operator for every row. Conceptually, a vectorized binary expression performs the same scalar operation across two input arrays:
+
+```rust,ignore
+for row in 0..input_len {
+    result.push(scalar_func(left[row], right[row]));
+}
+return result;
+```
+
+Later chapters will build the reusable vectorization layer. In this chapter, the goal is the representation underneath it: the array must return the scalar reference associated with its family, preserve nulls, and support append-only construction.
+
+Use the small Arrow-style layouts required by the supplied tests. They are teaching layouts inspired by Arrow's columnar separation; this chapter does not claim full Apache Arrow compatibility.
+
+For `PrimitiveArray<i32>`, store:
+
+- one contiguous `Vec<i32>` with one value slot per row; and
+- one packed `BitVec` validity bitmap, where `true` means the row is non-null.
+
+A null integer row still occupies a value slot, using the type's default value as an ignored placeholder. Nullness comes from the validity bit, not from wrapping every stored value in `Option<i32>`.
+
+For `StringArray`, store:
+
+- one contiguous `Vec<u8>` containing the UTF-8 bytes for all rows;
+- an offsets vector with `row_count + 1` entries; and
+- one packed `BitVec` validity bitmap.
+
+Row `i` occupies the half-open byte range `offsets[i]..offsets[i + 1]`. The first offset is zero, the offsets never decrease, and the last offset is the byte-buffer length. A null row and an empty string may repeat an offset; the validity bit distinguishes them. Because the bytes live in the array, `StringArray::get` returns an `&str` borrowed from that buffer rather than allocating a `String`.
+
+Implement the Day 1 array surface described by the starter comments:
+
+- array access: `get`, `len`, `is_empty`, `iter`, and the read-only buffer accessors used by the tests;
+- construction: `with_capacity`, `push`, and `finish` on each builder; and
+- `Array::from_slice`, which builds an array through its associated builder.
+
+Preserve the row count and null position for normal, empty, and all-null inputs. String offsets count UTF-8 bytes, not characters.
+
+```console
+cargo x copy-test --chapter 1 --checkpoint 3
+cargo test -p type-exercise-starter chapter_1 --locked
+```
+
+When this checkpoint passes, the scalar relationship from Checkpoint 1 becomes observable: `I32Array::get` produces `Option<i32>`, while `StringArray::get` produces `Option<&str>` borrowing the array.
+
+## Checkpoint 4: Add array type erasure with a macro
+
+Concrete arrays are ideal for generic code, but a database operator often receives a column selected from a runtime schema. `ArrayImpl` in `src/array.rs` is the erased boundary for that case. On Day 1 it has only `Int32(I32Array)` and `String(StringArray)` variants.
+
+Implement the common erased-array operations and the checked conversions between each concrete array and `ArrayImpl`. As with scalar erasure, upcasting with `From` cannot fail, while downcasting with `TryFrom` must return `TypeMismatch` for the wrong variant. Support both owned recovery and borrowed recovery so callers can inspect an erased array without cloning its buffers.
+
+The two families need the same conversion shape. Write that shape once as a `macro_rules!` macro, then invoke it for Int32 and String. Keep the family inventory in `src/variant_catalog.rs` to exactly the two Day 1 rows. The catalog supplies the type names to the macro; it must not contain the later physical families yet.
+
+The point of this macro is narrow: remove repetitive enum conversion code while keeping each generated implementation ordinary, inspectable Rust. It is not a generic reflection system. Later chapters will extend the catalog and reuse the same expansion boundary.
+
+Finish by checking these behaviors:
+
+- an `I32Array` and a `StringArray` each round-trip through `ArrayImpl`;
+- borrowed recovery returns a reference to the original concrete array;
+- asking for `I32Array` from `ArrayImpl::String` returns `TypeMismatch`;
+- erased `get` preserves nulls and returns the matching `ScalarRefImpl` variant; and
+- the physical-family catalog contains exactly Int32 and String.
+
+Run the focused test, then the starter library tests:
+
+```console
+cargo x copy-test --chapter 1 --checkpoint 4
 cargo test -p type-exercise-starter chapter_1 --locked
 cargo test -p type-exercise-starter --lib --locked
 ```
 
-Before continuing, explain why `StringArray::get` needs a lifetime-indexed associated type and why
-an erased downcast is fallible even when the compile-time family is consistent.
+Before continuing, make sure you can explain three boundaries in your own words:
+
+1. Why does `String` need `RefType<'a> = &'a str`, while `i32` can use `RefType<'a> = i32`?
+2. Why can generic code trust a `Scalar` relationship, while erased code must perform a checked downcast?
+3. Which bytes represent a null string row, and which structure tells you that it is null rather than empty?
+
+You have connected the first two concrete families by hand. Chapter 2 will extend the physical-family catalog and let the macros reproduce those connections for more types without turning the Day 1 starter into a completed framework.
 
 Next: [Chapter 2 scales the family without copying every connection](./chapter-2-type-catalog.md).
 
