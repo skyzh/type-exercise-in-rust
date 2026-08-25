@@ -1,5 +1,5 @@
-/// Day 1, checkpoint 1: add the bounds that connect an owned scalar to its borrowed and array
-/// forms. The starter intentionally does not reveal those bounds.
+/// Day 1, checkpoint 1: add the bounds that connect an owned scalar to its borrowed form. Keep
+/// ArrayType as an unconstrained placeholder until checkpoint 3.
 pub trait Scalar {
     type ArrayType;
     // Rust requires this lifetime well-formedness clause for a GAT returned from `&self`; the
@@ -10,7 +10,8 @@ pub trait Scalar {
     fn as_scalar_ref(&self) -> Self::RefType<'_>;
 }
 
-/// Day 1, checkpoint 1: add the reciprocal bounds for a value borrowed from a scalar or array.
+/// Day 1, checkpoint 1: add the reciprocal owned↔borrowed bounds. Keep ArrayType unconstrained
+/// until checkpoint 3 connects the concrete arrays.
 pub trait ScalarRef<'a> {
     type ArrayType;
     type ScalarType;
@@ -35,8 +36,9 @@ pub enum ScalarRefImpl<'a> {
     // Day 11: add `List(ListScalarRef<'a>)`.
 }
 
-// Day 1, checkpoint 1: implement Scalar/ScalarRef for i32 and String/&str. The reciprocal bounds
-// belong on the traits, not only on these concrete implementations.
+// Day 1, checkpoint 1: implement Scalar/ScalarRef for i32 and String/&str. The owned↔borrowed
+// reciprocal bounds belong on the traits, not only on these concrete implementations.
+// Day 1, checkpoint 3: connect each ArrayType placeholder to its concrete array.
 // Day 1, checkpoint 2: add physical-type methods and checked From/TryFrom conversions for both
 // erased enums. Wrong variants return TypeMismatch rather than panicking.
 // Day 2: extend those implementations to the remaining scalar families and Decimal.

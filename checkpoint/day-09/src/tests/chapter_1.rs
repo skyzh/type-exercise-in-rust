@@ -1,19 +1,12 @@
-use bitvec::vec::BitVec;
+use crate::{Scalar, ScalarRef};
 
-use crate::{
-    Array, ArrayBuilder, ArrayImpl, I32Array, PHYSICAL_FAMILY_CATALOG, PhysicalFamily, Scalar,
-    ScalarImpl, ScalarRef, ScalarRefImpl, StringArray, StringArrayBuilder,
-};
+// === Chapter 1 checkpoint 1 ===
 
-/// A small stand-in for a database comparison expression. Its body compiles with only `S:
-/// Scalar` because the reciprocal bounds live on the type-family traits rather than at every call
-/// site.
+/// This generic body must compile from `S: Scalar` alone. It proves that every
+/// `S::RefType<'a>` points back to exactly `S`, not merely to some scalar type.
 #[allow(dead_code)]
-fn rows_are_equal<S: Scalar>(array: &S::ArrayType, left: usize, right: usize) -> Option<bool>
-where
-    for<'a> S::RefType<'a>: PartialEq,
-{
-    Some(array.get(left)? == array.get(right)?)
+fn borrowed_value_returns_to_its_scalar<S: Scalar>(value: &S) -> S {
+    value.as_scalar_ref().to_owned_scalar()
 }
 
 #[test]
@@ -28,6 +21,10 @@ fn checkpoint_1_connects_scalar_and_scalar_ref() {
     assert_eq!(string_ref, "type system");
     assert_eq!(string_ref.to_owned_scalar(), string);
 }
+
+// === Chapter 1 checkpoint 2 ===
+
+use crate::{ScalarImpl, ScalarRefImpl};
 
 #[test]
 fn checkpoint_2_erases_and_recovers_scalars() {
@@ -44,6 +41,37 @@ fn checkpoint_2_erases_and_recovers_scalars() {
 
     assert!(i32::try_from(ScalarImpl::String("wrong".to_owned())).is_err());
     assert!(<&str>::try_from(ScalarRefImpl::Int32(1)).is_err());
+}
+
+// === Chapter 1 checkpoint 3 ===
+
+use bitvec::vec::BitVec;
+
+use crate::{Array, ArrayBuilder, I32Array, StringArray, StringArrayBuilder};
+
+/// A small stand-in for a database comparison expression. Its body compiles
+/// with only `S: Scalar` because Checkpoint 3 connects the array and scalar
+/// associated types in both directions.
+#[allow(dead_code)]
+fn rows_are_equal<S: Scalar>(array: &S::ArrayType, left: usize, right: usize) -> Option<bool>
+where
+    for<'a> S::RefType<'a>: PartialEq,
+{
+    Some(array.get(left)? == array.get(right)?)
+}
+
+/// The array selected by a scalar must yield references that own back to that
+/// same scalar.
+#[allow(dead_code)]
+fn first_owned_value<S: Scalar>(array: &S::ArrayType) -> Option<S> {
+    array.get(0).map(ScalarRef::to_owned_scalar)
+}
+
+/// A builder's selected array must point back to the exact builder type.
+#[allow(dead_code)]
+fn restart_builder<B: ArrayBuilder>(builder: B) -> B {
+    let array = builder.finish();
+    <B::Array as Array>::Builder::with_capacity(array.len())
 }
 
 #[test]
@@ -121,6 +149,10 @@ fn checkpoint_3_builds_arrow_like_arrays() {
         [false, false, false]
     );
 }
+
+// === Chapter 1 checkpoint 4 ===
+
+use crate::{ArrayImpl, PHYSICAL_FAMILY_CATALOG, PhysicalFamily};
 
 #[test]
 fn checkpoint_4_erases_arrays_through_the_two_row_catalog() {

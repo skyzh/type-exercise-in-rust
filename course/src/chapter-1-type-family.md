@@ -30,7 +30,7 @@ The comments beside each missing relationship name the checkpoint that owns it. 
 Copy the supplied Chapter 1 test and run it once before editing the starter:
 
 ```console
-cargo x copy-test --chapter 1
+cargo x copy-test --chapter 1 --checkpoint 1
 cargo test -p type-exercise-starter chapter_1 --locked
 ```
 
@@ -40,9 +40,9 @@ The test is cumulative course material; do not edit the copied file. Work only i
 
 Open `src/scalar.rs`. The starter already distinguishes owned Int32 and String values in `ScalarImpl` and borrowed Int32 and String values in `ScalarRefImpl<'a>`. What it does not yet express is that each owned type has exactly one borrowed type and one array type, and that the borrowed type points back to the same family.
 
-Complete the bounds and associated-type relationships on `Scalar` and `ScalarRef`. A `Scalar` needs an `ArrayType` and a lifetime-indexed `RefType<'a>`. A `ScalarRef<'a>` needs the reciprocal `ScalarType` and `ArrayType`. The important part is not merely giving the associated types names; the bounds must make contradictory families impossible. If `String::RefType<'a>` is `&'a str`, that reference must identify `String` as its owned scalar and `StringArray` as its array.
+Complete only the owned↔borrowed bounds and associated-type relationship on `Scalar` and `ScalarRef`. `Scalar::ArrayType` and `ScalarRef::ArrayType` remain unconstrained associated-type placeholders in this checkpoint; do not require them to implement `Array` or tie them reciprocally yet. Use `RefType<'a>` and `ScalarType` to make the owned and borrowed directions agree: if `String::RefType<'a>` is `&'a str`, then that reference must identify `String` as its owned scalar. Checkpoint 3 will connect both scalar forms to the concrete array and builder once those implementations exist.
 
-Then implement those relationships for the two families:
+Then implement the owned↔borrowed relationship for the two families. The array names remain placeholders until Checkpoint 3:
 
 ```text
 i32    <──owned/borrowed──> i32       <──array──> I32Array
@@ -78,11 +78,12 @@ assert_eq!(nullable_eq::<String>(None, Some("rust")), None);
 
 The function describes the database rule once: compare two non-null values, otherwise produce `NULL`. The type family decides whether the compared values are copied integers or borrowed strings:
 
-Chapter 1 does not build the generic expression framework yet. The supplied compile-time checks use this same idea to prove that both families have reciprocal scalar, reference, and array relationships. When this checkpoint passes, generic code can name `S::RefType<'a>` without separately teaching it the Int32 and String cases.
+Chapter 1 does not build the generic expression framework yet. The supplied Checkpoint 1 compile witness uses this same idea to prove that each owned scalar and borrowed scalar point back to one another. When this checkpoint passes, generic code can name `S::RefType<'a>` without separately teaching it the Int32 and String cases; no `Array` or builder relationship is required yet.
 
 Run the focused test again:
 
 ```console
+cargo x copy-test --chapter 1 --checkpoint 1
 cargo test -p type-exercise-starter chapter_1 --locked
 ```
 
@@ -108,12 +109,13 @@ Keep the distinction between owned and borrowed erasure visible. `ScalarImpl::St
 Run the same focused test. Its scalar-erasure checkpoint should now round-trip both families and reject a cross-family downcast.
 
 ```console
+cargo x copy-test --chapter 1 --checkpoint 2
 cargo test -p type-exercise-starter chapter_1 --locked
 ```
 
 ## Checkpoint 3: Implement primitive and string arrays
 
-Now the type system knows that each owned scalar and scalar reference belongs to one array family. Open `src/array.rs`, `src/array/primitive_array.rs`, and `src/array/string_array.rs`. Complete the Day 1 bounds on `Array` and `ArrayBuilder`, then implement the storage and access methods for `I32Array` and `StringArray`.
+Now connect the array-type placeholders from Checkpoint 1 to concrete arrays. Open `src/array.rs`, `src/array/primitive_array.rs`, and `src/array/string_array.rs`. Add the reciprocal Scalar↔Array and Array↔ArrayBuilder bounds here, then implement the storage and access methods for `I32Array` and `StringArray`.
 
 Why arrays? Database execution engines usually process columns in batches instead of dispatching one operator for every row. Conceptually, a vectorized binary expression performs the same scalar operation across two input arrays:
 
@@ -152,6 +154,7 @@ Implement the Day 1 array surface described by the starter comments:
 Preserve the row count and null position for normal, empty, and all-null inputs. String offsets count UTF-8 bytes, not characters.
 
 ```console
+cargo x copy-test --chapter 1 --checkpoint 3
 cargo test -p type-exercise-starter chapter_1 --locked
 ```
 
@@ -178,6 +181,7 @@ Finish by checking these behaviors:
 Run the focused test, then the starter library tests:
 
 ```console
+cargo x copy-test --chapter 1 --checkpoint 4
 cargo test -p type-exercise-starter chapter_1 --locked
 cargo test -p type-exercise-starter --lib --locked
 ```
