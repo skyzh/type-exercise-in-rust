@@ -77,31 +77,19 @@ fn write_if_changed(path: &Path, bytes: &[u8]) -> Result<bool> {
     Ok(true)
 }
 
-const CHAPTER_1_CHECKPOINT_MARKER: &str = "// === Chapter 1 checkpoint ";
 const CHAPTER_1_CHECKPOINTS: usize = 4;
 
-fn chapter_1_checkpoint_prefix(source: &[u8], checkpoint: usize) -> Result<Vec<u8>> {
+fn chapter_1_checkpoint_path(root: &Path, checkpoint: usize) -> Result<PathBuf> {
     if !(1..=CHAPTER_1_CHECKPOINTS).contains(&checkpoint) {
         bail!("no tests are available for Chapter 1 checkpoint {checkpoint}");
     }
-    let source = std::str::from_utf8(source).context("Chapter 1 tests are not UTF-8")?;
-    for number in 1..=CHAPTER_1_CHECKPOINTS {
-        let marker = format!("{CHAPTER_1_CHECKPOINT_MARKER}{number} ===");
-        if source.matches(&marker).count() != 1 {
-            bail!("Chapter 1 tests must contain exactly one `{marker}` marker");
-        }
-    }
-    let end = if checkpoint == CHAPTER_1_CHECKPOINTS {
-        source.len()
+    let path = if checkpoint == CHAPTER_1_CHECKPOINTS {
+        root.join("type-exercise/src/tests/chapter_1.rs")
     } else {
-        let next = format!("{CHAPTER_1_CHECKPOINT_MARKER}{} ===", checkpoint + 1);
-        source
-            .find(&next)
-            .context("failed to find the next Chapter 1 checkpoint marker")?
+        root.join("supplied-tests/chapter_1")
+            .join(format!("checkpoint_{checkpoint}.rs"))
     };
-    let mut prefix = source[..end].trim_end().as_bytes().to_vec();
-    prefix.push(b'\n');
-    Ok(prefix)
+    Ok(path)
 }
 
 fn copy_test(root: &Path, chapter: usize, checkpoint: Option<usize>) -> Result<CopyReport> {
@@ -122,14 +110,16 @@ fn copy_test(root: &Path, chapter: usize, checkpoint: Option<usize>) -> Result<C
     let sources = (1..=chapter)
         .map(|number| {
             let name = format!("chapter_{number}.rs");
-            let path = source_dir.join(&name);
-            let mut bytes = fs::read(&path)
+            let path = if number == 1 {
+                checkpoint
+                    .map(|checkpoint| chapter_1_checkpoint_path(root, checkpoint))
+                    .transpose()?
+                    .unwrap_or_else(|| source_dir.join(&name))
+            } else {
+                source_dir.join(&name)
+            };
+            let bytes = fs::read(&path)
                 .with_context(|| format!("failed to read cumulative source {}", path.display()))?;
-            if number == 1
-                && let Some(checkpoint) = checkpoint
-            {
-                bytes = chapter_1_checkpoint_prefix(&bytes, checkpoint)?;
-            }
             Ok((name, bytes))
         })
         .collect::<Result<Vec<_>>>()?;
@@ -215,16 +205,18 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let source = root.path().join("type-exercise/src/tests");
         fs::create_dir_all(&source).unwrap();
+        fs::create_dir_all(root.path().join("supplied-tests/chapter_1")).unwrap();
         fs::create_dir_all(root.path().join("type-exercise-starter/src")).unwrap();
-        fs::write(
-            source.join("chapter_1.rs"),
-            b"// preamble\n\
-              // === Chapter 1 checkpoint 1 ===\nfn one() {}\n\
-              // === Chapter 1 checkpoint 2 ===\nfn two() {}\n\
-              // === Chapter 1 checkpoint 3 ===\nfn three() {}\n\
-              // === Chapter 1 checkpoint 4 ===\nfn four() {}\n",
-        )
-        .unwrap();
+        fs::write(source.join("chapter_1.rs"), b"fn four() {}\n").unwrap();
+        for checkpoint in 1..=3 {
+            fs::write(
+                root.path()
+                    .join("supplied-tests/chapter_1")
+                    .join(format!("checkpoint_{checkpoint}.rs")),
+                format!("fn checkpoint_{checkpoint}() {{}}\n"),
+            )
+            .unwrap();
+        }
         fs::write(source.join("chapter_2.rs"), b"// two\n").unwrap();
         fs::write(source.join("chapter_3.rs"), b"// three\n").unwrap();
         root

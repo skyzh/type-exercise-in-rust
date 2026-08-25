@@ -53,10 +53,9 @@ This is where the GAT matters. A normal associated type could say that `String` 
 
 Why spend this effort on relationships before implementing an expression engine? Consider nullable equality, a common database scalar operation:
 
-```rust
-# trait Scalar { type RefType<'a>; }
-# impl Scalar for i32 { type RefType<'a> = i32; }
-# impl Scalar for String { type RefType<'a> = &'a str; }
+```rust,ignore
+use crate::Scalar;
+
 fn nullable_eq<'a, S>(
     left: Option<S::RefType<'a>>,
     right: Option<S::RefType<'a>>,
