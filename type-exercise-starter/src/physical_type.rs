@@ -21,6 +21,9 @@ pub enum PhysicalFamily {
     // Day 2: add Int16, Int64, Bool, Float32, Float64, and Decimal.
 }
 
+// Day 10: add `Nullability::{NonNull, Nullable}` beside `PhysicalType` as physical planning
+// metadata. Do not add a nullable logical or physical type variant.
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PhysicalFamilyEntry {
     pub family: PhysicalFamily,

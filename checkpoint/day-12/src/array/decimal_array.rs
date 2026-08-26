@@ -1,14 +1,12 @@
 use bitvec::vec::BitVec;
 
-use crate::{Decimal, DecimalError, DecimalType};
+use crate::{Decimal, DecimalError, DecimalType, PrimitiveArray, PrimitiveArrayBuilder};
 
 /// A nullable Decimal array with one descriptor shared by all rows.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DecimalArray {
-    values: Vec<i128>,
-    validity: BitVec,
+    storage: PrimitiveArray<i128>,
     decimal_type: DecimalType,
-    null_count: usize,
 }
 
 impl DecimalArray {
@@ -28,12 +26,9 @@ impl DecimalArray {
                 decimal_type.validate_unscaled(value)?;
             }
         }
-        let null_count = validity.iter().by_vals().filter(|valid| !valid).count();
         Ok(Self {
-            values,
-            validity,
+            storage: PrimitiveArray::from_raw_parts(values, validity),
             decimal_type,
-            null_count,
         })
     }
 
@@ -53,37 +48,36 @@ impl DecimalArray {
     }
 
     pub fn values(&self) -> &[i128] {
-        &self.values
+        self.storage.values()
     }
 
     pub fn validity(&self) -> &BitVec {
-        &self.validity
-    }
-
-    pub fn null_count(&self) -> usize {
-        self.null_count
+        self.storage.validity()
     }
 
     pub fn get(&self, row: usize) -> Option<Decimal> {
-        if row >= self.len() || !self.validity[row] {
+        if row >= self.len() || !self.storage.validity()[row] {
             return None;
         }
-        Some(Decimal::from_validated(self.values[row], self.decimal_type))
+        Some(Decimal::from_validated(
+            self.storage.values()[row],
+            self.decimal_type,
+        ))
     }
 
     pub fn len(&self) -> usize {
-        self.values.len()
+        self.storage.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.values.is_empty()
+        self.storage.values().is_empty()
     }
 
     pub(crate) fn try_slice(&self, start: usize, end: usize) -> Result<Self, DecimalError> {
         Self::try_from_raw_parts(
             self.decimal_type,
-            self.values[start..end].to_vec(),
-            self.validity[start..end].to_bitvec(),
+            self.storage.values()[start..end].to_vec(),
+            self.storage.validity()[start..end].to_bitvec(),
         )
     }
 }
@@ -91,10 +85,8 @@ impl DecimalArray {
 /// A fail-closed Decimal builder that requires metadata before any row.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DecimalArrayBuilder {
-    values: Vec<i128>,
-    validity: BitVec,
+    storage: PrimitiveArrayBuilder<i128>,
     decimal_type: DecimalType,
-    null_count: usize,
 }
 
 impl DecimalArrayBuilder {
@@ -102,10 +94,8 @@ impl DecimalArrayBuilder {
         // `DecimalType` can only be created by its checked constructor. Keep this
         // result fallible so metadata-bearing builders share one explicit boundary.
         Ok(Self {
-            values: Vec::with_capacity(capacity),
-            validity: BitVec::with_capacity(capacity),
+            storage: PrimitiveArrayBuilder::with_raw_capacity(capacity),
             decimal_type,
-            null_count: 0,
         })
     }
 
@@ -118,30 +108,25 @@ impl DecimalArrayBuilder {
                 });
             }
             self.decimal_type.validate_unscaled(value.unscaled())?;
-            self.values.push(value.unscaled());
-            self.validity.push(true);
+            self.storage.push_raw(value.unscaled(), true);
         } else {
-            self.values.push(0);
-            self.validity.push(false);
-            self.null_count += 1;
+            self.storage.push_raw(0, false);
         }
         Ok(())
     }
 
     pub fn len(&self) -> usize {
-        self.values.len()
+        self.storage.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.values.is_empty()
+        self.storage.len() == 0
     }
 
     pub fn finish(self) -> DecimalArray {
         DecimalArray {
-            values: self.values,
-            validity: self.validity,
+            storage: self.storage.finish_raw(),
             decimal_type: self.decimal_type,
-            null_count: self.null_count,
         }
     }
 }

@@ -2,113 +2,221 @@
 
 # Chapter 2: Scale the Physical Type Family
 
-Adding `f64` beside the two Chapter 1 rows repeats physical variants, scalar variants, array
-aliases, builders, and conversions. Repeating that work for every primitive makes drift more likely
-than the type itself warrants.
+Chapter 1 connected Int32 and String by hand. An owned scalar, its borrowed form, its nullable
+array, and its erased runtime variant now agree through Rust's associated types. That was useful
+while there were two families. Adding five more primitive families by copying those
+implementations would make the boilerplate larger than the storage idea.
 
-**Prerequisites:** Chapter 1 and basic declarative macros.
+This chapter turns the two-row catalog from Chapter 1 into the compile-time inventory for the repeated relationships. A declarative macro will generate ordinary aliases and implementations for the static families. Then we will add Decimal as the important exception: its precision and scale are chosen at runtime. `DecimalArray` therefore wraps reused `PrimitiveArray<i128>` coefficient and validity storage with one checked `DecimalType` shared by the whole array.
 
-**By the end of this chapter, you will:**
+The goal is not to hide the type system behind a general framework. It is to keep two kinds of variation separate:
 
-- add complete `i16`, `i64`, `bool`, `f32`, and `f64` static families plus a metadata-aware
-  Decimal family;
-- map planner-visible `DataType` values to physical storage; and
-- keep the non-List physical rows in one catalog that drives exhaustive code.
+| | Static family identity | Runtime type metadata |
+| --- | --- | --- |
+| What varies? | The Rust scalar, borrowed scalar, array, and builder types | Values that describe one physical family at runtime |
+| Examples | `i64` ↔ `I64Array`; `f64` ↔ `F64Array`; `String` ↔ `StringArray` | `DecimalType { precision, scale }` shared by a Decimal array |
+| Where is it enforced? | Catalog-generated aliases and trait implementations checked by Rust | Checked constructors plus `PhysicalType::Decimal(decimal_type)` at erased boundaries |
+
+## What is in the starter
+
+Begin from your completed Chapter 1 workspace. `src/variant_catalog.rs` contains exactly the
+Int32 and String rows. Those rows already drive scalar and array erasure. `src/physical_type.rs`,
+`src/scalar.rs`, and `src/array.rs` therefore expose two physical families, and
+`src/array/primitive_array.rs` has the working `I32Array` layout you implemented.
+
+The Day 2 starter does not predeclare the rest of the solution. Comments in the active files mark
+where the primitive variants and aliases belong. `src/data_type.rs`, `src/decimal.rs`, and
+`src/array/decimal_array.rs` are still docstrings rather than executable declarations, and their
+modules remain commented in `src/lib.rs` and `src/array.rs`. You will make those files executable
+only when their checkpoints introduce the concepts.
+
+Copy the cumulative supplied test before editing:
 
 ```console
 cargo x copy-test --chapter 2
 cargo test -p type-exercise-starter chapter_2 --locked
 ```
 
-Follow the `Day 2, checkpoint ...` comments beside the declarations in the named starter files.
-The first focused run should fail at those `todo!` boundaries for the new families and catalog.
+The Chapter 2 test is one final contract, not four progressive test files. Its first run should
+fail because the new arrays, logical types, and Decimal types do not exist yet. Do not edit the
+copied test. Checkpoints 1 and 2 can use a library check to catch local compiler errors. Checkpoints
+3 and 4 share one compile boundary because the final `DataType` includes Decimal; enable their
+modules together after both implementations exist. The focused Chapter 2 test becomes green after
+all four checkpoints are complete.
 
-## Add Double explicitly before generalizing
+```console
+cargo check -p type-exercise-starter --lib --locked
+```
 
-Connect `DataType::Double`, `PhysicalType::Float64`, `f64`, `F64Array`, and its builder by hand.
-Use the same checkpoints as Chapter 1. The copied test includes NaN, infinity, and signed zero so
-the family cannot accidentally require total equality.
+## Checkpoint 1: Generate the primitive array families
 
-This explicit row is evidence: the repeated edits are real. Now extend Chapter 1's two-row family
-catalog so it owns every non-List row:
+Open `src/array/primitive_array.rs`. Chapter 1 implemented `Array` and `ArrayBuilder` directly for
+the `I32Array` aliases. The storage does not depend on `i32`: every copyable primitive family uses
+one contiguous `Vec<T>` plus one packed validity bitmap. What changes from family to family is the
+Rust scalar type and the public alias name.
 
-| Logical type | Physical family | Owned / borrowed scalar |
-| --- | --- | --- |
-| `SmallInt` | `Int16` | `i16` / `i16` |
-| `Integer` | `Int32` | `i32` / `i32` |
-| `BigInt` | `Int64` | `i64` / `i64` |
-| `Boolean` | `Bool` | `bool` / `bool` |
-| `Real` | `Float32` | `f32` / `f32` |
-| `Double` | `Float64` | `f64` / `f64` |
-| `Varchar`, `Char` | `String` | `String` / `&str` |
-| `Decimal(p, s)` | `Decimal(p, s)` | typed `Decimal` / typed `Decimal` |
+Generalize that implementation without making every `T` a supported database type. Define one
+macro that emits an array and builder alias for a `copy` catalog row, and another that emits the
+matching `Array` and `ArrayBuilder` implementations. The callbacks receive rows from
+`for_each_physical_family!`; helper arms for `borrowed` and `decimal` rows should deliberately emit
+nothing. This lets the catalog choose which Rust types participate instead of giving
+`PrimitiveArray<T>` a blanket implementation for arbitrary `T`.
 
-`Char { width }` retains logical metadata without changing String storage. Decimal is different:
-its precision and scale define the physical value's meaning, including for empty and all-null
-arrays. Use `DecimalType::try_new(precision, scale)` and enforce `1 <= precision <= 38` plus
-`scale <= precision`. This course keeps scale nonnegative.
+The resulting expansion has this shape:
 
-## Checkpoint 1: make primitive storage generic
+```text
+{ copy, Float64, F64Array, F64ArrayBuilder, f64, f64 }
+                         |
+                         |-- type F64Array = PrimitiveArray<f64>
+                         |-- type F64ArrayBuilder = PrimitiveArrayBuilder<f64>
+                         `-- Array and ArrayBuilder implementations
+```
 
-- **Target:** `type-exercise-starter/src/array/primitive_array.rs::{PrimitiveArray, PrimitiveArrayBuilder}`.
-- **Change:** implement the `Array` family once for supported primitive scalars and expose aliases.
-- **Preserve:** nullable, empty, and special-float behavior from Chapter 1.
-- **Run:** the Chapter 2 focused test.
-- **Passing means:** every primitive family satisfies the same reciprocal type equations.
+Keep the Chapter 1 layout unchanged. `push(None)` still appends a default placeholder and a false
+validity bit. `get` consults validity before returning the copied value. NaN, infinity, and signed
+zero are stored as their original floating-point bit patterns; do not add an equality or ordering
+requirement just to make the generic implementation convenient.
 
-## Checkpoint 2: extend the family catalog
+At this point the catalog still has only the two Chapter 1 rows, so the new macro expansion should
+preserve the working Int32 family while ignoring String. The later aliases do not exist until you
+add their rows in Checkpoint 2; do not re-export names the catalog has not generated yet.
 
-- **Target:** `type-exercise-starter/src/variant_catalog.rs::for_each_physical_family`, plus generated arms in
-  `type-exercise-starter/src/physical_type.rs`, `type-exercise-starter/src/scalar.rs`, and `type-exercise-starter/src/array.rs`.
-- **Change:** expand the two-row Chapter 1 catalog so one row defines each physical variant, array,
-  builder, owned scalar, and borrowed scalar.
-- **Preserve:** `String` remains the one borrowed row and every downcast remains checked.
-- **Run:** the focused test and inspect `PHYSICAL_FAMILY_CATALOG` failures.
-- **Passing means:** omitting or duplicating a family becomes a compile or test failure.
+```console
+cargo check -p type-exercise-starter --lib --locked
+```
 
-## Checkpoint 3: map logical meaning to storage
+## Checkpoint 2: Make the catalog own the repeated relationships
 
-- **Target:** `type-exercise-starter/src/data_type.rs::{DataType, DataType::physical_type}`.
-- **Change:** add all scalar logical types in the table.
-- **Preserve:** `DataType` is planner metadata; do not add `Nullable` or List yet.
-- **Run:** the focused and cumulative tests.
-- **Passing means:** every logical scalar type has one documented physical family.
+Now open `src/variant_catalog.rs`. Each row names six facts that otherwise have to stay synchronized:
 
-## Checkpoint 4: give Decimal one shared descriptor
+```text
+storage kind, erased variant, array, builder, owned scalar, borrowed scalar
+```
 
-- **Target:** `type-exercise-starter/src/decimal.rs::{DecimalType, Decimal, DecimalError}` and
-  `type-exercise-starter/src/array/decimal_array.rs::{DecimalArray, DecimalArrayBuilder}`.
-- **Change:** store one flat `i128` unscaled coefficient per row, packed validity, and one checked
-  `DecimalType` shared by the whole array. Require the descriptor before the first builder push.
-- **Preserve:** null rows use validity rather than `Option<Decimal>` storage; empty and all-null
-  arrays remain typed; a failed coefficient or metadata check must not append a partial row.
-- **Run:** the focused and cumulative tests.
-- **Passing means:** scalar, array, and erased Decimal values preserve exact precision and scale.
+Extend the inventory with the static Day 2 families: Int16, Int64, Bool, Float32, and Float64.
+Int32 remains in place, and String remains the one `borrowed` row because its array yields `&str`
+rather than copying an owned `String`.
 
-The represented value is `unscaled × 10^-scale`. A valid coefficient has fewer than or exactly
-`precision` decimal digits, so `10^precision` itself is out of range. Validate with an
-overflow-safe absolute value: `i128::MIN` is an ordinary error case, not a reason to panic. Do not
-use `rust_decimal`; repeating scale inside every stored row would create a second source of truth.
+The existing catalog callbacks in `src/scalar.rs` and `src/array.rs` should now generate the new
+erased variants, family relationships, physical-type dispatch, and checked conversions without
+five hand-written copies. Add the matching variants to `PhysicalType` and `PhysicalFamily` in
+`src/physical_type.rs`, update the primitive re-exports in `src/array.rs`, and keep
+`PHYSICAL_FAMILY_CATALOG` in the same public order. The supplied test treats that public list as an
+audit surface: an omitted, duplicated, or misnamed family is a failure even if some generated code
+still compiles.
 
-Decimal is a dedicated catalog row rather than a `PrimitiveArray<Decimal>` alias. Static numeric
-families can use metadata-free `ArrayBuilder::with_capacity`; Decimal uses
-`DecimalArrayBuilder::try_with_type`. Decimal arithmetic, comparisons, casts, rounding, and
-implicit coercion remain outside this chapter.
+This is a declarative macro, not runtime reflection. After expansion, Rust still sees concrete
+items such as `impl Scalar for f64`, `ArrayImpl::Float64(F64Array)`, and a checked
+`TryFrom<ArrayImpl> for F64Array`. The compiler checks the same reciprocal relationships from
+Chapter 1 for every static row:
 
-## Required and extension work
+```text
+owned scalar <-> borrowed scalar <-> concrete array <-> builder
+```
 
-All table rows and Decimal storage checks are required. Decimal arithmetic and casts are not.
-Extending the catalog with another physical family is useful practice, but it must bring the
-complete scalar, array, erasure, and mismatch surface rather than one enum variant.
+Do not add Decimal to the primitive macro implementations. Checkpoint 4 will add its catalog row after the descriptor-bearing types exist. The Decimal wrapper reuses `PrimitiveArray<i128>` for coefficient and validity storage, but its builder still needs a runtime `DecimalType` before it can accept any row.
 
-The starter contains commented declarations and signatures for later chapters at their
-implementation locations. Leave each one commented until its checkpoint asks you to uncomment
-and implement it.
+```console
+cargo check -p type-exercise-starter --lib --locked
+```
+
+## Checkpoint 3: Separate logical type from physical storage
+
+So far, `PhysicalType` answers an execution question: which scalar and array representation is in
+memory? A planner asks a different question. SQL `CHAR(7)` and `VARCHAR` have different logical
+meaning, but this course stores both in the String physical family. That distinction belongs in a
+planner-visible `DataType`, not in `StringArray`.
+
+Replace the docstring in `src/data_type.rs` with `DataType` and its methods. Add the primitive
+logical variants and the two string variants, then map them explicitly:
+
+| Logical `DataType` | Physical storage |
+| --- | --- |
+| `SmallInt` | `Int16` |
+| `Integer` | `Int32` |
+| `BigInt` | `Int64` |
+| `Boolean` | `Bool` |
+| `Real` | `Float32` |
+| `Double` | `Float64` |
+| `Varchar`, `Char { width }` | `String` |
+
+Implement `physical_type`, `is_string`, and `is_numeric`. `Boolean` is not numeric. The `width` in
+`Char { width }` remains logical metadata even though it does not change the physical array.
+
+Do not add a nullable logical variant or List. Keep one primitive array representation with its validity bitmap. Nullability is a physical property beside `PhysicalType`, expressed as `Nullability::{NonNull, Nullable}`. Day 10 will make `ColumnViewImpl` carry that property and make expressions derive their output property with `Expression::output_nullability`; `BoundExpression` only delegates it. An ordinary `ColumnViewImpl::array` remains conservatively `Nullable`. A checked `try_non_null_array` can establish `NonNull` once, after which the selected dense loop reads the same array's `values()` and leaves its bitmap structurally present but unused. This does not require a second Arrow array type or a cached null count. List arrives with its own scalar and array relationships on Day 11.
+
+Checkpoint 4 adds the Decimal variants and checked constructor to this same file. After that work,
+uncomment the `data_type` and `decimal` modules and exports in `src/lib.rs`; do not enable any
+later-day module.
+
+## Checkpoint 4: Keep Decimal metadata with the physical value
+
+An `f64` value carries its interpretation in its bits. An `i128` coefficient does not tell you
+whether `12345` means `12345`, `123.45`, or `12.345`. Decimal therefore cannot use the static
+primitive relationship unchanged.
+
+Implement `DecimalType`, `Decimal`, and `DecimalError` in `src/decimal.rs`. `DecimalType` owns the
+precision and scale and accepts only:
+
+```text
+1 <= precision <= 38
+0 <= scale <= precision
+```
+
+The scale is an unsigned `u8`, so it is nonnegative by construction. A `Decimal` pairs one checked
+`i128` coefficient with a `DecimalType`; its represented value is
+`unscaled * 10^(-scale)`. A coefficient is valid when its absolute value is strictly less than
+`10^precision`. Use an overflow-safe absolute value so `i128::MIN` returns an ordinary error
+instead of panicking.
+
+Next implement `DecimalArray` and `DecimalArrayBuilder` in `src/array/decimal_array.rs`. `DecimalArray` is a logical metadata wrapper around `PrimitiveArray<i128>`:
+
+| Stored state | Role |
+| --- | --- |
+| `DecimalType { precision, scale }` | One checked descriptor shared by the entire array |
+| `PrimitiveArray<i128>` | One flat coefficient slot and one validity bit per row |
+
+Do not cache a null count. The reused primitive representation already owns the coefficient buffer and validity bitmap.
+
+Require the descriptor before the first push with `DecimalArrayBuilder::try_with_type`. Store zero as the ignored coefficient for a null row, just as other primitive arrays use a placeholder value. Empty and all-null arrays must retain their `DecimalType`; the descriptor cannot be inferred from a non-null row because such a row may not exist.
+
+Validate before mutation. `try_from_raw_parts` rejects different value/validity lengths and any valid coefficient outside the declared precision. `try_push` rejects a `Decimal` whose descriptor does not exactly match the builder's descriptor, without appending either a coefficient or a validity bit. A failed push must leave the builder in the same logical state it had before the call.
+
+Now complete the Decimal path through the runtime types:
+
+- add `DataType::Decimal(DecimalType)` and the checked `DataType::decimal` constructor;
+- add `PhysicalType::Decimal(DecimalType)` and the descriptor-free `PhysicalFamily::Decimal` audit
+  tag;
+- add the `decimal` row to `for_each_physical_family!` and to `PHYSICAL_FAMILY_CATALOG`;
+- enable and re-export `decimal_array` from `src/array.rs`; and
+- make `ScalarImpl`, `ScalarRefImpl`, and `ArrayImpl` report the exact descriptor from `physical_type()`.
+
+Do not add a `try_decimal(expected)` convenience method. A caller that requires one precision and scale first compares the erased value's `physical_type()` with `PhysicalType::Decimal(expected)`. Only after equality does it use the existing checked conversion—`Decimal::try_from`, `<&DecimalArray>::try_from`, or owned `DecimalArray::try_from`—when it actually needs a typed value. A descriptor mismatch is a physical-type mismatch at the caller; converting the wrong erased family still returns `ExpectedDecimal`. Code that only carries an erased value forward does not need to force a Decimal conversion.
+
+Decimal does not implement the Chapter 1 `Scalar`/`Array` static-family contract because that contract fixes the physical type in the Rust type relationship and constructs builders with `ArrayBuilder::with_capacity(capacity)`. Decimal's precision and scale are runtime values, and an empty or all-null builder cannot infer them from a row. `DecimalArrayBuilder::try_with_type(decimal_type, capacity)` must therefore receive the descriptor up front. The Decimal catalog arm generates only the erased enum plumbing for this metadata-bearing wrapper; it neither duplicates primitive storage nor repeats precision and scale in every row.
+
+This chapter does not implement Decimal arithmetic, comparison, rounding, casts, or implicit
+coercion. It establishes the representation and checked runtime boundary that those operations
+would have to preserve.
+
+Run the final contract and the starter library tests:
 
 ```console
 cargo test -p type-exercise-starter chapter_2 --locked
 cargo test -p type-exercise-starter --lib --locked
 ```
+
+Before continuing, make sure you can explain three boundaries in your own words:
+
+1. Why does a catalog row generate implementations for `f64`, while an arbitrary
+   `PrimitiveArray<T>` does not automatically become a database array?
+2. Why do `Char { width }` and `Varchar` remain distinct logical types even though both map to
+   `PhysicalType::String`?
+3. Why can `DecimalArray` reuse `PrimitiveArray<i128>` storage while `DecimalArrayBuilder` still cannot use the metadata-free `ArrayBuilder::with_capacity` constructor?
+
+You now have one compile-time inventory for the repeated static relationships and one explicit,
+checked path for runtime metadata. Chapter 3 will use those physical families through several
+nullable column encodings.
 
 Next: [Chapter 3 reads several nullable column encodings](./chapter-3-column-views.md).
 

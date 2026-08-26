@@ -101,24 +101,16 @@ fn benchmark_expressions(criterion: &mut Criterion) {
         I32Array::from_values((0..ROWS).map(|row| row as i32).collect()).into();
     let dense_right: ArrayImpl =
         I32Array::from_values((0..ROWS).map(|row| (row as i32).wrapping_mul(3)).collect()).into();
-    let dense_left_values = <&I32Array>::try_from(&dense_left)
-        .unwrap()
-        .as_non_null()
-        .unwrap()
-        .values();
-    let dense_right_values = <&I32Array>::try_from(&dense_right)
-        .unwrap()
-        .as_non_null()
-        .unwrap()
-        .values();
+    let dense_left_values = <&I32Array>::try_from(&dense_left).unwrap().values();
+    let dense_right_values = <&I32Array>::try_from(&dense_right).unwrap().values();
+
+    let dense_left_view = ColumnViewImpl::try_non_null_array(&dense_left).unwrap();
+    let dense_right_view = ColumnViewImpl::try_non_null_array(&dense_right).unwrap();
 
     benchmark_case(
         criterion,
         "dense/array-array",
-        [
-            ColumnViewImpl::array(&dense_left),
-            ColumnViewImpl::array(&dense_right),
-        ],
+        [dense_left_view.clone(), dense_right_view.clone()],
         [
             HandwrittenColumn::DenseArray(dense_left_values),
             HandwrittenColumn::DenseArray(dense_right_values),
@@ -128,7 +120,7 @@ fn benchmark_expressions(criterion: &mut Criterion) {
         criterion,
         "dense/array-constant",
         [
-            ColumnViewImpl::array(&dense_left),
+            dense_left_view,
             ColumnViewImpl::constant(ScalarRefImpl::Int32(7), ROWS),
         ],
         [
@@ -144,7 +136,7 @@ fn benchmark_expressions(criterion: &mut Criterion) {
         "dense/constant-array",
         [
             ColumnViewImpl::constant(ScalarRefImpl::Int32(7), ROWS),
-            ColumnViewImpl::array(&dense_right),
+            dense_right_view,
         ],
         [
             HandwrittenColumn::Constant {

@@ -3,13 +3,13 @@ use bitvec::vec::BitVec;
 use crate::variant_catalog::for_each_physical_family;
 use crate::{Array, ArrayBuilder};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PrimitiveArray<T> {
     values: Vec<T>,
     validity: BitVec,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PrimitiveArrayBuilder<T> {
     values: Vec<T>,
     validity: BitVec,
@@ -39,6 +39,37 @@ impl<T> PrimitiveArray<T> {
 
     pub fn validity(&self) -> &BitVec {
         &self.validity
+    }
+
+    pub(crate) fn from_raw_parts(values: Vec<T>, validity: BitVec) -> Self {
+        debug_assert_eq!(values.len(), validity.len());
+        Self { values, validity }
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.values.len()
+    }
+}
+
+impl<T> PrimitiveArrayBuilder<T> {
+    pub(crate) fn with_raw_capacity(capacity: usize) -> Self {
+        Self {
+            values: Vec::with_capacity(capacity),
+            validity: BitVec::with_capacity(capacity),
+        }
+    }
+
+    pub(crate) fn push_raw(&mut self, value: T, valid: bool) {
+        self.values.push(value);
+        self.validity.push(valid);
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.values.len()
+    }
+
+    pub(crate) fn finish_raw(self) -> PrimitiveArray<T> {
+        PrimitiveArray::from_raw_parts(self.values, self.validity)
     }
 }
 
@@ -93,4 +124,4 @@ macro_rules! implement_primitive_family {
 
 for_each_physical_family!(implement_primitive_families);
 
-// Day 10 adds null counting and `NonNullPrimitiveArray`.
+// Day 10 keeps this one representation and moves the checked non-null proof to column metadata.

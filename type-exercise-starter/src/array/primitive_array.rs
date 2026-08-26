@@ -13,16 +13,10 @@ pub struct PrimitiveArrayBuilder<T> {
     marker: PhantomData<T>,
 }
 
-// Day 10, checkpoint 1: add a checked borrowed proof for an all-valid primitive array.
-// #[derive(Clone, Copy, Debug)]
-// pub struct NonNullPrimitiveArray<'a, T> { /* one borrowed primitive array */ }
-// impl<'a, T> NonNullPrimitiveArray<'a, T> {
-//     pub fn values(self) -> &'a [T];
-// }
-
 pub type I32Array = PrimitiveArray<i32>;
 pub type I32ArrayBuilder = PrimitiveArrayBuilder<i32>;
 
 // Day 1, checkpoint 3: add `values`/`validity`, implement Array for I32Array, and implement its
 // builder. Day 2 generalizes the implementation and adds I16, I64, Bool, F32, and F64 aliases.
-// Day 10 adds null counting and the checked `NonNullPrimitiveArray` borrowed view.
+// Day 10 keeps this one representation and lets a checked `ColumnViewImpl` carry physical
+// `Nullability`; it does not add a second primitive array type or cache a null count.

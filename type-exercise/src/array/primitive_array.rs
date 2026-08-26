@@ -3,25 +3,17 @@ use crate::{Array, ArrayBuilder};
 use bitvec::vec::BitVec;
 
 /// A compact teaching representation for nullable fixed-width values.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PrimitiveArray<T> {
     values: Vec<T>,
     validity: BitVec,
-    null_count: usize,
-}
-
-/// A checked view proving that every slot in a primitive array is valid.
-#[derive(Clone, Copy, Debug)]
-pub struct NonNullPrimitiveArray<'a, T> {
-    array: &'a PrimitiveArray<T>,
 }
 
 /// The append-only builder for [`PrimitiveArray`].
-#[derive(Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PrimitiveArrayBuilder<T> {
     values: Vec<T>,
     validity: BitVec,
-    null_count: usize,
 }
 
 macro_rules! define_primitive_aliases {
@@ -46,8 +38,12 @@ impl<T> PrimitiveArray<T> {
         Self {
             validity: BitVec::repeat(true, values.len()),
             values,
-            null_count: 0,
         }
+    }
+
+    pub(crate) fn from_raw_parts(values: Vec<T>, validity: BitVec) -> Self {
+        debug_assert_eq!(values.len(), validity.len());
+        Self { values, validity }
     }
 
     /// The contiguous fixed-width value buffer.
@@ -60,18 +56,30 @@ impl<T> PrimitiveArray<T> {
         &self.validity
     }
 
-    pub fn null_count(&self) -> usize {
-        self.null_count
-    }
-
-    pub fn as_non_null(&self) -> Option<NonNullPrimitiveArray<'_, T>> {
-        (self.null_count == 0).then_some(NonNullPrimitiveArray { array: self })
+    pub(crate) fn len(&self) -> usize {
+        self.values.len()
     }
 }
 
-impl<'a, T> NonNullPrimitiveArray<'a, T> {
-    pub fn values(self) -> &'a [T] {
-        &self.array.values
+impl<T> PrimitiveArrayBuilder<T> {
+    pub(crate) fn with_raw_capacity(capacity: usize) -> Self {
+        Self {
+            values: Vec::with_capacity(capacity),
+            validity: BitVec::with_capacity(capacity),
+        }
+    }
+
+    pub(crate) fn push_raw(&mut self, value: T, valid: bool) {
+        self.values.push(value);
+        self.validity.push(valid);
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.values.len()
+    }
+
+    pub(crate) fn finish_raw(self) -> PrimitiveArray<T> {
+        PrimitiveArray::from_raw_parts(self.values, self.validity)
     }
 }
 
@@ -104,7 +112,6 @@ macro_rules! implement_primitive_family {
                 Self {
                     values: Vec::with_capacity(capacity),
                     validity: BitVec::with_capacity(capacity),
-                    null_count: 0,
                 }
             }
 
@@ -117,7 +124,6 @@ macro_rules! implement_primitive_family {
                     None => {
                         self.values.push(<$owned>::default());
                         self.validity.push(false);
-                        self.null_count += 1;
                     }
                 }
             }
@@ -126,7 +132,6 @@ macro_rules! implement_primitive_family {
                 PrimitiveArray {
                     values: self.values,
                     validity: self.validity,
-                    null_count: self.null_count,
                 }
             }
         }

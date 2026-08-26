@@ -22,8 +22,10 @@ The first run should fail on fast-path selection while the earlier general evalu
 
 ## Prove the fast-path preconditions
 
-`NonNullPrimitiveArray` is a proof that an array has no null rows. A constant is already one
-non-null scalar repeated for the batch. These facts permit four dense binary loop shapes:
+A checked `ColumnViewImpl::try_non_null_array` proves once that an array has no null rows and
+records `Nullability::NonNull` beside its `PhysicalType`. A constant value is already one non-null
+scalar repeated for the batch. These facts permit four dense binary loop shapes over the same
+primitive array representation:
 
 - array / array;
 - array / constant;
@@ -35,11 +37,13 @@ return to the general contract or the same structured error.
 
 ## Checkpoint 1: select once per batch
 
-- **Target:** `type-exercise-starter/src/array/primitive_array.rs::{NonNullPrimitiveArray,
-  PrimitiveArray::null_count, PrimitiveArray::as_non_null}` and
-  `type-exercise-starter/src/expression.rs::{PrimitiveLoop,
+- **Target:** `type-exercise-starter/src/physical_type.rs::Nullability`,
+  `type-exercise-starter/src/column.rs::{ColumnViewImpl::nullability,
+  ColumnViewImpl::try_non_null_array}`, and
+  `type-exercise-starter/src/expression.rs::{Expression::output_nullability, PrimitiveLoop,
   PrimitiveBinaryExpression::evaluate_with_loop}`.
-- **Change:** choose the dense `i32` path only after ordinary validation succeeds.
+- **Change:** keep one primitive array representation, establish physical nullability at the
+  column boundary, and choose the dense `i32` path only after ordinary validation succeeds.
 - **Preserve:** output values, nulls, and errors are identical to `evaluate`.
 - **Run:** the Chapter 10 focused test.
 - **Passing means:** all four dense shapes report their selected loop and every fallback reports
@@ -47,8 +51,10 @@ return to the general contract or the same structured error.
 
 ## Checkpoint 2: forward through binding
 
-- **Target:** `type-exercise-starter/src/binder.rs::BoundExpression::evaluate_with_loop`.
-- **Change:** delegate to the already-selected physical expression.
+- **Target:** `type-exercise-starter/src/binder.rs::{BoundExpression::output_nullability,
+  BoundExpression::evaluate_with_loop}`.
+- **Change:** delegate nullability propagation and evaluation to the already-selected physical
+  expression.
 - **Preserve:** logical selection does not choose a fast path; batch representation does.
 - **Run:** focused and cumulative tests.
 - **Passing means:** binding and non-primitive catalog entries remain unchanged.

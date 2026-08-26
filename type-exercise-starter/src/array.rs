@@ -15,7 +15,8 @@ mod string_array;
 pub use primitive_array::{I32Array, I32ArrayBuilder, PrimitiveArray, PrimitiveArrayBuilder};
 // Day 2, checkpoint 1: extend the primitive re-export with I16, I64, Bool, F32, and F64 arrays
 // and builders.
-// Day 10, checkpoint 1: extend the primitive re-export above with `NonNullPrimitiveArray`.
+// Day 10, checkpoint 1: keep this single primitive representation; the checked non-null proof
+// belongs to `ColumnViewImpl` as physical `Nullability` metadata.
 pub use string_array::{StringArray, StringArrayBuilder};
 
 /// Day 1, checkpoint 3: add the bounds that connect an array to its scalar and builder forms.

@@ -4,10 +4,10 @@ use std::fmt::{Display, Formatter};
 use std::future::Future;
 use std::pin::Pin;
 
-use crate::column::NonNullI32Column;
+use crate::column::DenseI32Column;
 use crate::{
-    Array, ArrayBuilder, ArrayImpl, ColumnView, ColumnViewImpl, I32Array, PhysicalType, Scalar,
-    ScalarRefImpl, TypeMismatch,
+    Array, ArrayBuilder, ArrayImpl, ColumnView, ColumnViewImpl, I32Array, Nullability,
+    PhysicalType, Scalar, ScalarRefImpl, TypeMismatch,
 };
 
 /// A checked failure at an expression boundary.
@@ -106,6 +106,16 @@ pub trait Expression: Any + Send + Sync {
         self.input_types().len()
     }
     fn output_type(&self) -> PhysicalType;
+    fn output_nullability(&self, inputs: &[Nullability]) -> Nullability {
+        if inputs
+            .iter()
+            .all(|nullability| *nullability == Nullability::NonNull)
+        {
+            Nullability::NonNull
+        } else {
+            Nullability::Nullable
+        }
+    }
     fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError>;
     fn evaluate_with_loop(
         &self,
@@ -294,13 +304,13 @@ where
             });
         }
 
-        let Some(left) = inputs[0].as_non_null_i32() else {
+        let Some(left) = inputs[0].as_dense_i32() else {
             return Ok((
                 evaluate_binary(&self.function, inputs[0].clone(), inputs[1].clone())?,
                 PrimitiveLoop::General,
             ));
         };
-        let Some(right) = inputs[1].as_non_null_i32() else {
+        let Some(right) = inputs[1].as_dense_i32() else {
             return Ok((
                 evaluate_binary(&self.function, inputs[0].clone(), inputs[1].clone())?,
                 PrimitiveLoop::General,
@@ -309,7 +319,7 @@ where
         debug_assert_eq!(left.len(), right.len());
 
         let (values, selected_loop) = match (left, right) {
-            (NonNullI32Column::Array(left), NonNullI32Column::Array(right)) => (
+            (DenseI32Column::Array(left), DenseI32Column::Array(right)) => (
                 left.values()
                     .iter()
                     .copied()
@@ -318,7 +328,7 @@ where
                     .collect(),
                 PrimitiveLoop::ArrayArray,
             ),
-            (NonNullI32Column::Array(left), NonNullI32Column::Constant { value: right, .. }) => (
+            (DenseI32Column::Array(left), DenseI32Column::Constant { value: right, .. }) => (
                 left.values()
                     .iter()
                     .copied()
@@ -326,7 +336,7 @@ where
                     .collect(),
                 PrimitiveLoop::ArrayConstant,
             ),
-            (NonNullI32Column::Constant { value: left, .. }, NonNullI32Column::Array(right)) => (
+            (DenseI32Column::Constant { value: left, .. }, DenseI32Column::Array(right)) => (
                 right
                     .values()
                     .iter()
@@ -336,8 +346,8 @@ where
                 PrimitiveLoop::ConstantArray,
             ),
             (
-                NonNullI32Column::Constant { value: left, len },
-                NonNullI32Column::Constant { value: right, .. },
+                DenseI32Column::Constant { value: left, len },
+                DenseI32Column::Constant { value: right, .. },
             ) => (
                 (0..len)
                     .map(|_| self.function.evaluate(left, right))

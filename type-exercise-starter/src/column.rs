@@ -15,6 +15,11 @@
 //     pub fn physical_type(&self) -> PhysicalType;
 // }
 //
+//! Day 10, checkpoint 1: make `ColumnViewImpl` carry physical `Nullability`. Keep `array`
+//! conservatively `Nullable`; add a checked `try_non_null_array` constructor that proves every
+//! row valid once. Constants with a value are `NonNull`; typed nulls and indexed views remain
+//! `Nullable`.
+//
 //! Day 3, checkpoint 2: uncomment and implement the typed view here.
 // pub struct ColumnView<'a, S: Scalar> { /* checked borrowed state */ }
 // impl<'a, S: Scalar> ColumnView<'a, S> {

@@ -5,8 +5,8 @@ mod string_array;
 pub use decimal_array::{DecimalArray, DecimalArrayBuilder};
 pub use primitive_array::{
     BoolArray, BoolArrayBuilder, F32Array, F32ArrayBuilder, F64Array, F64ArrayBuilder, I16Array,
-    I16ArrayBuilder, I32Array, I32ArrayBuilder, I64Array, I64ArrayBuilder, NonNullPrimitiveArray,
-    PrimitiveArray, PrimitiveArrayBuilder,
+    I16ArrayBuilder, I32Array, I32ArrayBuilder, I64Array, I64ArrayBuilder, PrimitiveArray,
+    PrimitiveArrayBuilder,
 };
 pub use string_array::{StringArray, StringArrayBuilder};
 
@@ -174,21 +174,6 @@ macro_rules! define_array_family {
 }
 
 for_each_physical_family!(define_array_erasure);
-
-impl ArrayImpl {
-    pub fn try_decimal(&self, expected: crate::DecimalType) -> Result<&DecimalArray, DecimalError> {
-        match self {
-            Self::Decimal(array) if array.decimal_type() == expected => Ok(array),
-            Self::Decimal(array) => Err(DecimalError::MetadataMismatch {
-                expected,
-                actual: array.decimal_type(),
-            }),
-            other => Err(DecimalError::ExpectedDecimal {
-                actual: other.physical_type(),
-            }),
-        }
-    }
-}
 
 // Day 10 adds a checked non-null primitive view. Day 11 adds List erasure and slicing. Day 12
 // replaces the iterator adapter with a private concrete iterator.

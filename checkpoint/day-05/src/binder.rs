@@ -8,6 +8,7 @@
 //     /* pub fn input_types(&self) -> &[DataType] */
 //     /* pub fn output_type(&self) -> DataType */
 //     /* pub fn physical_name(&self) -> &str */
+//     /* pub fn output_nullability(&self, inputs: &[Nullability]) -> Nullability */
 //     /* pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> */
 // }
 // pub struct FunctionRegistry { /* registered factories */ }
@@ -29,7 +30,7 @@
 //! Day 9, checkpoint 3: bind the Day 7 three-valued Boolean expressions here.
 // fn bind_boolean(/* name, operator, and inputs */) -> Result<BoundExpression, BindError>;
 //
-//! Day 10, checkpoint 2: forward a preselected primitive loop here.
+//! Day 10, checkpoint 2: delegate output nullability and forward a preselected primitive loop here.
 // impl BoundExpression {
 //     pub fn evaluate_with_loop(
 //         &self,

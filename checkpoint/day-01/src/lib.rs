@@ -43,7 +43,7 @@ mod variant_catalog;
 //     BinaryExpression, BUILTIN_EXPRESSION_NAMES, Expression, build_builtin_expression,
 // };
 // Day 10, checkpoint 1: extend the expression re-export with `PrimitiveBinaryExpression` and
-// `PrimitiveLoop`; extend the primitive-array re-export with `NonNullPrimitiveArray`.
+// `PrimitiveLoop`; `Nullability` is exported beside `PhysicalType`.
 // Day 9, checkpoint 1: uncomment after implementing the binder and registry.
 // mod binder;
 // pub use binder::{BindError, BoundExpression, FunctionRegistry};
