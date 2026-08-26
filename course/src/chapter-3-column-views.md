@@ -127,13 +127,10 @@ The focused test proves five boundaries:
 - every invalid non-null index is rejected during construction; and
 - a physical-family mismatch fails before row access.
 
-## What this boundary does not claim
-
-The four borrowed representations and fail-closed indexed constructor are required. An indexed
-view here is not a persisted dictionary-array format: it borrows ordinary nullable `usize` indices
-and an existing `ArrayImpl`, and it adds no key type, builder, or storage encoding. Run-length
-encoding is an extension. Primitive-loop specialization remains Chapter 10, and List reuses this
-representation boundary in Chapter 11.
+Keep this chapter focused on borrowed execution views. The indexed form borrows ordinary nullable
+`usize` indices and an existing `ArrayImpl`; it is not a persisted dictionary-array format and adds
+no key type, builder, or storage encoding. Leave run-length encoding as an extension. Chapter 10
+adds primitive-loop specialization, and Chapter 11 reuses this representation boundary for List.
 
 Before continuing, make sure you can explain three boundaries in your own words:
 
