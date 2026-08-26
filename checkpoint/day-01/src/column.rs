@@ -15,6 +15,10 @@
 //     pub fn physical_type(&self) -> PhysicalType;
 // }
 //
+//! Day 10, checkpoint 1: carry physical `Nullability`; keep `array` conservative and add checked
+//! `try_non_null_array`. Constants with a value are non-null; typed nulls and indexed views remain
+//! nullable.
+//
 //! Day 3, checkpoint 2: uncomment and implement the typed view here.
 // pub struct ColumnView<'a, S: Scalar> { /* checked borrowed state */ }
 // impl<'a, S: Scalar> ColumnView<'a, S> {

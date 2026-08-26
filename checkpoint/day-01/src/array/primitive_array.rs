@@ -65,4 +65,4 @@ impl ArrayBuilder for I32ArrayBuilder {
 }
 
 // Day 2 generalizes this implementation and adds the other primitive aliases.
-// Day 10 adds null counting and `NonNullPrimitiveArray`.
+// Day 10 keeps this one representation and moves the checked non-null proof to column metadata.

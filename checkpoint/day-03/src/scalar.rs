@@ -259,36 +259,6 @@ macro_rules! define_scalar_family {
 
 for_each_physical_family!(define_scalar_erasure);
 
-impl ScalarImpl {
-    pub fn try_decimal(&self, expected: crate::DecimalType) -> Result<Decimal, DecimalError> {
-        match self {
-            Self::Decimal(value) if value.decimal_type() == expected => Ok(*value),
-            Self::Decimal(value) => Err(DecimalError::MetadataMismatch {
-                expected,
-                actual: value.decimal_type(),
-            }),
-            other => Err(DecimalError::ExpectedDecimal {
-                actual: other.physical_type(),
-            }),
-        }
-    }
-}
-
-impl ScalarRefImpl<'_> {
-    pub fn try_decimal(self, expected: crate::DecimalType) -> Result<Decimal, DecimalError> {
-        match self {
-            Self::Decimal(value) if value.decimal_type() == expected => Ok(value),
-            Self::Decimal(value) => Err(DecimalError::MetadataMismatch {
-                expected,
-                actual: value.decimal_type(),
-            }),
-            other => Err(DecimalError::ExpectedDecimal {
-                actual: other.physical_type(),
-            }),
-        }
-    }
-}
-
 // Day 11 extends both erased enums and conversions with List.
 
 #[cfg(test)]

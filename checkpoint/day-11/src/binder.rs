@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
+use crate::Nullability;
+
 use crate::{
     ArithmeticOperator, ArrayImpl, BooleanOperator, ColumnViewImpl, ComparisonOperator, DataType,
     Expression, ExpressionError, PhysicalType, PrimitiveLoop, build_bool_comparison_expression,
@@ -120,6 +122,10 @@ impl BoundExpression {
 
     pub fn physical_name(&self) -> &'static str {
         self.expression.name()
+    }
+
+    pub fn output_nullability(&self, inputs: &[Nullability]) -> Nullability {
+        self.expression.output_nullability(inputs)
     }
 
     pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {

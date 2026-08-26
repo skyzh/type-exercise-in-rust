@@ -2,9 +2,9 @@ use bitvec::prelude::{Lsb0, bitvec};
 
 use crate::{
     Array, ArrayBuilder, ArrayImpl, BoolArray, DataType, Decimal, DecimalArray,
-    DecimalArrayBuilder, DecimalType, F32Array, F64Array, I16Array, I32Array, I64Array,
-    PHYSICAL_FAMILY_CATALOG, PhysicalFamily, PhysicalType, Scalar, ScalarImpl, ScalarRef,
-    StringArray,
+    DecimalArrayBuilder, DecimalError, DecimalType, F32Array, F64Array, I16Array, I32Array,
+    I64Array, PHYSICAL_FAMILY_CATALOG, PhysicalFamily, PhysicalType, Scalar, ScalarImpl, ScalarRef,
+    ScalarRefImpl, StringArray,
 };
 
 fn assert_complete_static_family<S, A>()
@@ -92,7 +92,6 @@ fn decimal_array_uses_flat_coefficients_packed_validity_and_shared_metadata() {
     assert_eq!(array.values(), &[12_345, 0, -99]);
     assert_eq!(array.validity(), &bitvec![1, 0, 1]);
     assert_eq!(array.decimal_type(), decimal_type);
-    assert_eq!(array.null_count(), 1);
     assert_eq!(array.get(0), values[0]);
     assert_eq!(array.get(1), None);
     let many = DecimalArray::try_from_slice(
@@ -119,7 +118,13 @@ fn decimal_boundaries_and_builder_errors_fail_before_mutation() {
     assert!(Decimal::try_new(-1_000, decimal_type).is_err());
     assert!(Decimal::try_new(i128::MIN, decimal_type).is_err());
 
-    assert!(DecimalArray::try_from_raw_parts(decimal_type, vec![1, 2], bitvec![1]).is_err());
+    assert_eq!(
+        DecimalArray::try_from_raw_parts(decimal_type, vec![1_000, 2], bitvec![1]),
+        Err(DecimalError::ValueValidityLength {
+            values: 2,
+            validity: 1,
+        })
+    );
     assert!(DecimalArray::try_from_raw_parts(decimal_type, vec![1_000], bitvec![1]).is_err());
 
     let other_type = DecimalType::try_new(4, 1).unwrap();
@@ -128,10 +133,12 @@ fn decimal_boundaries_and_builder_errors_fail_before_mutation() {
         .try_push(Some(Decimal::try_new(10, decimal_type).unwrap()))
         .unwrap();
     let before = builder.clone();
-    assert!(
-        builder
-            .try_push(Some(Decimal::try_new(10, other_type).unwrap()))
-            .is_err()
+    assert_eq!(
+        builder.try_push(Some(Decimal::try_new(10, other_type).unwrap())),
+        Err(DecimalError::MetadataMismatch {
+            expected: decimal_type,
+            actual: other_type,
+        })
     );
     assert_eq!(builder, before);
 }
@@ -142,17 +149,43 @@ fn decimal_erasure_preserves_exact_precision_and_scale() {
     let other_type = DecimalType::try_new(6, 3).unwrap();
     let decimal = Decimal::try_new(1_234, decimal_type).unwrap();
     let erased = ScalarImpl::from(decimal);
-    assert_eq!(erased.try_decimal(decimal_type), Ok(decimal));
-    assert!(erased.try_decimal(other_type).is_err());
-    let erased_ref = crate::ScalarRefImpl::from(decimal);
-    assert_eq!(erased_ref.try_decimal(decimal_type), Ok(decimal));
-    assert!(erased_ref.try_decimal(other_type).is_err());
+    assert_eq!(erased.physical_type(), PhysicalType::Decimal(decimal_type));
+    assert_eq!(Decimal::try_from(erased), Ok(decimal));
+    assert_ne!(
+        PhysicalType::Decimal(decimal_type),
+        PhysicalType::Decimal(other_type)
+    );
+    let erased_ref = ScalarRefImpl::from(decimal);
+    assert_eq!(
+        erased_ref.physical_type(),
+        PhysicalType::Decimal(decimal_type)
+    );
+    assert_eq!(Decimal::try_from(erased_ref), Ok(decimal));
+    assert_eq!(
+        Decimal::try_from(ScalarImpl::Int32(7)),
+        Err(DecimalError::ExpectedDecimal {
+            actual: PhysicalType::Int32,
+        })
+    );
+    assert_eq!(
+        Decimal::try_from(ScalarRefImpl::Int32(7)),
+        Err(DecimalError::ExpectedDecimal {
+            actual: PhysicalType::Int32,
+        })
+    );
 
     let array = DecimalArray::try_from_slice(decimal_type, &[Some(decimal), None]).unwrap();
     let erased = ArrayImpl::from(array.clone());
     assert_eq!(erased.physical_type(), PhysicalType::Decimal(decimal_type));
-    assert_eq!(erased.try_decimal(decimal_type), Ok(&array));
-    assert!(erased.try_decimal(other_type).is_err());
+    assert_eq!(<&DecimalArray>::try_from(&erased), Ok(&array));
+    assert_ne!(erased.physical_type(), PhysicalType::Decimal(other_type));
+    let wrong: ArrayImpl = I32Array::from_slice(&[Some(7)]).into();
+    assert_eq!(
+        DecimalArray::try_from(wrong),
+        Err(DecimalError::ExpectedDecimal {
+            actual: PhysicalType::Int32,
+        })
+    );
 }
 
 #[test]

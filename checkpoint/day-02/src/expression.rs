@@ -17,6 +17,7 @@
 //     /* fn arity(&self) -> usize */
 //     /* fn input_types(&self) -> &[PhysicalType] */
 //     /* fn output_type(&self) -> PhysicalType */
+//     /* fn output_nullability(&self, inputs: &[Nullability]) -> Nullability */
 //     /* fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> */
 // }
 // pub struct BinaryExpression<F> { /* typed function plus runtime metadata */ }
@@ -27,7 +28,7 @@
 // pub fn build_builtin_expression(name: &str) -> Option<Box<dyn Expression>>;
 // pub const BUILTIN_EXPRESSION_NAMES: &[&str];
 //
-//! Day 10, checkpoint 1: add one representative batch loop choice here.
+//! Day 10, checkpoint 1: add one representative batch loop choice here. Select it only from checked physical `Nullability` metadata while keeping one primitive array representation.
 // pub enum PrimitiveLoop { /* supported dense loops plus general fallback */ }
 // pub struct PrimitiveBinaryExpression<F> { /* typed i32 function plus runtime metadata */ }
 // impl<F> PrimitiveBinaryExpression<F> {
