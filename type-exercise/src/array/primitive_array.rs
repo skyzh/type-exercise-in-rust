@@ -3,7 +3,7 @@ use crate::{Array, ArrayBuilder};
 use bitvec::vec::BitVec;
 
 /// A compact teaching representation for nullable fixed-width values.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PrimitiveArray<T> {
     values: Vec<T>,
     validity: BitVec,
@@ -17,7 +17,7 @@ pub struct NonNullPrimitiveArray<'a, T> {
 }
 
 /// The append-only builder for [`PrimitiveArray`].
-#[derive(Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PrimitiveArrayBuilder<T> {
     values: Vec<T>,
     validity: BitVec,
@@ -50,6 +50,16 @@ impl<T> PrimitiveArray<T> {
         }
     }
 
+    pub(crate) fn from_raw_parts(values: Vec<T>, validity: BitVec) -> Self {
+        debug_assert_eq!(values.len(), validity.len());
+        let null_count = validity.iter().by_vals().filter(|valid| !valid).count();
+        Self {
+            values,
+            validity,
+            null_count,
+        }
+    }
+
     /// The contiguous fixed-width value buffer.
     pub fn values(&self) -> &[T] {
         &self.values
@@ -67,11 +77,39 @@ impl<T> PrimitiveArray<T> {
     pub fn as_non_null(&self) -> Option<NonNullPrimitiveArray<'_, T>> {
         (self.null_count == 0).then_some(NonNullPrimitiveArray { array: self })
     }
+
+    pub(crate) fn len(&self) -> usize {
+        self.values.len()
+    }
 }
 
 impl<'a, T> NonNullPrimitiveArray<'a, T> {
     pub fn values(self) -> &'a [T] {
         &self.array.values
+    }
+}
+
+impl<T> PrimitiveArrayBuilder<T> {
+    pub(crate) fn with_raw_capacity(capacity: usize) -> Self {
+        Self {
+            values: Vec::with_capacity(capacity),
+            validity: BitVec::with_capacity(capacity),
+            null_count: 0,
+        }
+    }
+
+    pub(crate) fn push_raw(&mut self, value: T, valid: bool) {
+        self.values.push(value);
+        self.validity.push(valid);
+        self.null_count += usize::from(!valid);
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.values.len()
+    }
+
+    pub(crate) fn finish_raw(self) -> PrimitiveArray<T> {
+        PrimitiveArray::from_raw_parts(self.values, self.validity)
     }
 }
 

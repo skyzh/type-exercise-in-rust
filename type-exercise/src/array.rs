@@ -285,21 +285,6 @@ macro_rules! define_array_family {
 
 for_each_physical_family!(define_array_erasure);
 
-impl ArrayImpl {
-    pub fn try_decimal(&self, expected: crate::DecimalType) -> Result<&DecimalArray, DecimalError> {
-        match self {
-            Self::Decimal(array) if array.decimal_type() == expected => Ok(array),
-            Self::Decimal(array) => Err(DecimalError::MetadataMismatch {
-                expected,
-                actual: array.decimal_type(),
-            }),
-            other => Err(DecimalError::ExpectedDecimal {
-                actual: other.physical_type(),
-            }),
-        }
-    }
-}
-
 impl From<ListArray> for ArrayImpl {
     fn from(array: ListArray) -> Self {
         Self::List(array)
