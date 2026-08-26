@@ -9,8 +9,8 @@ use iterator::ArrayIterator;
 pub use list_array::{ListArray, ListError, ListScalar, ListScalarRef};
 pub use primitive_array::{
     BoolArray, BoolArrayBuilder, F32Array, F32ArrayBuilder, F64Array, F64ArrayBuilder, I16Array,
-    I16ArrayBuilder, I32Array, I32ArrayBuilder, I64Array, I64ArrayBuilder, NonNullPrimitiveArray,
-    PrimitiveArray, PrimitiveArrayBuilder,
+    I16ArrayBuilder, I32Array, I32ArrayBuilder, I64Array, I64ArrayBuilder, PrimitiveArray,
+    PrimitiveArrayBuilder,
 };
 pub use string_array::{StringArray, StringArrayBuilder};
 
