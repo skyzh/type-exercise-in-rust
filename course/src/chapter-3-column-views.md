@@ -2,107 +2,145 @@
 
 # Chapter 3: Read Nullable Columns Without Materializing Them
 
-A scalar kernel should not care whether a logical row comes from an array, one repeated constant,
-or an index into shared values. This chapter gives those representations one checked borrowed
-interface.
+Chapter 2 gave the executor several physical families. A row loop still should not need separate
+code for an array, one scalar repeated across a batch, or an index into shared values. Those are
+different representations of a column, not different scalar operations.
 
-**Prerequisites:** Chapters 1–2, slices, and validity-based nulls.
+This chapter gives them one borrowed boundary. `ColumnViewImpl<'a>` keeps the representation known
+at runtime. After one checked conversion, `ColumnView<'a, S>` lets generic code read nullable rows
+as `Option<S::RefType<'a>>`. The views borrow their buffers, so constants and indexed columns do not
+need to materialize another array first.
 
-**By the end of this chapter, you will:**
+## What is in the starter
 
-- read array, constant, Indexed, and typed-null columns through `ColumnViewImpl`;
-- preserve null rows without materializing another array; and
-- reject every invalid index before a view becomes usable.
+Begin from your completed Chapter 2 workspace. The scalar, array, erasure, logical-type, and
+Decimal work from the first two chapters is already present. `src/column.rs` contains only the Day
+3 comment shells for `ColumnViewImpl<'a>` and `ColumnView<'a, S>`. The `column` module and its public
+exports remain commented in `src/lib.rs`.
 
-Open the existing Day 3 skeleton in `type-exercise-starter/src/column.rs`. Follow its checkpoint
-comments, uncomment the declarations you are implementing, then uncomment the matching module and
-public export in `type-exercise-starter/src/lib.rs`:
+You own two additions in this chapter:
 
-```rust,ignore
-mod column;
-pub use column::{ColumnView, ColumnViewImpl};
-```
+1. a representation-erased borrowed view with checked constructors; and
+2. a typed borrowed view that checks one physical family before row access.
 
-Keep the public views in `column.rs`; this module wiring lets the copied test import them from the
-starter crate root.
+Later relationships in the starter remain comments. Do not implement Day 10 nullability proofs or
+Day 11 List views here.
+
+Copy the cumulative supplied test before editing:
 
 ```console
 cargo x copy-test --chapter 3
 cargo test -p type-exercise-starter chapter_3 --locked
 ```
 
-The first run should fail on the still-commented column constructors and typed view. After you
-uncomment their skeletons, it should reach your missing implementation rather than any tool-driven
-source rewrite.
+The first run should fail because `ColumnViewImpl` and `ColumnView` are not exported yet. Do not
+edit the copied test. The two checkpoints below use one final Chapter 3 contract, so Checkpoint 1
+has a library compile gate and Checkpoint 2 makes the focused test green.
 
-## Representation and logical rows
+## Checkpoint 1: Borrow each physical representation
 
-These columns describe the same logical values:
+Open `src/column.rs` and implement `ColumnViewImpl<'a>`. It represents four ways a batch can supply
+logical rows:
+
+| Representation | Borrowed state | Logical length | Physical type |
+| --- | --- | --- | --- |
+| Array | `&'a ArrayImpl` | array length | array physical type |
+| Constant | one `ScalarRefImpl<'a>` plus a length | recorded length | scalar physical type |
+| Typed null | `PhysicalType` plus a length | recorded length | recorded physical type |
+| Indexed | `&'a [Option<usize>]` plus `&'a ArrayImpl` values | index count | values physical type |
+
+The lifetime `'a` is the ownership boundary: the view may borrow an array, indices, or a string
+scalar, but it does not own or copy those buffers. Implement `array`, `constant`, `null`, and
+`indexed`, together with `len`, `is_empty`, `physical_type`, and row access through `get`.
+
+A typed null needs an explicit `PhysicalType` because it has no non-null scalar from which to
+recover one. The type still matters for overload selection and output allocation, including for an
+empty batch. Do not add nullable variants to `DataType`, `PhysicalType`, or the scalar families;
+this chapter continues to represent each logical row as `Some(value)` or `None`.
+
+For an indexed view, a null index produces a null row. A non-null index selects one row from the
+borrowed values array, which may itself be null. Both cases return `None`, but for different
+reasons:
 
 ```text
-array:    [10, 20, null]
-constant: 10 repeated three times
-Indexed:  indices [0, 1, null] over values [10, 20]
+indices[row] = None                     -> None
+indices[row] = Some(i), values[i] null -> None
+indices[row] = Some(i), values[i] set  -> Some(values[i])
 ```
 
-`ColumnViewImpl<'a>` stores the representation. `ColumnView<'a, S>` proves the physical family
-once, then `get(row)` returns `Option<S::RefType<'a>>`. The future expression loop sees only rows.
+Validate every non-null index inside `indexed` before returning a view. If any index is outside the
+values array, return an error and expose no partially valid view. You may choose a useful error
+type; the supplied test does not require a particular public name, field layout, or display text.
 
-## Infer a Type When Every Row Is Null
+Enable the module for this checkpoint and export only the type you have implemented:
 
-A non-null constant carries its physical type in its value. An all-null column does not. The
-planner must still choose an overload and allocate an output array—even for an empty batch—so a
-typed-null view carries `PhysicalType` beside its length.
+```rust,ignore
+mod column;
+pub use column::ColumnViewImpl;
+```
 
-Nullability remains row state. Do not add `DataType::Nullable`, `PhysicalType::Nullable`, or a
-separate nullable scalar family.
+Then compile the learner library:
 
-## Checkpoint 1: construct checked representations
+```console
+cargo check -p type-exercise-starter --lib --locked
+```
 
-- **Target:** `type-exercise-starter/src/column.rs::ColumnViewImpl::{array, constant, null, indexed}`.
-- **Change:** borrow the backing values and record one logical row count.
-- **Preserve:** constructors do not copy array values; typed nulls retain type and length.
-- **Run:** the Chapter 3 focused test.
-- **Passing means:** all four representations expose the expected row count and physical type.
+Passing means the real `column.rs` implementation compiles. The focused Chapter 3 test is still
+expected to fail because `ColumnView<'a, S>` belongs to Checkpoint 2.
 
-Validate every non-null index in the constructor and return `Err` before exposing a usable view; do
-not wait for a later `get` to panic. Choose a readable error representation, but the supplied tests
-do not require a particular public error type, field layout, or display text.
+## Checkpoint 2: Check the scalar family once
 
-## Checkpoint 2: recover one typed view
+Now implement `ColumnView<'a, S>` and `TryFrom<ColumnViewImpl<'a>>`. The erased view can report its
+`PhysicalType`, but a generic row loop wants the concrete family `S`. Compare the view's physical
+type with `S::PHYSICAL_TYPE` once during conversion. A mismatch returns `TypeMismatch` before any
+row is read.
 
-- **Target:** `type-exercise-starter/src/column.rs::{ColumnView, ColumnView::get, ColumnView::len}` and
-  `TryFrom<ColumnViewImpl>`.
-- **Change:** check the family once and read each representation as nullable logical rows.
-- **Preserve:** null indices and null values both become `None`.
-- **Run:** the focused and cumulative tests.
-- **Passing means:** expanded primitive families work through array, constant, and Indexed
-  views without family-specific row loops.
+After that check, recover the matching borrowed array, borrowed scalar reference, or indexed values
+array once and store it in the typed view. `get(row)` can then return `Option<S::RefType<'a>>`
+without repeating an erased downcast for every row. The GAT relationship from Chapter 1 remains
+visible: `ColumnView<'a, i32>` returns copied `i32` values, while `ColumnView<'a, String>` returns
+`&'a str` borrowed from the original string storage.
 
-## Required and extension work
+The generic typed view covers the catalog families that implement `Scalar`. `ColumnViewImpl` can
+still carry an erased Decimal array and preserve its exact `PhysicalType::Decimal` descriptor.
+Decimal does not implement the static `Scalar` relationship, so it is not a `ColumnView<Decimal>`
+family in this chapter.
 
-The four representations and fail-closed Indexed constructor are required. Run-length encoding
-and nested columns are extensions. Primitive specialization remains Chapter 10. List reuses the
-same representation boundary in Chapter 11.
+Finish the public export in `src/lib.rs`:
+
+```rust,ignore
+pub use column::{ColumnView, ColumnViewImpl};
+```
+
+Run the focused contract, then all learner-library tests copied so far:
 
 ```console
 cargo test -p type-exercise-starter chapter_3 --locked
 cargo test -p type-exercise-starter --lib --locked
 ```
 
-Before continuing, explain why an all-null column still needs a physical type and why index
-validation belongs in construction rather than row evaluation.
+The focused test proves five boundaries:
 
-## Test your understanding
+- arrays, constants, and indexed values expose the same logical-row interface;
+- the primitive families added in Chapter 2 work without family-specific row loops;
+- typed-null and empty views retain their type and length;
+- every invalid non-null index is rejected during construction; and
+- a physical-family mismatch fails before row access.
 
-Compare this borrowed Indexed view with Arrow's
-[`DictionaryArray<K>`](https://arrow.apache.org/rust/arrow/array/struct.DictionaryArray.html) and
-DataFusion's [`ArrayRef`](https://datafusion.apache.org/user-guide/arrow-introduction.html) /
-[`ColumnarValue`](https://docs.rs/datafusion/latest/datafusion/logical_expr/enum.ColumnarValue.html)
-boundary. Which representation owns nullable primitive keys plus shared values, validates key
-bounds, and remains an array with a key-type parameter, slicing, and builders? Why can this
-course's borrowed indices plus ordinary `ArrayImpl` teach checked indirection without becoming a
-persistable, interchangeable dictionary encoding?
+Keep this chapter focused on borrowed execution views. The indexed form borrows ordinary nullable
+`usize` indices and an existing `ArrayImpl`; it is not a persisted dictionary-array format and adds
+no key type, builder, or storage encoding. Leave run-length encoding as an extension. Chapter 10
+adds primitive-loop specialization, and Chapter 11 reuses this representation boundary for List.
+
+Before continuing, make sure you can explain three boundaries in your own words:
+
+1. Why must an all-null or empty column carry a physical type instead of inferring one from rows?
+2. Why does `indexed` validate every non-null index before it returns a view?
+3. Why can `ColumnView<'a, String>::get` return a borrowed `&'a str` without materializing a new
+   `StringArray`?
+
+You can now separate the representation of a batch from the scalar operation that reads it.
+Chapter 4 will use this borrowed boundary to expose what concrete unary and binary row loops repeat.
 
 Next: [Chapter 4 exposes what unary and binary loops repeat](./chapter-4-concrete-loops.md).
 
