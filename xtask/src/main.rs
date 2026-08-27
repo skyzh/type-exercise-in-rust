@@ -18,7 +18,7 @@ enum Action {
     CopyTest {
         #[arg(long)]
         chapter: usize,
-        /// Copy only the cumulative tests through one checkpoint of Chapter 1.
+        /// Copy only the cumulative tests through one checkpoint of a staged chapter.
         #[arg(long)]
         checkpoint: Option<usize>,
     },
@@ -77,16 +77,24 @@ fn write_if_changed(path: &Path, bytes: &[u8]) -> Result<bool> {
     Ok(true)
 }
 
-const CHAPTER_1_CHECKPOINTS: usize = 4;
-
-fn chapter_1_checkpoint_path(root: &Path, checkpoint: usize) -> Result<PathBuf> {
-    if !(1..=CHAPTER_1_CHECKPOINTS).contains(&checkpoint) {
-        bail!("no tests are available for Chapter 1 checkpoint {checkpoint}");
+fn chapter_checkpoint_count(chapter: usize) -> Option<usize> {
+    match chapter {
+        1 => Some(4),
+        6 => Some(3),
+        _ => None,
     }
-    let path = if checkpoint == CHAPTER_1_CHECKPOINTS {
-        root.join("type-exercise/src/tests/chapter_1.rs")
+}
+
+fn chapter_checkpoint_path(root: &Path, chapter: usize, checkpoint: usize) -> Result<PathBuf> {
+    let checkpoint_count = chapter_checkpoint_count(chapter)
+        .with_context(|| format!("--checkpoint is not available with --chapter {chapter}"))?;
+    if !(1..=checkpoint_count).contains(&checkpoint) {
+        bail!("no tests are available for Chapter {chapter} checkpoint {checkpoint}");
+    }
+    let path = if checkpoint == checkpoint_count {
+        root.join(format!("type-exercise/src/tests/chapter_{chapter}.rs"))
     } else {
-        root.join("supplied-tests/chapter_1")
+        root.join(format!("supplied-tests/chapter_{chapter}"))
             .join(format!("checkpoint_{checkpoint}.rs"))
     };
     Ok(path)
@@ -102,17 +110,17 @@ fn copy_test(root: &Path, chapter: usize, checkpoint: Option<usize>) -> Result<C
     if chapter == 0 || chapter > last_chapter {
         bail!("no tests are available for chapter {chapter}");
     }
-    if checkpoint.is_some() && chapter != 1 {
-        bail!("--checkpoint is available only with --chapter 1");
+    if let Some(checkpoint) = checkpoint {
+        chapter_checkpoint_path(root, chapter, checkpoint)?;
     }
 
     // Read the complete cumulative source set before writing any supplied tests.
     let sources = (1..=chapter)
         .map(|number| {
             let name = format!("chapter_{number}.rs");
-            let path = if number == 1 {
+            let path = if number == chapter {
                 checkpoint
-                    .map(|checkpoint| chapter_1_checkpoint_path(root, checkpoint))
+                    .map(|checkpoint| chapter_checkpoint_path(root, chapter, checkpoint))
                     .transpose()?
                     .unwrap_or_else(|| source_dir.join(&name))
             } else {
@@ -172,7 +180,7 @@ fn copy_test(root: &Path, chapter: usize, checkpoint: Option<usize>) -> Result<C
 
     if let Some(checkpoint) = checkpoint {
         println!(
-            "copied cumulative Chapter 1 checkpoint {checkpoint} tests into type-exercise-starter"
+            "copied cumulative Chapter {chapter} checkpoint {checkpoint} tests into type-exercise-starter"
         );
     } else {
         println!("copied cumulative Chapters 1-{chapter} tests into type-exercise-starter");

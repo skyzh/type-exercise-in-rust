@@ -44,7 +44,7 @@
 //
 //! Day 6, checkpoint 3: make the ternary path observable with clamp.
 // pub(crate) fn build_numeric_neg_expression(/* input type */) -> /* expression */;
-// pub(crate) fn build_numeric_clamp_expression(/* physical type */) -> /* expression */;
+// pub(crate) fn build_numeric_clamp_expression(/* three input types and one output type */) -> /* expression */;
 //
 //! Day 8, checkpoint 2: implement the erased Expression boundary for each checked shell here.
 // impl<F> Expression for UnaryExpression<F> { /* metadata and evaluation */ }

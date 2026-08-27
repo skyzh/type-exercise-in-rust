@@ -5,10 +5,9 @@
 // pub struct I32Add;
 // pub fn evaluate_binary<F: BinaryScalarFunction>(/* inputs */) -> /* output */;
 //
-//! Day 4, checkpoint 2: define the checked scalar error used by the checked shells here.
+//! Day 4, checkpoint 2: define the checked scalar error and structured batch error here.
 // pub enum ScalarError { DivisionByZero, /* more checked failures arrive with their days */ }
 //
-//! Day 6, checkpoint 1: add one structured batch-evaluation error here.
 // pub enum ExpressionError { /* arity, type, length, and scalar failures */ }
 //
 //! Day 8, checkpoint 1: add the object-safe runtime expression boundary here.

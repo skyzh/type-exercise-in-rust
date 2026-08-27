@@ -551,17 +551,26 @@ where
     }
 }
 
-pub(crate) struct NumericClamp<O>(PhantomData<O>);
-impl<O> CheckedTernaryScalarFunction for NumericClamp<O>
+pub(crate) struct NumericClamp<A, B, C, O>(PhantomData<(A, B, C, O)>);
+impl<A, B, C, O> CheckedTernaryScalarFunction for NumericClamp<A, B, C, O>
 where
+    A: Numeric + PromoteInto<O>,
+    B: Numeric + PromoteInto<O>,
+    C: Numeric + PromoteInto<O>,
     O: Numeric,
+    for<'a> A: Scalar<RefType<'a> = A>,
+    for<'a> B: Scalar<RefType<'a> = B>,
+    for<'a> C: Scalar<RefType<'a> = C>,
     for<'a> O: Scalar<RefType<'a> = O>,
 {
-    type First = O;
-    type Second = O;
-    type Third = O;
+    type First = A;
+    type Second = B;
+    type Third = C;
     type Output = O;
-    fn evaluate<'a>(&self, value: O, lower: O, upper: O) -> Result<O, ScalarError> {
+    fn evaluate<'a>(&self, value: A, lower: B, upper: C) -> Result<O, ScalarError> {
+        let value = value.promote();
+        let lower = lower.promote();
+        let upper = upper.promote();
         if lower.partial_cmp(&upper) != Some(Ordering::Less)
             && lower.partial_cmp(&upper) != Some(Ordering::Equal)
         {
@@ -659,7 +668,6 @@ type NumericClampBatchKernel = for<'a> fn(
     &NumericClampExpression,
     &[ColumnViewImpl<'a>],
 ) -> Result<ArrayImpl, ExpressionError>;
-type NumericCastBatchKernel = for<'a> fn(&ColumnViewImpl<'a>) -> Result<ArrayImpl, ExpressionError>;
 
 pub(crate) struct NumericBinaryExpression {
     name: &'static str,
@@ -759,7 +767,6 @@ pub(crate) struct NumericClampExpression {
     input_types: [PhysicalType; 3],
     output_type: PhysicalType,
     kernel: NumericClampBatchKernel,
-    casts: [NumericCastBatchKernel; 3],
 }
 
 impl NumericClampExpression {
@@ -767,18 +774,7 @@ impl NumericClampExpression {
         &self,
         inputs: &[ColumnViewImpl<'_>],
     ) -> Result<ArrayImpl, ExpressionError> {
-        validate_expression_inputs(inputs, &self.input_types)?;
-        let first = (self.casts[0])(&inputs[0])?;
-        let second = (self.casts[1])(&inputs[1])?;
-        let third = (self.casts[2])(&inputs[2])?;
-        (self.kernel)(
-            self,
-            &[
-                ColumnViewImpl::array(&first),
-                ColumnViewImpl::array(&second),
-                ColumnViewImpl::array(&third),
-            ],
-        )
+        (self.kernel)(self, inputs)
     }
 }
 
@@ -970,62 +966,238 @@ fn numeric_neg_kernel(input: &PhysicalType) -> NumericNegBatchKernel {
     }
 }
 
-fn evaluate_numeric_clamp<O>(
+fn evaluate_numeric_clamp<A, B, C, O>(
     expression: &NumericClampExpression,
     inputs: &[ColumnViewImpl<'_>],
 ) -> Result<ArrayImpl, ExpressionError>
 where
+    A: Numeric + PromoteInto<O>,
+    B: Numeric + PromoteInto<O>,
+    C: Numeric + PromoteInto<O>,
     O: Numeric,
+    A::ArrayType: 'static,
+    B::ArrayType: 'static,
+    C::ArrayType: 'static,
+    for<'a> A: Scalar<RefType<'a> = A>,
+    for<'a> B: Scalar<RefType<'a> = B>,
+    for<'a> C: Scalar<RefType<'a> = C>,
     for<'a> O: Scalar<RefType<'a> = O>,
-    for<'a> &'a O::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
-    for<'a> O::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> &'a A::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a B::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a C::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> A::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> B::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> C::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
 {
-    TernaryExpression::new(expression.name, NumericClamp::<O>(PhantomData)).evaluate(inputs)
+    TernaryExpression::new(expression.name, NumericClamp::<A, B, C, O>(PhantomData))
+        .evaluate(inputs)
 }
 
-fn cast_numeric_column<L, O>(input: &ColumnViewImpl<'_>) -> Result<ArrayImpl, ExpressionError>
+fn numeric_clamp_after_int16_pair<A, B>(
+    third: &PhysicalType,
+    output: &PhysicalType,
+) -> NumericClampBatchKernel
 where
-    L: Numeric + PromoteInto<O>,
-    O: Numeric,
-    for<'a> L: Scalar<RefType<'a> = L>,
-    for<'a> &'a L::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
-    for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    A: Numeric
+        + PromoteInto<i16>
+        + PromoteInto<i32>
+        + PromoteInto<i64>
+        + PromoteInto<f32>
+        + PromoteInto<f64>,
+    B: Numeric
+        + PromoteInto<i16>
+        + PromoteInto<i32>
+        + PromoteInto<i64>
+        + PromoteInto<f32>
+        + PromoteInto<f64>,
+    A::ArrayType: 'static,
+    B::ArrayType: 'static,
+    for<'a> A: Scalar<RefType<'a> = A>,
+    for<'a> B: Scalar<RefType<'a> = B>,
+    for<'a> &'a A::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a B::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> A::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> B::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
 {
-    let input = ColumnView::<L>::try_from(input.clone())?;
-    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(input.len());
-    for row in 0..input.len() {
-        let value = input.get(row).map(PromoteInto::promote);
-        output.push(value.as_ref().map(Scalar::as_scalar_ref));
-    }
-    Ok(output.finish().into())
-}
-
-fn numeric_cast_kernel(input: &PhysicalType, output: &PhysicalType) -> NumericCastBatchKernel {
-    match (input, output) {
-        (PhysicalType::Int16, PhysicalType::Int16) => cast_numeric_column::<i16, i16>,
-        (PhysicalType::Int16, PhysicalType::Int32) => cast_numeric_column::<i16, i32>,
-        (PhysicalType::Int16, PhysicalType::Int64) => cast_numeric_column::<i16, i64>,
-        (PhysicalType::Int16, PhysicalType::Float32) => cast_numeric_column::<i16, f32>,
-        (PhysicalType::Int16, PhysicalType::Float64) => cast_numeric_column::<i16, f64>,
-        (PhysicalType::Int32, PhysicalType::Int32) => cast_numeric_column::<i32, i32>,
-        (PhysicalType::Int32, PhysicalType::Int64) => cast_numeric_column::<i32, i64>,
-        (PhysicalType::Int32, PhysicalType::Float64) => cast_numeric_column::<i32, f64>,
-        (PhysicalType::Int64, PhysicalType::Int64) => cast_numeric_column::<i64, i64>,
-        (PhysicalType::Float32, PhysicalType::Float32) => cast_numeric_column::<f32, f32>,
-        (PhysicalType::Float32, PhysicalType::Float64) => cast_numeric_column::<f32, f64>,
-        (PhysicalType::Float64, PhysicalType::Float64) => cast_numeric_column::<f64, f64>,
-        _ => unreachable!("validated numeric conversion"),
+    match (third, output) {
+        (PhysicalType::Int16, PhysicalType::Int16) => evaluate_numeric_clamp::<A, B, i16, i16>,
+        (PhysicalType::Int32, PhysicalType::Int32) => evaluate_numeric_clamp::<A, B, i32, i32>,
+        (PhysicalType::Int64, PhysicalType::Int64) => evaluate_numeric_clamp::<A, B, i64, i64>,
+        (PhysicalType::Float32, PhysicalType::Float32) => evaluate_numeric_clamp::<A, B, f32, f32>,
+        (PhysicalType::Float64, PhysicalType::Float64) => evaluate_numeric_clamp::<A, B, f64, f64>,
+        _ => unreachable!("validated numeric clamp tuple after Int16 pair"),
     }
 }
 
-fn numeric_clamp_kernel(output: &PhysicalType) -> NumericClampBatchKernel {
-    match output {
-        PhysicalType::Int16 => evaluate_numeric_clamp::<i16>,
-        PhysicalType::Int32 => evaluate_numeric_clamp::<i32>,
-        PhysicalType::Int64 => evaluate_numeric_clamp::<i64>,
-        PhysicalType::Float32 => evaluate_numeric_clamp::<f32>,
-        PhysicalType::Float64 => evaluate_numeric_clamp::<f64>,
-        _ => unreachable!("numeric clamp output"),
+fn numeric_clamp_after_int32_pair<A, B>(
+    third: &PhysicalType,
+    output: &PhysicalType,
+) -> NumericClampBatchKernel
+where
+    A: Numeric + PromoteInto<i32> + PromoteInto<i64> + PromoteInto<f64>,
+    B: Numeric + PromoteInto<i32> + PromoteInto<i64> + PromoteInto<f64>,
+    A::ArrayType: 'static,
+    B::ArrayType: 'static,
+    for<'a> A: Scalar<RefType<'a> = A>,
+    for<'a> B: Scalar<RefType<'a> = B>,
+    for<'a> &'a A::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a B::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> A::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> B::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+{
+    match (third, output) {
+        (PhysicalType::Int16, PhysicalType::Int32) => evaluate_numeric_clamp::<A, B, i16, i32>,
+        (PhysicalType::Int32, PhysicalType::Int32) => evaluate_numeric_clamp::<A, B, i32, i32>,
+        (PhysicalType::Int64, PhysicalType::Int64) => evaluate_numeric_clamp::<A, B, i64, i64>,
+        (PhysicalType::Float32, PhysicalType::Float64) => evaluate_numeric_clamp::<A, B, f32, f64>,
+        (PhysicalType::Float64, PhysicalType::Float64) => evaluate_numeric_clamp::<A, B, f64, f64>,
+        _ => unreachable!("validated numeric clamp tuple after Int32 pair"),
+    }
+}
+
+fn numeric_clamp_after_int64_pair<A, B>(
+    third: &PhysicalType,
+    output: &PhysicalType,
+) -> NumericClampBatchKernel
+where
+    A: Numeric + PromoteInto<i64>,
+    B: Numeric + PromoteInto<i64>,
+    A::ArrayType: 'static,
+    B::ArrayType: 'static,
+    for<'a> A: Scalar<RefType<'a> = A>,
+    for<'a> B: Scalar<RefType<'a> = B>,
+    for<'a> &'a A::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a B::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> A::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> B::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+{
+    match (third, output) {
+        (PhysicalType::Int16, PhysicalType::Int64) => evaluate_numeric_clamp::<A, B, i16, i64>,
+        (PhysicalType::Int32, PhysicalType::Int64) => evaluate_numeric_clamp::<A, B, i32, i64>,
+        (PhysicalType::Int64, PhysicalType::Int64) => evaluate_numeric_clamp::<A, B, i64, i64>,
+        _ => unreachable!("validated numeric clamp tuple after Int64 pair"),
+    }
+}
+
+fn numeric_clamp_after_float32_pair<A, B>(
+    third: &PhysicalType,
+    output: &PhysicalType,
+) -> NumericClampBatchKernel
+where
+    A: Numeric + PromoteInto<f32> + PromoteInto<f64>,
+    B: Numeric + PromoteInto<f32> + PromoteInto<f64>,
+    A::ArrayType: 'static,
+    B::ArrayType: 'static,
+    for<'a> A: Scalar<RefType<'a> = A>,
+    for<'a> B: Scalar<RefType<'a> = B>,
+    for<'a> &'a A::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a B::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> A::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> B::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+{
+    match (third, output) {
+        (PhysicalType::Int16, PhysicalType::Float32) => evaluate_numeric_clamp::<A, B, i16, f32>,
+        (PhysicalType::Int32, PhysicalType::Float64) => evaluate_numeric_clamp::<A, B, i32, f64>,
+        (PhysicalType::Float32, PhysicalType::Float32) => evaluate_numeric_clamp::<A, B, f32, f32>,
+        (PhysicalType::Float64, PhysicalType::Float64) => evaluate_numeric_clamp::<A, B, f64, f64>,
+        _ => unreachable!("validated numeric clamp tuple after Float32 pair"),
+    }
+}
+
+fn numeric_clamp_after_float64_pair<A, B>(
+    third: &PhysicalType,
+    output: &PhysicalType,
+) -> NumericClampBatchKernel
+where
+    A: Numeric + PromoteInto<f64>,
+    B: Numeric + PromoteInto<f64>,
+    A::ArrayType: 'static,
+    B::ArrayType: 'static,
+    for<'a> A: Scalar<RefType<'a> = A>,
+    for<'a> B: Scalar<RefType<'a> = B>,
+    for<'a> &'a A::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a B::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> A::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> B::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+{
+    match (third, output) {
+        (PhysicalType::Int16, PhysicalType::Float64) => evaluate_numeric_clamp::<A, B, i16, f64>,
+        (PhysicalType::Int32, PhysicalType::Float64) => evaluate_numeric_clamp::<A, B, i32, f64>,
+        (PhysicalType::Float32, PhysicalType::Float64) => evaluate_numeric_clamp::<A, B, f32, f64>,
+        (PhysicalType::Float64, PhysicalType::Float64) => evaluate_numeric_clamp::<A, B, f64, f64>,
+        _ => unreachable!("validated numeric clamp tuple after Float64 pair"),
+    }
+}
+
+fn numeric_clamp_kernel(
+    inputs: &[PhysicalType; 3],
+    output: &PhysicalType,
+) -> NumericClampBatchKernel {
+    match (&inputs[0], &inputs[1]) {
+        (PhysicalType::Int16, PhysicalType::Int16) => {
+            numeric_clamp_after_int16_pair::<i16, i16>(&inputs[2], output)
+        }
+        (PhysicalType::Int16, PhysicalType::Int32) => {
+            numeric_clamp_after_int32_pair::<i16, i32>(&inputs[2], output)
+        }
+        (PhysicalType::Int32, PhysicalType::Int16) => {
+            numeric_clamp_after_int32_pair::<i32, i16>(&inputs[2], output)
+        }
+        (PhysicalType::Int32, PhysicalType::Int32) => {
+            numeric_clamp_after_int32_pair::<i32, i32>(&inputs[2], output)
+        }
+        (PhysicalType::Int16, PhysicalType::Int64) => {
+            numeric_clamp_after_int64_pair::<i16, i64>(&inputs[2], output)
+        }
+        (PhysicalType::Int64, PhysicalType::Int16) => {
+            numeric_clamp_after_int64_pair::<i64, i16>(&inputs[2], output)
+        }
+        (PhysicalType::Int32, PhysicalType::Int64) => {
+            numeric_clamp_after_int64_pair::<i32, i64>(&inputs[2], output)
+        }
+        (PhysicalType::Int64, PhysicalType::Int32) => {
+            numeric_clamp_after_int64_pair::<i64, i32>(&inputs[2], output)
+        }
+        (PhysicalType::Int64, PhysicalType::Int64) => {
+            numeric_clamp_after_int64_pair::<i64, i64>(&inputs[2], output)
+        }
+        (PhysicalType::Int16, PhysicalType::Float32) => {
+            numeric_clamp_after_float32_pair::<i16, f32>(&inputs[2], output)
+        }
+        (PhysicalType::Float32, PhysicalType::Int16) => {
+            numeric_clamp_after_float32_pair::<f32, i16>(&inputs[2], output)
+        }
+        (PhysicalType::Float32, PhysicalType::Float32) => {
+            numeric_clamp_after_float32_pair::<f32, f32>(&inputs[2], output)
+        }
+        (PhysicalType::Int16, PhysicalType::Float64) => {
+            numeric_clamp_after_float64_pair::<i16, f64>(&inputs[2], output)
+        }
+        (PhysicalType::Float64, PhysicalType::Int16) => {
+            numeric_clamp_after_float64_pair::<f64, i16>(&inputs[2], output)
+        }
+        (PhysicalType::Int32, PhysicalType::Float32) => {
+            numeric_clamp_after_float64_pair::<i32, f32>(&inputs[2], output)
+        }
+        (PhysicalType::Float32, PhysicalType::Int32) => {
+            numeric_clamp_after_float64_pair::<f32, i32>(&inputs[2], output)
+        }
+        (PhysicalType::Int32, PhysicalType::Float64) => {
+            numeric_clamp_after_float64_pair::<i32, f64>(&inputs[2], output)
+        }
+        (PhysicalType::Float64, PhysicalType::Int32) => {
+            numeric_clamp_after_float64_pair::<f64, i32>(&inputs[2], output)
+        }
+        (PhysicalType::Float32, PhysicalType::Float64) => {
+            numeric_clamp_after_float64_pair::<f32, f64>(&inputs[2], output)
+        }
+        (PhysicalType::Float64, PhysicalType::Float32) => {
+            numeric_clamp_after_float64_pair::<f64, f32>(&inputs[2], output)
+        }
+        (PhysicalType::Float64, PhysicalType::Float64) => {
+            numeric_clamp_after_float64_pair::<f64, f64>(&inputs[2], output)
+        }
+        _ => unreachable!("validated numeric clamp input pair"),
     }
 }
 
@@ -1063,18 +1235,12 @@ pub(crate) fn build_numeric_clamp_expression(
     inputs: [PhysicalType; 3],
     output: PhysicalType,
 ) -> NumericClampExpression {
-    let kernel = numeric_clamp_kernel(&output);
-    let casts = [
-        numeric_cast_kernel(&inputs[0], &output),
-        numeric_cast_kernel(&inputs[1], &output),
-        numeric_cast_kernel(&inputs[2], &output),
-    ];
+    let kernel = numeric_clamp_kernel(&inputs, &output);
     NumericClampExpression {
         name,
         input_types: inputs,
         output_type: output,
         kernel,
-        casts,
     }
 }
 
