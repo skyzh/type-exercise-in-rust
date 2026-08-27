@@ -64,14 +64,14 @@ pub use operators::validate_expression_inputs;
 ## Checkpoint 3: make ternary behavior observable
 
 - **Target:** `type-exercise-starter/src/operators.rs::build_numeric_clamp_expression` and
-  `build_numeric_neg_expression` (declared on Day 5 with the other arithmetic selection builders).
-- **Change:** construct a physical `clamp` shell for the already-selected common numeric family and
-  reject `lower > upper`; reuse the unary `neg` shell from Day 5 for the strict unary path.
+  `build_numeric_neg_expression`.
+- **Change:** construct physical `neg` and `clamp` shells for their already-selected numeric
+  families, and reject `lower > upper` in the ternary function.
 - **Preserve:** physical selection happens once before the batch; the typed shell remains the only
   row loop.
 - **Run:** focused and cumulative tests.
-- **Passing means:** `clamp` executes through the real three-input batch path, not only in a
-  source-level smoke test.
+- **Passing means:** `neg` exercises the strict unary path and `clamp` executes through the real
+  three-input batch path, not only in a source-level smoke test.
 
 ## Required and extension work
 

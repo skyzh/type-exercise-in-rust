@@ -9,7 +9,7 @@ use crate::{
     Scalar, ScalarError, ScalarRefImpl, TypeMismatch,
 };
 
-pub fn validate_expression_inputs(
+fn validate_expression_inputs(
     inputs: &[ColumnViewImpl<'_>],
     expected_types: &[PhysicalType],
 ) -> Result<usize, ExpressionError> {

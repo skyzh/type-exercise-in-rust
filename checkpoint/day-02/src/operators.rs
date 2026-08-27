@@ -32,7 +32,6 @@
 // /* one concrete expression stores a monomorphized whole-batch kernel pointer selected from (left, right, output) */
 // pub(crate) fn build_numeric_binary_expression(/* operator and types */) -> /* expression */;
 // pub(crate) fn build_numeric_comparison_expression(/* operator and types */) -> /* expression */;
-// pub(crate) fn build_numeric_neg_expression(/* input type */) -> /* expression */;
 //
 //! Day 6, checkpoint 1: share arity, physical-type, and length validation here.
 // pub fn validate_expression_inputs(/* expected types and inputs */) -> Result<usize, ExpressionError>;
@@ -44,6 +43,7 @@
 // pub struct TernaryExpression<F> { /* function and metadata */ }
 //
 //! Day 6, checkpoint 3: make the ternary path observable with clamp.
+// pub(crate) fn build_numeric_neg_expression(/* input type */) -> /* expression */;
 // pub(crate) fn build_numeric_clamp_expression(/* physical type */) -> /* expression */;
 //
 //! Day 8, checkpoint 2: implement the erased Expression boundary for each checked shell here.
