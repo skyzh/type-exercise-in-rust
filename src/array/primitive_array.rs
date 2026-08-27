@@ -1,21 +1,40 @@
 use bitvec::vec::BitVec;
 
-use crate::{Array, ArrayBuilder};
+use crate::{Array, ArrayBuilder, ArrayImpl, Scalar, ScalarRef, TypeMismatch};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PrimitiveArray<T> {
     values: Vec<T>,
     validity: BitVec,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PrimitiveArrayBuilder<T> {
     values: Vec<T>,
     validity: BitVec,
 }
 
+pub type I16Array = PrimitiveArray<i16>;
+pub type I16ArrayBuilder = PrimitiveArrayBuilder<i16>;
 pub type I32Array = PrimitiveArray<i32>;
 pub type I32ArrayBuilder = PrimitiveArrayBuilder<i32>;
+pub type I64Array = PrimitiveArray<i64>;
+pub type I64ArrayBuilder = PrimitiveArrayBuilder<i64>;
+pub type BoolArray = PrimitiveArray<bool>;
+pub type BoolArrayBuilder = PrimitiveArrayBuilder<bool>;
+pub type F32Array = PrimitiveArray<f32>;
+pub type F32ArrayBuilder = PrimitiveArrayBuilder<f32>;
+pub type F64Array = PrimitiveArray<f64>;
+pub type F64ArrayBuilder = PrimitiveArrayBuilder<f64>;
+
+trait SupportedPrimitive: Scalar + Copy + Default {}
+
+impl SupportedPrimitive for i16 {}
+impl SupportedPrimitive for i32 {}
+impl SupportedPrimitive for i64 {}
+impl SupportedPrimitive for bool {}
+impl SupportedPrimitive for f32 {}
+impl SupportedPrimitive for f64 {}
 
 impl<T> PrimitiveArray<T> {
     pub fn values(&self) -> &[T] {
@@ -25,12 +44,49 @@ impl<T> PrimitiveArray<T> {
     pub fn validity(&self) -> &BitVec {
         &self.validity
     }
+
+    pub(crate) fn from_raw_parts(values: Vec<T>, validity: BitVec) -> Self {
+        debug_assert_eq!(values.len(), validity.len());
+        Self { values, validity }
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.values.len()
+    }
 }
 
-impl Array for I32Array {
-    type Builder = I32ArrayBuilder;
-    type OwnedItem = i32;
-    type RefItem<'a> = i32;
+impl<T> PrimitiveArrayBuilder<T> {
+    pub(crate) fn with_raw_capacity(capacity: usize) -> Self {
+        Self {
+            values: Vec::with_capacity(capacity),
+            validity: BitVec::with_capacity(capacity),
+        }
+    }
+
+    pub(crate) fn push_raw(&mut self, value: T, valid: bool) {
+        self.values.push(value);
+        self.validity.push(valid);
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.values.len()
+    }
+
+    pub(crate) fn finish_raw(self) -> PrimitiveArray<T> {
+        PrimitiveArray::from_raw_parts(self.values, self.validity)
+    }
+}
+
+impl<T> Array for PrimitiveArray<T>
+where
+    T: SupportedPrimitive + Scalar<ArrayType = Self>,
+    for<'a> T: ScalarRef<'a, ScalarType = T, ArrayType = Self>,
+    for<'a> T: Scalar<RefType<'a> = T>,
+    Self: Into<ArrayImpl> + TryFrom<ArrayImpl, Error = TypeMismatch>,
+{
+    type Builder = PrimitiveArrayBuilder<T>;
+    type OwnedItem = T;
+    type RefItem<'a> = T;
 
     fn get(&self, row: usize) -> Option<Self::RefItem<'_>> {
         self.validity[row].then_some(self.values[row])
@@ -41,8 +97,14 @@ impl Array for I32Array {
     }
 }
 
-impl ArrayBuilder for I32ArrayBuilder {
-    type Array = I32Array;
+impl<T> ArrayBuilder for PrimitiveArrayBuilder<T>
+where
+    T: SupportedPrimitive + Scalar<ArrayType = PrimitiveArray<T>>,
+    for<'a> T: ScalarRef<'a, ScalarType = T, ArrayType = PrimitiveArray<T>>,
+    for<'a> T: Scalar<RefType<'a> = T>,
+    PrimitiveArray<T>: Into<ArrayImpl> + TryFrom<ArrayImpl, Error = TypeMismatch>,
+{
+    type Array = PrimitiveArray<T>;
 
     fn with_capacity(capacity: usize) -> Self {
         Self {
@@ -51,9 +113,17 @@ impl ArrayBuilder for I32ArrayBuilder {
         }
     }
 
-    fn push(&mut self, value: Option<i32>) {
-        self.values.push(value.unwrap_or_default());
-        self.validity.push(value.is_some());
+    fn push(&mut self, value: Option<T>) {
+        match value {
+            Some(value) => {
+                self.values.push(value);
+                self.validity.push(true);
+            }
+            None => {
+                self.values.push(T::default());
+                self.validity.push(false);
+            }
+        }
     }
 
     fn finish(self) -> Self::Array {
@@ -63,7 +133,3 @@ impl ArrayBuilder for I32ArrayBuilder {
         }
     }
 }
-
-// Day 2 adds six explicit aliases, a private supported-primitive marker, and one generic
-// Array/ArrayBuilder implementation instead of generating identical implementations with macros.
-// Day 10 keeps this one representation and moves the checked non-null proof to column metadata.

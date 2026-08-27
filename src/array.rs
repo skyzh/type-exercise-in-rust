@@ -1,13 +1,33 @@
+mod decimal_array;
 mod primitive_array;
 mod string_array;
 
-pub use primitive_array::{I32Array, I32ArrayBuilder, PrimitiveArray, PrimitiveArrayBuilder};
+pub use decimal_array::{DecimalArray, DecimalArrayBuilder};
+pub use primitive_array::{
+    BoolArray, BoolArrayBuilder, F32Array, F32ArrayBuilder, F64Array, F64ArrayBuilder, I16Array,
+    I16ArrayBuilder, I32Array, I32ArrayBuilder, I64Array, I64ArrayBuilder, PrimitiveArray,
+    PrimitiveArrayBuilder,
+};
 pub use string_array::{StringArray, StringArrayBuilder};
 
 use std::fmt::Debug;
 
 use crate::variant_catalog::for_each_physical_family;
-use crate::{PhysicalType, Scalar, ScalarRef, ScalarRefImpl, TypeMismatch};
+use crate::{DecimalError, PhysicalType, Scalar, ScalarRef, ScalarRefImpl, TypeMismatch};
+
+macro_rules! erased_array_physical_type {
+    (copy, $variant:ident, $array:ident) => {{
+        let _ = $array;
+        PhysicalType::$variant
+    }};
+    (borrowed, $variant:ident, $array:ident) => {{
+        let _ = $array;
+        PhysicalType::$variant
+    }};
+    (decimal, $variant:ident, $array:ident) => {
+        PhysicalType::Decimal($array.decimal_type())
+    };
+}
 
 pub trait Array:
     Debug + Clone + Sized + TryFrom<ArrayImpl, Error = TypeMismatch> + Into<ArrayImpl>
@@ -55,7 +75,7 @@ macro_rules! define_array_erasure {
         impl ArrayImpl {
             pub fn physical_type(&self) -> PhysicalType {
                 match self {
-                    $(Self::$variant(_) => PhysicalType::$variant),+
+                    $(Self::$variant(array) => erased_array_physical_type!($kind, $variant, array)),+
                 }
             }
 
@@ -84,7 +104,7 @@ macro_rules! define_array_erasure {
 }
 
 macro_rules! define_array_family {
-    ($kind:ident, $variant:ident, $array:ident) => {
+    (copy, $variant:ident, $array:ident) => {
         impl From<$array> for ArrayImpl {
             fn from(array: $array) -> Self {
                 Self::$variant(array)
@@ -117,6 +137,43 @@ macro_rules! define_array_family {
             }
         }
     };
+    (borrowed, $variant:ident, $array:ident) => {
+        define_array_family!(copy, $variant, $array);
+    };
+    (decimal, $variant:ident, $array:ident) => {
+        impl From<$array> for ArrayImpl {
+            fn from(array: $array) -> Self {
+                Self::$variant(array)
+            }
+        }
+
+        impl TryFrom<ArrayImpl> for $array {
+            type Error = DecimalError;
+            fn try_from(array: ArrayImpl) -> Result<Self, Self::Error> {
+                match array {
+                    ArrayImpl::$variant(array) => Ok(array),
+                    other => Err(DecimalError::ExpectedDecimal {
+                        actual: other.physical_type(),
+                    }),
+                }
+            }
+        }
+
+        impl<'a> TryFrom<&'a ArrayImpl> for &'a $array {
+            type Error = DecimalError;
+            fn try_from(array: &'a ArrayImpl) -> Result<Self, Self::Error> {
+                match array {
+                    ArrayImpl::$variant(array) => Ok(array),
+                    other => Err(DecimalError::ExpectedDecimal {
+                        actual: other.physical_type(),
+                    }),
+                }
+            }
+        }
+    };
 }
 
 for_each_physical_family!(define_array_erasure);
+
+// Day 10 adds a checked non-null primitive view. Day 11 adds List erasure and slicing. Day 12
+// replaces the iterator adapter with a private concrete iterator.
