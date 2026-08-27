@@ -3,8 +3,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::{
     Array, ArrayImpl, BinaryScalarFunction, CheckedBinaryExpression, CheckedBinaryScalarFunction,
-    CheckedUnaryScalarFunction, ColumnViewImpl, I32Add, I32Array, PhysicalType, ScalarError,
-    ScalarRefImpl, StringArray, UnaryExpression, evaluate_binary,
+    CheckedUnaryScalarFunction, ColumnViewImpl, ExpressionError, I32Add, I32Array, PhysicalType,
+    ScalarError, ScalarRefImpl, StringArray, UnaryExpression, evaluate_binary,
 };
 
 struct StringLengthAdd;
@@ -139,12 +139,10 @@ fn rejects_physical_types_before_evaluating_rows() {
 struct CheckedNeg;
 
 impl CheckedUnaryScalarFunction for CheckedNeg {
+    type Input = i32;
     type Output = i32;
 
-    fn evaluate(&self, input: ScalarRefImpl<'_>) -> Result<i32, ScalarError> {
-        let ScalarRefImpl::Int32(input) = input else {
-            unreachable!("the expression validates its physical input")
-        };
+    fn evaluate<'a>(&self, input: i32) -> Result<i32, ScalarError> {
         Ok(input.wrapping_neg())
     }
 }
@@ -152,16 +150,11 @@ impl CheckedUnaryScalarFunction for CheckedNeg {
 struct CheckedAdd;
 
 impl CheckedBinaryScalarFunction for CheckedAdd {
+    type Left = i32;
+    type Right = i32;
     type Output = i32;
 
-    fn evaluate(
-        &self,
-        left: ScalarRefImpl<'_>,
-        right: ScalarRefImpl<'_>,
-    ) -> Result<i32, ScalarError> {
-        let (ScalarRefImpl::Int32(left), ScalarRefImpl::Int32(right)) = (left, right) else {
-            unreachable!("the expression validates both physical inputs")
-        };
+    fn evaluate<'a>(&self, left: i32, right: i32) -> Result<i32, ScalarError> {
         Ok(left.wrapping_add(right))
     }
 }
@@ -169,12 +162,10 @@ impl CheckedBinaryScalarFunction for CheckedAdd {
 struct CheckedFailOnSeven;
 
 impl CheckedUnaryScalarFunction for CheckedFailOnSeven {
+    type Input = i32;
     type Output = i32;
 
-    fn evaluate(&self, input: ScalarRefImpl<'_>) -> Result<i32, ScalarError> {
-        let ScalarRefImpl::Int32(input) = input else {
-            unreachable!("the expression validates its physical input")
-        };
+    fn evaluate<'a>(&self, input: i32) -> Result<i32, ScalarError> {
         if input == 7 {
             return Err(ScalarError::DivisionByZero);
         }
@@ -187,16 +178,11 @@ struct CheckedAddFailOnSecondCall {
 }
 
 impl CheckedBinaryScalarFunction for CheckedAddFailOnSecondCall {
+    type Left = i32;
+    type Right = i32;
     type Output = i32;
 
-    fn evaluate(
-        &self,
-        left: ScalarRefImpl<'_>,
-        right: ScalarRefImpl<'_>,
-    ) -> Result<i32, ScalarError> {
-        let (ScalarRefImpl::Int32(left), ScalarRefImpl::Int32(right)) = (left, right) else {
-            unreachable!("the expression validates both physical inputs")
-        };
+    fn evaluate<'a>(&self, left: i32, right: i32) -> Result<i32, ScalarError> {
         if self.calls.fetch_add(1, Ordering::SeqCst) == 1 {
             return Err(ScalarError::DivisionByZero);
         }
@@ -204,9 +190,41 @@ impl CheckedBinaryScalarFunction for CheckedAddFailOnSecondCall {
     }
 }
 
+struct CheckedStringLengthAdd;
+
+impl CheckedBinaryScalarFunction for CheckedStringLengthAdd {
+    type Left = String;
+    type Right = i32;
+    type Output = i32;
+
+    fn evaluate(&self, left: &str, right: i32) -> Result<i32, ScalarError> {
+        Ok(i32::try_from(left.len()).unwrap().wrapping_add(right))
+    }
+}
+
+#[test]
+fn checked_hooks_receive_typed_borrowed_inputs() {
+    let expression =
+        CheckedBinaryExpression::new("checked_string_length_add", CheckedStringLengthAdd);
+    let strings: ArrayImpl = StringArray::from_slice(&[Some("typed"), None]).into();
+    let output = expression
+        .evaluate(&[
+            ColumnViewImpl::array(&strings),
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 2),
+        ])
+        .unwrap();
+    assert_eq!(
+        <&I32Array>::try_from(&output)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![Some(7), None]
+    );
+}
+
 #[test]
 fn concrete_unary_and_binary_shells_agree_on_validation_nulls_and_output() {
-    let unary = UnaryExpression::new("checked_neg", [PhysicalType::Int32], CheckedNeg);
+    let unary = UnaryExpression::new("checked_neg", CheckedNeg);
     let unary_output = unary
         .evaluate(&[ColumnViewImpl::constant(ScalarRefImpl::Int32(7), 2)])
         .unwrap();
@@ -218,11 +236,7 @@ fn concrete_unary_and_binary_shells_agree_on_validation_nulls_and_output() {
         vec![Some(-7), Some(-7)]
     );
 
-    let binary = CheckedBinaryExpression::new(
-        "checked_add",
-        [PhysicalType::Int32, PhysicalType::Int32],
-        CheckedAdd,
-    );
+    let binary = CheckedBinaryExpression::new("checked_add", CheckedAdd);
     let binary_output = binary
         .evaluate(&[
             ColumnViewImpl::null(PhysicalType::Int32, 2),
@@ -240,11 +254,7 @@ fn concrete_unary_and_binary_shells_agree_on_validation_nulls_and_output() {
 
 #[test]
 fn shells_reject_extra_or_missing_inputs_before_indexing() {
-    let binary = CheckedBinaryExpression::new(
-        "checked_add",
-        [PhysicalType::Int32, PhysicalType::Int32],
-        CheckedAdd,
-    );
+    let binary = CheckedBinaryExpression::new("checked_add", CheckedAdd);
     assert!(
         binary
             .evaluate(&[
@@ -260,7 +270,7 @@ fn shells_reject_extra_or_missing_inputs_before_indexing() {
             .is_err()
     );
 
-    let unary = UnaryExpression::new("checked_neg", [PhysicalType::Int32], CheckedNeg);
+    let unary = UnaryExpression::new("checked_neg", CheckedNeg);
     assert!(
         unary
             .evaluate(&[
@@ -275,11 +285,7 @@ fn shells_reject_extra_or_missing_inputs_before_indexing() {
 #[test]
 fn shells_reject_the_second_input_physical_type() {
     let strings: ArrayImpl = StringArray::from_slice(&[Some("wrong")]).into();
-    let binary = CheckedBinaryExpression::new(
-        "checked_add",
-        [PhysicalType::Int32, PhysicalType::Int32],
-        CheckedAdd,
-    );
+    let binary = CheckedBinaryExpression::new("checked_add", CheckedAdd);
     assert!(
         binary
             .evaluate(&[
@@ -292,11 +298,7 @@ fn shells_reject_the_second_input_physical_type() {
 
 #[test]
 fn shells_reject_mismatched_input_lengths() {
-    let binary = CheckedBinaryExpression::new(
-        "checked_add",
-        [PhysicalType::Int32, PhysicalType::Int32],
-        CheckedAdd,
-    );
+    let binary = CheckedBinaryExpression::new("checked_add", CheckedAdd);
     assert!(
         binary
             .evaluate(&[
@@ -309,11 +311,7 @@ fn shells_reject_mismatched_input_lengths() {
 
 #[test]
 fn scalar_errors_propagate_as_batch_errors_not_null_rows() {
-    let unary = UnaryExpression::new(
-        "checked_fail_on_seven",
-        [PhysicalType::Int32],
-        CheckedFailOnSeven,
-    );
+    let unary = UnaryExpression::new("checked_fail_on_seven", CheckedFailOnSeven);
     assert!(
         unary
             .evaluate(&[ColumnViewImpl::constant(ScalarRefImpl::Int32(7), 1)])
@@ -331,18 +329,34 @@ fn binary_scalar_errors_propagate_and_stop_later_rows() {
     let calls = Arc::new(AtomicUsize::new(0));
     let binary = CheckedBinaryExpression::new(
         "checked_add_fail_on_second_call",
-        [PhysicalType::Int32, PhysicalType::Int32],
         CheckedAddFailOnSecondCall {
             calls: Arc::clone(&calls),
         },
     );
+    let strings: ArrayImpl = StringArray::from_slice(&[Some("wrong")]).into();
     assert!(
         binary
             .evaluate(&[
-                ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 3),
-                ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 3),
+                ColumnViewImpl::array(&strings),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 1),
             ])
             .is_err()
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+
+    let error = binary
+        .evaluate(&[
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 3),
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 3),
+        ])
+        .unwrap_err();
+    assert_eq!(
+        error,
+        ExpressionError::ScalarEvaluation {
+            function: "checked_add_fail_on_second_call",
+            row: 1,
+            error: ScalarError::DivisionByZero,
+        }
     );
     // The error stops the row loop: the third row is never evaluated.
     assert_eq!(calls.load(Ordering::SeqCst), 2);
