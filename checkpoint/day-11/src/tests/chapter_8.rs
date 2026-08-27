@@ -201,12 +201,10 @@ fn boolean_expressions_delegate_through_the_erased_boundary() {
 struct CheckedNeg;
 
 impl CheckedUnaryScalarFunction for CheckedNeg {
+    type Input = i32;
     type Output = i32;
 
-    fn evaluate(&self, input: ScalarRefImpl<'_>) -> Result<i32, ScalarError> {
-        let ScalarRefImpl::Int32(input) = input else {
-            unreachable!("the expression validates its physical input")
-        };
+    fn evaluate<'a>(&self, input: i32) -> Result<i32, ScalarError> {
         Ok(input.wrapping_neg())
     }
 }
@@ -214,16 +212,11 @@ impl CheckedUnaryScalarFunction for CheckedNeg {
 struct CheckedAdd;
 
 impl CheckedBinaryScalarFunction for CheckedAdd {
+    type Left = i32;
+    type Right = i32;
     type Output = i32;
 
-    fn evaluate(
-        &self,
-        left: ScalarRefImpl<'_>,
-        right: ScalarRefImpl<'_>,
-    ) -> Result<i32, ScalarError> {
-        let (ScalarRefImpl::Int32(left), ScalarRefImpl::Int32(right)) = (left, right) else {
-            unreachable!("the expression validates both physical inputs")
-        };
+    fn evaluate<'a>(&self, left: i32, right: i32) -> Result<i32, ScalarError> {
         Ok(left.wrapping_add(right))
     }
 }
@@ -231,30 +224,19 @@ impl CheckedBinaryScalarFunction for CheckedAdd {
 struct CheckedClamp;
 
 impl CheckedTernaryScalarFunction for CheckedClamp {
+    type First = i32;
+    type Second = i32;
+    type Third = i32;
     type Output = i32;
 
-    fn evaluate(
-        &self,
-        value: ScalarRefImpl<'_>,
-        lower: ScalarRefImpl<'_>,
-        upper: ScalarRefImpl<'_>,
-    ) -> Result<i32, ScalarError> {
-        let (ScalarRefImpl::Int32(value), ScalarRefImpl::Int32(lower), ScalarRefImpl::Int32(upper)) =
-            (value, lower, upper)
-        else {
-            unreachable!("the expression validates all physical inputs")
-        };
+    fn evaluate<'a>(&self, value: i32, lower: i32, upper: i32) -> Result<i32, ScalarError> {
         Ok(value.clamp(lower, upper))
     }
 }
 
 #[test]
 fn erased_unary_shell_delegates_metadata_and_rows() {
-    let expression: Box<dyn Expression> = Box::new(UnaryExpression::new(
-        "checked_neg",
-        [PhysicalType::Int32],
-        CheckedNeg,
-    ));
+    let expression: Box<dyn Expression> = Box::new(UnaryExpression::new("checked_neg", CheckedNeg));
     assert_eq!(expression.name(), "checked_neg");
     assert_eq!(expression.arity(), 1);
     assert_eq!(expression.input_types(), &[PhysicalType::Int32]);
@@ -274,11 +256,8 @@ fn erased_unary_shell_delegates_metadata_and_rows() {
 
 #[test]
 fn erased_binary_shell_delegates_metadata_and_rows() {
-    let expression: Box<dyn Expression> = Box::new(CheckedBinaryExpression::new(
-        "checked_add",
-        [PhysicalType::Int32, PhysicalType::Int32],
-        CheckedAdd,
-    ));
+    let expression: Box<dyn Expression> =
+        Box::new(CheckedBinaryExpression::new("checked_add", CheckedAdd));
     assert_eq!(expression.name(), "checked_add");
     assert_eq!(expression.arity(), 2);
     assert_eq!(
@@ -304,15 +283,8 @@ fn erased_binary_shell_delegates_metadata_and_rows() {
 
 #[test]
 fn erased_ternary_shell_delegates_metadata_and_rows() {
-    let expression: Box<dyn Expression> = Box::new(TernaryExpression::new(
-        "checked_clamp",
-        [
-            PhysicalType::Int32,
-            PhysicalType::Int32,
-            PhysicalType::Int32,
-        ],
-        CheckedClamp,
-    ));
+    let expression: Box<dyn Expression> =
+        Box::new(TernaryExpression::new("checked_clamp", CheckedClamp));
     assert_eq!(expression.name(), "checked_clamp");
     assert_eq!(expression.arity(), 3);
     assert_eq!(

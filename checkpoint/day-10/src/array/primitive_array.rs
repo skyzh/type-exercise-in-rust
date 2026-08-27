@@ -1,5 +1,4 @@
-use crate::variant_catalog::for_each_physical_family;
-use crate::{Array, ArrayBuilder};
+use crate::{Array, ArrayBuilder, ArrayImpl, Scalar, ScalarRef, TypeMismatch};
 use bitvec::vec::BitVec;
 
 /// A compact teaching representation for nullable fixed-width values.
@@ -16,22 +15,27 @@ pub struct PrimitiveArrayBuilder<T> {
     validity: BitVec,
 }
 
-macro_rules! define_primitive_aliases {
-    ($( { $kind:ident, $variant:ident, $array:ident, $builder:ident, $owned:ty, $borrowed:ty } ),+ $(,)?) => {
-        $(define_primitive_alias!($kind, $array, $builder, $owned);)+
-    };
-}
+pub type I16Array = PrimitiveArray<i16>;
+pub type I16ArrayBuilder = PrimitiveArrayBuilder<i16>;
+pub type I32Array = PrimitiveArray<i32>;
+pub type I32ArrayBuilder = PrimitiveArrayBuilder<i32>;
+pub type I64Array = PrimitiveArray<i64>;
+pub type I64ArrayBuilder = PrimitiveArrayBuilder<i64>;
+pub type BoolArray = PrimitiveArray<bool>;
+pub type BoolArrayBuilder = PrimitiveArrayBuilder<bool>;
+pub type F32Array = PrimitiveArray<f32>;
+pub type F32ArrayBuilder = PrimitiveArrayBuilder<f32>;
+pub type F64Array = PrimitiveArray<f64>;
+pub type F64ArrayBuilder = PrimitiveArrayBuilder<f64>;
 
-macro_rules! define_primitive_alias {
-    (copy, $array:ident, $builder:ident, $owned:ty) => {
-        pub type $array = PrimitiveArray<$owned>;
-        pub type $builder = PrimitiveArrayBuilder<$owned>;
-    };
-    (borrowed, $array:ident, $builder:ident, $owned:ty) => {};
-    (decimal, $array:ident, $builder:ident, $owned:ty) => {};
-}
+trait SupportedPrimitive: Scalar + Copy + Default {}
 
-for_each_physical_family!(define_primitive_aliases);
+impl SupportedPrimitive for i16 {}
+impl SupportedPrimitive for i32 {}
+impl SupportedPrimitive for i64 {}
+impl SupportedPrimitive for bool {}
+impl SupportedPrimitive for f32 {}
+impl SupportedPrimitive for f64 {}
 
 impl<T> PrimitiveArray<T> {
     pub fn from_values(values: Vec<T>) -> Self {
@@ -83,64 +87,62 @@ impl<T> PrimitiveArrayBuilder<T> {
     }
 }
 
-macro_rules! implement_primitive_families {
-    ($( { $kind:ident, $variant:ident, $array:ident, $builder:ident, $owned:ty, $borrowed:ty } ),+ $(,)?) => {
-        $(implement_primitive_family!($kind, $array, $builder, $owned);)+
-    };
+impl<T> Array for PrimitiveArray<T>
+where
+    T: SupportedPrimitive + Scalar<ArrayType = Self>,
+    for<'a> T: ScalarRef<'a, ScalarType = T, ArrayType = Self>,
+    for<'a> T: Scalar<RefType<'a> = T>,
+    Self: Into<ArrayImpl> + TryFrom<ArrayImpl, Error = TypeMismatch>,
+{
+    type Builder = PrimitiveArrayBuilder<T>;
+    type OwnedItem = T;
+    type RefItem<'a> = T;
+
+    fn get(&self, row: usize) -> Option<Self::RefItem<'_>> {
+        self.validity[row].then_some(self.values[row])
+    }
+
+    fn len(&self) -> usize {
+        self.values.len()
+    }
 }
 
-macro_rules! implement_primitive_family {
-    (copy, $array:ident, $builder:ident, $owned:ty) => {
-        impl Array for $array {
-            type Builder = $builder;
-            type OwnedItem = $owned;
-            type RefItem<'a> = $owned;
+impl<T> ArrayBuilder for PrimitiveArrayBuilder<T>
+where
+    T: SupportedPrimitive + Scalar<ArrayType = PrimitiveArray<T>>,
+    for<'a> T: ScalarRef<'a, ScalarType = T, ArrayType = PrimitiveArray<T>>,
+    for<'a> T: Scalar<RefType<'a> = T>,
+    PrimitiveArray<T>: Into<ArrayImpl> + TryFrom<ArrayImpl, Error = TypeMismatch>,
+{
+    type Array = PrimitiveArray<T>;
 
-            fn get(&self, row: usize) -> Option<Self::RefItem<'_>> {
-                self.validity[row].then_some(self.values[row])
+    fn with_capacity(capacity: usize) -> Self {
+        Self {
+            values: Vec::with_capacity(capacity),
+            validity: BitVec::with_capacity(capacity),
+        }
+    }
+
+    fn push(&mut self, value: Option<T>) {
+        match value {
+            Some(value) => {
+                self.values.push(value);
+                self.validity.push(true);
             }
-
-            fn len(&self) -> usize {
-                self.values.len()
+            None => {
+                self.values.push(T::default());
+                self.validity.push(false);
             }
         }
+    }
 
-        impl ArrayBuilder for $builder {
-            type Array = $array;
-
-            fn with_capacity(capacity: usize) -> Self {
-                Self {
-                    values: Vec::with_capacity(capacity),
-                    validity: BitVec::with_capacity(capacity),
-                }
-            }
-
-            fn push(&mut self, value: Option<$owned>) {
-                match value {
-                    Some(value) => {
-                        self.values.push(value);
-                        self.validity.push(true);
-                    }
-                    None => {
-                        self.values.push(<$owned>::default());
-                        self.validity.push(false);
-                    }
-                }
-            }
-
-            fn finish(self) -> Self::Array {
-                PrimitiveArray {
-                    values: self.values,
-                    validity: self.validity,
-                }
-            }
+    fn finish(self) -> Self::Array {
+        PrimitiveArray {
+            values: self.values,
+            validity: self.validity,
         }
-    };
-    (borrowed, $array:ident, $builder:ident, $owned:ty) => {};
-    (decimal, $array:ident, $builder:ident, $owned:ty) => {};
+    }
 }
-
-for_each_physical_family!(implement_primitive_families);
 
 #[cfg(test)]
 mod tests {

@@ -103,17 +103,21 @@ length rejection.
 ## Checkpoint 2: put two concrete arities side by side
 
 Now open `src/operators.rs`. Define `CheckedUnaryScalarFunction` and
-`CheckedBinaryScalarFunction`. Each hook receives non-null `ScalarRefImpl<'_>` inputs, returns an
-associated owned output family, and may return `ScalarError`.
+`CheckedBinaryScalarFunction`. Give the unary hook an associated `Input` family and the binary hook
+associated `Left` and `Right` families, in addition to their associated owned output family. Their
+methods receive those families' borrowed scalar-reference types and may return `ScalarError`.
 
-The erased scalar references here do not remove the type check. `UnaryExpression<F>` and
-`CheckedBinaryExpression<F>` carry their expected `PhysicalType` values and validate the whole
-batch before calling the hook. A checked hook may therefore treat a different scalar variant as an
-unreachable caller bug rather than normal row input.
+The batch adapters derive their expected `PhysicalType` values from those associated input
+families. After validating the whole batch, each adapter converts every erased column view once to
+the corresponding typed `ColumnView`. The row loop therefore passes `&str`, `i32`, or another
+declared borrowed type directly to the checked hook; no checked scalar hook accepts or matches on
+`ScalarRefImpl`.
 
-Give both adapters a `new` constructor containing a static function name, the fixed-size expected
-input-type array for its arity, and the function value. Their inherent `evaluate` methods accept
-`&[ColumnViewImpl<'_>]` and return an owned `ArrayImpl` or a readable batch error.
+Give both adapters a `new` constructor containing only a static function name and the function
+value. The constructor derives its fixed-size expected input-type array from the function's
+associated input families, so a caller cannot provide contradictory runtime metadata. Their
+inherent `evaluate` methods accept `&[ColumnViewImpl<'_>]` and return an owned `ArrayImpl` or a
+readable batch error.
 
 Before allocating an output or indexing `inputs[0]`, each adapter must validate in this order:
 

@@ -54,8 +54,9 @@ pub use operators::validate_expression_inputs;
 ## Checkpoint 2: add the ternary shell
 
 - **Target:** `type-exercise-starter/src/operators.rs::{CheckedTernaryScalarFunction, TernaryExpression}`.
-- **Change:** apply the same strict row contract to three inputs and build the associated output
-  array.
+- **Change:** give the checked hook associated `First`, `Second`, and `Third` scalar families;
+  derive the expected physical inputs from them, convert each column to its typed view once, apply
+  the same strict row contract to three inputs, and build the associated output array.
 - **Preserve:** a null in any position skips the scalar function; scalar failure carries its row.
 - **Run:** the focused test.
 - **Passing means:** mixed array/constant/null inputs retain position and null semantics.
@@ -63,20 +64,20 @@ pub use operators::validate_expression_inputs;
 ## Checkpoint 3: make ternary behavior observable
 
 - **Target:** `type-exercise-starter/src/operators.rs::build_numeric_clamp_expression` and
-  `build_numeric_neg_expression` (declared on Day 5 with the other arithmetic selection builders).
-- **Change:** construct a physical `clamp` shell for the already-selected common numeric family and
-  reject `lower > upper`; reuse the unary `neg` shell from Day 5 for the strict unary path.
+  `build_numeric_neg_expression`.
+- **Change:** construct physical `neg` and `clamp` shells for their already-selected numeric
+  families, and reject `lower > upper` in the ternary function.
 - **Preserve:** physical selection happens once before the batch; the typed shell remains the only
   row loop.
 - **Run:** focused and cumulative tests.
-- **Passing means:** `clamp` executes through the real three-input batch path, not only in a
-  source-level smoke test.
+- **Passing means:** `neg` exercises the strict unary path and `clamp` executes through the real
+  three-input batch path, not only in a source-level smoke test.
 
 ## Required and extension work
 
 Unary, binary, real ternary, and generic validation for longer slices are required. Logical
-registration waits until Chapter 9. Concrete four- and five-input builtins are extensions. If you
-generate boilerplate, use a source-controlled declarative macro.
+registration waits until Chapter 9. Concrete four- and five-input builtins are extensions. Keep
+their scalar hooks typed and any runtime erasure at the whole-batch boundary.
 
 ```console
 cargo test -p type-exercise-starter chapter_6 --locked

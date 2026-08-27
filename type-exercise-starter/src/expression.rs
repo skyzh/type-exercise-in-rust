@@ -24,7 +24,6 @@
 // impl<F> BinaryExpression<F> { /* pub fn new(name, function) -> Self */ }
 //
 //! Day 8, checkpoint 3: add the builtin catalog here.
-// macro_rules! define_builtin_expressions { /* names and constructors */ }
 // pub fn build_builtin_expression(name: &str) -> Option<Box<dyn Expression>>;
 // pub const BUILTIN_EXPRESSION_NAMES: &[&str];
 //

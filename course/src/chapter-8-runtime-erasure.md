@@ -25,11 +25,13 @@ The first run should fail on the object-safe expression boundary or physical cat
 The runtime path is:
 
 ```text
-physical name → Box<dyn Expression> → validate batch → typed adapter → scalar function
+physical name → Box<dyn Expression> → typed whole-batch kernel → typed scalar function
 ```
 
-The object decides which typed adapter to use once. It must not match on `ScalarRefImpl` to select
-an operator for every row.
+The object erases one already-vectorized evaluator. Its stored batch-kernel pointer selects the
+typed adapter once; that adapter validates the batch, converts columns to typed views, and enters
+the row loop. It must not erase a scalar callback or match on `ScalarRefImpl` to select an operator
+for every row.
 
 ## Checkpoint 1: make the batch contract safe to erase
 
