@@ -1,14 +1,22 @@
 //! Learner-owned expression checkpoints.
 //!
-//! Day 4, checkpoint 1: define scalar work and the first binary evaluator here.
+//! Day 4, checkpoint 1: define scalar work, the first binary evaluator, and the completed public
+//! error types required by the library compile gate here.
 // pub trait BinaryScalarFunction { /* associated scalar families and one row call */ }
 // pub struct I32Add;
 // pub fn evaluate_binary<F: BinaryScalarFunction>(/* inputs */) -> /* output */;
 //
-//! Day 4, checkpoint 2: define the checked scalar error and structured batch error here.
-// pub enum ScalarError { DivisionByZero, /* more checked failures arrive with their days */ }
-//
-// pub enum ExpressionError { /* arity, type, length, and scalar failures */ }
+// pub enum ScalarError { DivisionByZero, DivisionOverflow }
+// pub enum ExpressionError {
+//     TypeMismatch(TypeMismatch),
+//     InputArityMismatch { expected: usize, actual: usize },
+//     InputLengthMismatch { expected: usize, actual: usize, input_index: usize },
+//     ScalarEvaluation { function: &'static str, row: usize, error: ScalarError },
+// }
+//! The exact `Display` sentences remain your choice.
+//!
+//! Day 4, checkpoint 2: add the checked scalar hooks and shells. Their tests begin exercising the
+//! completed error contract's arity and scalar-evaluation cases.
 //
 //! Day 8, checkpoint 1: add the object-safe runtime expression boundary here.
 // pub trait Expression: Any + Send + Sync {
