@@ -7,7 +7,9 @@ A hand-written loop for `i32 + i32` is easy:
 ```rust,ignore
 for row in 0..left.len() {
     output.push(match (left.get(row), right.get(row)) {
-        (Some(left), Some(right)) => Some(left.wrapping_add(right)),
+        (Some(left), Some(right)) => Some(
+            std::ops::Add::add(std::num::Wrapping(left), std::num::Wrapping(right)).0,
+        ),
         _ => None,
     });
 }
@@ -31,6 +33,10 @@ The map has three reading directions:
    enums cross runtime boundaries through checked conversions.
 3. `ColumnViewImpl` normalizes array, constant, Indexed, and typed-null representations before one
    selected typed expression enters its row loop.
+
+The numeric chapters keep scalar hooks statically typed and erase only whole-batch evaluators.
+For signed addition, subtraction, and multiplication, `std::num::Wrapping<T>` makes the chosen
+cross-profile overflow behavior explicit while still using the standard operator traits.
 
 Nullability is value state—`Option` or validity—not a `DataType::Nullable` variant. A one-level
 List adds offsets and independent outer/child validity; it does not add an aggregate engine.

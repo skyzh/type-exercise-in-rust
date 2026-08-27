@@ -119,31 +119,39 @@ behavior shared by the five concrete output scalar types:
 
 ```rust,ignore
 trait Numeric: Scalar + Copy + PartialOrd {
-    fn from_erased(value: ScalarRefImpl<'_>) -> Self;
-    fn wrapping_add(self, rhs: Self) -> Self;
-    fn wrapping_sub(self, rhs: Self) -> Self;
-    fn wrapping_mul(self, rhs: Self) -> Self;
+    fn add(self, rhs: Self) -> Self;
+    fn subtract(self, rhs: Self) -> Self;
+    fn multiply(self, rhs: Self) -> Self;
     fn checked_divide(self, rhs: Self) -> Result<Self, ScalarError>;
 }
 ```
 
-Implement it for `i16`, `i32`, `i64`, `f32`, and `f64`. The integer implementations use explicit
-wrapping addition, subtraction, and multiplication. Integer division reports
-`DivisionByZero` for zero and `DivisionOverflow` for `MIN / -1`. Floating-point addition,
-subtraction, and multiplication keep ordinary IEEE results. Treat both `0.0` and `-0.0` divisors
-as division by zero; other results such as infinity or NaN remain values.
+Implement it explicitly for `i16`, `i32`, `i64`, `f32`, and `f64`. Express addition,
+subtraction, and multiplication through the standard `Add`, `Sub`, and `Mul` traits. For signed
+integers, apply those traits to `std::num::Wrapping<T>` and recover `.0`; this keeps the course's
+deterministic wrapping result in debug and release builds. Standard `Add` on a bare signed integer
+does not itself choose one cross-profile overflow policy, so changing overflow into an error would
+be a separate product-semantic decision rather than part of this generic refactor. Floating-point
+implementations use the standard traits directly and retain ordinary IEEE results.
 
-The important Rust boundary is where the generic type becomes concrete. A crate-private
-`NumericBinary<O>` implements the Chapter 4 `CheckedBinaryScalarFunction` for one output type
-`O`. A small enum holds the five possible `CheckedBinaryExpression<NumericBinary<O>>` forms, and
-a declarative macro can generate the repeated `PhysicalType` match. The builder receives the two
-expected source families and the physical form of the promoted output, selects one enum variant,
-and constructs one typed shell.
+Division stays the one small custom fallible operation because stable `std` has no single checked
+division trait covering both the course's integers and floats. Integer division reports
+`DivisionByZero` for zero and `DivisionOverflow` for `MIN / -1`. Treat both `0.0` and `-0.0`
+floating-point divisors as division by zero; other results such as infinity or NaN remain values.
 
-After that match, the row loop is still the Chapter 4 loop. `NumericBinary<O>` converts each
-already-validated erased scalar into `O` and applies the selected operation. Do not re-run
-promotion or match the output family inside every row. The caller must obtain the logical output
-from `promote_numeric` first; an unsupported pair never reaches the physical builder.
+The important Rust boundary is where all three generic types become concrete. A crate-private
+`NumericBinary<L, R, O>` implements the Chapter 4 `CheckedBinaryScalarFunction` with typed
+associated inputs `L` and `R`. A small `PromoteInto<O>` relationship performs only the lossless
+conversions admitted by the promotion table. The physical builder matches the validated
+`(left, right, output)` tuple once and stores the selected monomorphized whole-batch function
+pointer in one concrete `NumericBinaryExpression`.
+
+That function pointer enters the existing typed Chapter 4 batch adapter. It converts each erased
+column to its typed view once, then the row loop receives `L` and `R` values directly, promotes
+them to `O`, and applies the selected operation. Do not accept `ScalarRefImpl` in the checked hook,
+re-run logical promotion, or match physical variants inside every row. The caller must obtain the
+logical output from `promote_numeric` first; an unsupported pair never reaches the physical
+builder.
 
 Keep `build_numeric_binary_expression` and its returned shell crate-private. Export
 `ArithmeticOperator` from the crate root, but do not turn the physical constructor into a public
@@ -161,9 +169,9 @@ existing checked batch shell without widening the public runtime boundary.
 ## Checkpoint 3: return Boolean through the same common type
 
 Add the six public `ComparisonOperator` variants: `Less`, `LessOrEqual`, `Greater`,
-`GreaterOrEqual`, `Equal`, and `NotEqual`. A crate-private `NumericCompare<O>` can reuse the same
-`Numeric::from_erased` conversion selected by the promotion result, but its associated output is
-`bool`. Build the same five concrete checked shells and keep
+`GreaterOrEqual`, `Equal`, and `NotEqual`. A crate-private `NumericCompare<L, R, O>` reuses the same
+typed `PromoteInto<O>` conversions and tuple-selected batch kernel, but its associated output is
+`bool`. Keep
 `build_numeric_comparison_expression` crate-private.
 
 This is why the associated output family from Chapter 4 matters. Both inputs may be promoted to
@@ -182,7 +190,7 @@ cargo test -p type-exercise-starter chapter_5 --locked
 cargo test -p type-exercise-starter --lib --locked
 ```
 
-The 9 focused cases and 41 cumulative learner tests prove the whole Day 5 boundary:
+The 9 focused cases and 42 cumulative learner tests prove the whole Day 5 boundary:
 
 - the catalog contains exactly the approved ordered promotions and rejects every lossy pair;
 - arithmetic works in both mixed operand orders and builds the promoted physical family;
@@ -204,7 +212,8 @@ Before continuing, make sure you can explain these boundaries in your own words:
 
 1. Why may `SmallInt + Real` produce `Real` while `Integer + Real` produces `Double`?
 2. Why is every `BigInt`/floating-point pair absent even though Rust provides an `as` conversion?
-3. Why does the physical builder select `O` once instead of matching scalar variants in each row?
+3. Why does the physical builder select `(L, R, O)` once instead of matching scalar variants in
+   each row?
 4. Why is `null / 0` a null row rather than a division error?
 
 You now have generic numeric operation selection without changing the batch contract that made

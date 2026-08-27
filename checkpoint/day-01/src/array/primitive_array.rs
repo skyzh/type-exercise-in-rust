@@ -64,5 +64,6 @@ impl ArrayBuilder for I32ArrayBuilder {
     }
 }
 
-// Day 2 generalizes this implementation and adds the other primitive aliases.
+// Day 2 adds six explicit aliases, a private supported-primitive marker, and one generic
+// Array/ArrayBuilder implementation instead of generating identical implementations with macros.
 // Day 10 keeps this one representation and moves the checked non-null proof to column metadata.
