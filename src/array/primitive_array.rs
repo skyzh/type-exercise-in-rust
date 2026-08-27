@@ -37,6 +37,13 @@ impl SupportedPrimitive for f32 {}
 impl SupportedPrimitive for f64 {}
 
 impl<T> PrimitiveArray<T> {
+    pub fn from_values(values: Vec<T>) -> Self {
+        Self {
+            validity: BitVec::repeat(true, values.len()),
+            values,
+        }
+    }
+
     pub fn values(&self) -> &[T] {
         &self.values
     }

@@ -7,6 +7,7 @@ mod decimal;
 mod expression;
 mod operators;
 mod physical_type;
+mod promotion;
 mod scalar;
 mod variant_catalog;
 
@@ -26,4 +27,5 @@ pub use decimal::*;
 pub use expression::*;
 pub use operators::*;
 pub use physical_type::*;
+pub use promotion::*;
 pub use scalar::*;
