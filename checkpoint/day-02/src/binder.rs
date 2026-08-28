@@ -8,7 +8,6 @@
 //     /* pub fn input_types(&self) -> &[DataType] */
 //     /* pub fn output_type(&self) -> DataType */
 //     /* pub fn physical_name(&self) -> &str */
-//     /* pub fn output_nullability(&self, inputs: &[Nullability]) -> Nullability */
 //     /* pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> */
 // }
 // pub struct FunctionRegistry { /* registered factories */ }
@@ -32,6 +31,7 @@
 //
 //! Day 10, checkpoint 2: delegate output nullability and forward a preselected primitive loop here.
 // impl BoundExpression {
+//     /* pub fn output_nullability(&self, inputs: &[Nullability]) -> Nullability */
 //     pub fn evaluate_with_loop(
 //         &self,
 //         inputs: &[ColumnViewImpl<'_>],
