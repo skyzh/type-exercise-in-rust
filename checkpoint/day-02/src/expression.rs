@@ -24,7 +24,6 @@
 //     /* fn arity(&self) -> usize */
 //     /* fn input_types(&self) -> &[PhysicalType] */
 //     /* fn output_type(&self) -> PhysicalType */
-//     /* fn output_nullability(&self, inputs: &[Nullability]) -> Nullability */
 //     /* fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> */
 // }
 // pub type BinaryBatchKernel = /* one function pointer over a complete borrowed input batch */;
@@ -36,6 +35,7 @@
 // pub const BUILTIN_EXPRESSION_NAMES: &[&str];
 //
 //! Day 10, checkpoint 1: add one representative batch loop choice here. Select it only from checked physical `Nullability` metadata while keeping one primitive array representation.
+//     /* fn output_nullability(&self, inputs: &[Nullability]) -> Nullability */
 // pub enum PrimitiveLoop { /* supported dense loops plus general fallback */ }
 // pub struct PrimitiveBinaryExpression<F> { /* typed i32 function plus runtime metadata */ }
 // impl<F> PrimitiveBinaryExpression<F> {

@@ -24,7 +24,6 @@
 //     /* fn arity(&self) -> usize */
 //     /* fn input_types(&self) -> &[PhysicalType] */
 //     /* fn output_type(&self) -> PhysicalType */
-//     /* fn output_nullability(&self, inputs: &[Nullability]) -> Nullability */
 //     /* fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> */
 // }
 // pub type BinaryBatchKernel = /* one function pointer over a complete borrowed input batch */;
@@ -38,6 +37,7 @@
 //! Day 10, checkpoint 1: add one representative batch loop choice here. Select a dense loop only
 //! when both checked input views carry `Nullability::NonNull`; read the same primitive arrays'
 //! `values()` without adding another array representation.
+//     /* fn output_nullability(&self, inputs: &[Nullability]) -> Nullability */
 // pub type BinaryLoopKernel = /* whole-batch kernel plus selected PrimitiveLoop */;
 // impl BinaryExpression { /* pub fn new_with_loop(..., kernel, loop_kernel) -> Self */ }
 // pub enum PrimitiveLoop { /* supported dense loops plus general fallback */ }
