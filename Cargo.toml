@@ -1,0 +1,13 @@
+[package]
+name = "type-exercise-checkpoint-02"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+anyhow = "1"
+bitvec = "1"
