@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
 use std::cmp::Ordering;
-use std::marker::PhantomData;
 use std::num::Wrapping;
 use std::ops::{Add, Mul, Neg, Sub};
 
@@ -42,256 +41,52 @@ pub fn validate_expression_inputs(
     Ok(len)
 }
 
-pub trait CheckedUnaryScalarFunction {
-    type Input: Scalar;
-    type Output: Scalar;
-    fn evaluate<'a>(
-        &self,
-        input: <Self::Input as Scalar>::RefType<'a>,
-    ) -> Result<Self::Output, ScalarError>;
-}
+/// One monomorphized evaluator for a complete input batch.
+pub type BatchKernel<const N: usize> =
+    for<'a> fn(&BatchExpression<N>, &[ColumnViewImpl<'a>]) -> Result<ArrayImpl, ExpressionError>;
 
-pub trait CheckedBinaryScalarFunction {
-    type Left: Scalar;
-    type Right: Scalar;
-    type Output: Scalar;
-    fn evaluate<'a>(
-        &self,
-        left: <Self::Left as Scalar>::RefType<'a>,
-        right: <Self::Right as Scalar>::RefType<'a>,
-    ) -> Result<Self::Output, ScalarError>;
-}
-
-pub trait CheckedTernaryScalarFunction {
-    type First: Scalar;
-    type Second: Scalar;
-    type Third: Scalar;
-    type Output: Scalar;
-    fn evaluate<'a>(
-        &self,
-        first: <Self::First as Scalar>::RefType<'a>,
-        second: <Self::Second as Scalar>::RefType<'a>,
-        third: <Self::Third as Scalar>::RefType<'a>,
-    ) -> Result<Self::Output, ScalarError>;
-}
-
-pub struct UnaryExpression<F> {
+/// A fixed-arity expression whose only callable operation is vectorized.
+pub struct BatchExpression<const N: usize> {
     name: &'static str,
-    input_types: [PhysicalType; 1],
-    function: F,
+    input_types: [PhysicalType; N],
+    output_type: PhysicalType,
+    kernel: BatchKernel<N>,
 }
 
-impl<F: CheckedUnaryScalarFunction> UnaryExpression<F> {
-    pub fn new(name: &'static str, function: F) -> Self {
+impl<const N: usize> BatchExpression<N> {
+    pub fn new(
+        name: &'static str,
+        input_types: [PhysicalType; N],
+        output_type: PhysicalType,
+        kernel: BatchKernel<N>,
+    ) -> Self {
         Self {
             name,
-            input_types: [F::Input::PHYSICAL_TYPE],
-            function,
+            input_types,
+            output_type,
+            kernel,
         }
     }
-}
 
-pub struct CheckedBinaryExpression<F> {
-    name: &'static str,
-    input_types: [PhysicalType; 2],
-    function: F,
-}
-
-impl<F: CheckedBinaryScalarFunction> CheckedBinaryExpression<F> {
-    pub fn new(name: &'static str, function: F) -> Self {
-        Self {
-            name,
-            input_types: [F::Left::PHYSICAL_TYPE, F::Right::PHYSICAL_TYPE],
-            function,
-        }
-    }
-}
-
-pub struct TernaryExpression<F> {
-    name: &'static str,
-    input_types: [PhysicalType; 3],
-    function: F,
-}
-
-impl<F: CheckedTernaryScalarFunction> TernaryExpression<F> {
-    pub fn new(name: &'static str, function: F) -> Self {
-        Self {
-            name,
-            input_types: [
-                F::First::PHYSICAL_TYPE,
-                F::Second::PHYSICAL_TYPE,
-                F::Third::PHYSICAL_TYPE,
-            ],
-            function,
-        }
-    }
-}
-
-macro_rules! expression_metadata {
-    ($function:ident) => {
-        fn name(&self) -> &'static str {
-            self.name
-        }
-        fn input_types(&self) -> &[PhysicalType] {
-            &self.input_types
-        }
-        fn output_type(&self) -> PhysicalType {
-            F::Output::PHYSICAL_TYPE
-        }
-    };
-}
-
-impl<F> UnaryExpression<F>
-where
-    F: CheckedUnaryScalarFunction,
-    <F::Input as Scalar>::ArrayType: 'static,
-    for<'a> &'a <F::Input as Scalar>::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
-    for<'a> <F::Input as Scalar>::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-{
-    /// Strict concrete-loop evaluation for one checked unary function.
-    ///
-    /// This inherent method is the day-4-owned callable surface of the shell;
-    /// the erased `Expression` boundary delegates to it from day 8 onward.
     pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
-        let len = validate_expression_inputs(inputs, &self.input_types)?;
-        let input = ColumnView::<F::Input>::try_from(inputs[0].clone())?;
-        let mut output = <<F::Output as Scalar>::ArrayType as Array>::Builder::with_capacity(len);
-        for row in 0..len {
-            let value = match input.get(row) {
-                Some(input) => Some(self.function.evaluate(input).map_err(|error| {
-                    ExpressionError::ScalarEvaluation {
-                        function: self.name,
-                        row,
-                        error,
-                    }
-                })?),
-                None => None,
-            };
-            output.push(value.as_ref().map(Scalar::as_scalar_ref));
-        }
-        Ok(output.finish().into())
+        validate_expression_inputs(inputs, &self.input_types)?;
+        (self.kernel)(self, inputs)
     }
 }
 
-impl<F> Expression for UnaryExpression<F>
-where
-    F: CheckedUnaryScalarFunction,
-    <F::Input as Scalar>::ArrayType: 'static,
-    for<'a> &'a <F::Input as Scalar>::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
-    for<'a> <F::Input as Scalar>::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-{
-    expression_metadata!(CheckedUnaryScalarFunction);
-    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
-        self.evaluate(inputs)
+impl<const N: usize> Expression for BatchExpression<N> {
+    fn name(&self) -> &'static str {
+        self.name
     }
-}
 
-impl<F> CheckedBinaryExpression<F>
-where
-    F: CheckedBinaryScalarFunction,
-    <F::Left as Scalar>::ArrayType: 'static,
-    <F::Right as Scalar>::ArrayType: 'static,
-    for<'a> &'a <F::Left as Scalar>::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
-    for<'a> &'a <F::Right as Scalar>::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
-    for<'a> <F::Left as Scalar>::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-    for<'a> <F::Right as Scalar>::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-{
-    /// Strict concrete-loop evaluation for one checked binary function.
-    ///
-    /// This inherent method is the day-4-owned callable surface of the shell;
-    /// the erased `Expression` boundary delegates to it from day 8 onward.
-    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
-        let len = validate_expression_inputs(inputs, &self.input_types)?;
-        let left = ColumnView::<F::Left>::try_from(inputs[0].clone())?;
-        let right = ColumnView::<F::Right>::try_from(inputs[1].clone())?;
-        let mut output = <<F::Output as Scalar>::ArrayType as Array>::Builder::with_capacity(len);
-        for row in 0..len {
-            let value = match (left.get(row), right.get(row)) {
-                (Some(left), Some(right)) => {
-                    Some(self.function.evaluate(left, right).map_err(|error| {
-                        ExpressionError::ScalarEvaluation {
-                            function: self.name,
-                            row,
-                            error,
-                        }
-                    })?)
-                }
-                _ => None,
-            };
-            output.push(value.as_ref().map(Scalar::as_scalar_ref));
-        }
-        Ok(output.finish().into())
+    fn input_types(&self) -> &[PhysicalType] {
+        &self.input_types
     }
-}
 
-impl<F> Expression for CheckedBinaryExpression<F>
-where
-    F: CheckedBinaryScalarFunction,
-    <F::Left as Scalar>::ArrayType: 'static,
-    <F::Right as Scalar>::ArrayType: 'static,
-    for<'a> &'a <F::Left as Scalar>::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
-    for<'a> &'a <F::Right as Scalar>::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
-    for<'a> <F::Left as Scalar>::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-    for<'a> <F::Right as Scalar>::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-{
-    expression_metadata!(CheckedBinaryScalarFunction);
-    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
-        self.evaluate(inputs)
+    fn output_type(&self) -> PhysicalType {
+        self.output_type.clone()
     }
-}
 
-impl<F> TernaryExpression<F>
-where
-    F: CheckedTernaryScalarFunction,
-    <F::First as Scalar>::ArrayType: 'static,
-    <F::Second as Scalar>::ArrayType: 'static,
-    <F::Third as Scalar>::ArrayType: 'static,
-    for<'a> &'a <F::First as Scalar>::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
-    for<'a> &'a <F::Second as Scalar>::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
-    for<'a> &'a <F::Third as Scalar>::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
-    for<'a> <F::First as Scalar>::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-    for<'a> <F::Second as Scalar>::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-    for<'a> <F::Third as Scalar>::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-{
-    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
-        let len = validate_expression_inputs(inputs, &self.input_types)?;
-        let first = ColumnView::<F::First>::try_from(inputs[0].clone())?;
-        let second = ColumnView::<F::Second>::try_from(inputs[1].clone())?;
-        let third = ColumnView::<F::Third>::try_from(inputs[2].clone())?;
-        let mut output = <<F::Output as Scalar>::ArrayType as Array>::Builder::with_capacity(len);
-        for row in 0..len {
-            let value = match (first.get(row), second.get(row), third.get(row)) {
-                (Some(first), Some(second), Some(third)) => Some(
-                    self.function
-                        .evaluate(first, second, third)
-                        .map_err(|error| ExpressionError::ScalarEvaluation {
-                            function: self.name,
-                            row,
-                            error,
-                        })?,
-                ),
-                _ => None,
-            };
-            output.push(value.as_ref().map(Scalar::as_scalar_ref));
-        }
-        Ok(output.finish().into())
-    }
-}
-
-impl<F> Expression for TernaryExpression<F>
-where
-    F: CheckedTernaryScalarFunction,
-    <F::First as Scalar>::ArrayType: 'static,
-    <F::Second as Scalar>::ArrayType: 'static,
-    <F::Third as Scalar>::ArrayType: 'static,
-    for<'a> &'a <F::First as Scalar>::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
-    for<'a> &'a <F::Second as Scalar>::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
-    for<'a> &'a <F::Third as Scalar>::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
-    for<'a> <F::First as Scalar>::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-    for<'a> <F::Second as Scalar>::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-    for<'a> <F::Third as Scalar>::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-{
-    expression_metadata!(CheckedTernaryScalarFunction);
     fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
         self.evaluate(inputs)
     }
@@ -315,87 +110,117 @@ pub enum ComparisonOperator {
     NotEqual,
 }
 
-trait Numeric: Scalar + Copy + PartialOrd {
-    fn add(self, rhs: Self) -> Self;
-    fn subtract(self, rhs: Self) -> Self;
-    fn multiply(self, rhs: Self) -> Self;
-    fn checked_divide(self, rhs: Self) -> Result<Self, ScalarError>;
-    fn negate(self) -> Self;
+trait Numeric:
+    Scalar
+    + Copy
+    + PartialOrd
+    + Add<Output = Self>
+    + Sub<Output = Self>
+    + Mul<Output = Self>
+    + std::ops::Div<Output = Self>
+    + Neg<Output = Self>
+{
+    type Arithmetic: Add<Output = Self::Arithmetic>
+        + Sub<Output = Self::Arithmetic>
+        + Mul<Output = Self::Arithmetic>
+        + Neg<Output = Self::Arithmetic>;
+
+    fn into_arithmetic(self) -> Self::Arithmetic;
+    fn from_arithmetic(value: Self::Arithmetic) -> Self;
 }
 
 impl Numeric for i16 {
-    fn add(self, rhs: Self) -> Self {
-        Add::add(Wrapping(self), Wrapping(rhs)).0
+    type Arithmetic = Wrapping<Self>;
+
+    fn into_arithmetic(self) -> Self::Arithmetic {
+        Wrapping(self)
     }
-    fn subtract(self, rhs: Self) -> Self {
-        Sub::sub(Wrapping(self), Wrapping(rhs)).0
-    }
-    fn multiply(self, rhs: Self) -> Self {
-        Mul::mul(Wrapping(self), Wrapping(rhs)).0
-    }
-    fn checked_divide(self, rhs: Self) -> Result<Self, ScalarError> {
-        if rhs == 0 {
-            return Err(ScalarError::DivisionByZero);
-        }
-        self.checked_div(rhs).ok_or(ScalarError::DivisionOverflow)
-    }
-    fn negate(self) -> Self {
-        Neg::neg(Wrapping(self)).0
+
+    fn from_arithmetic(value: Self::Arithmetic) -> Self {
+        value.0
     }
 }
 
 impl Numeric for i32 {
-    fn add(self, rhs: Self) -> Self {
-        Add::add(Wrapping(self), Wrapping(rhs)).0
+    type Arithmetic = Wrapping<Self>;
+
+    fn into_arithmetic(self) -> Self::Arithmetic {
+        Wrapping(self)
     }
-    fn subtract(self, rhs: Self) -> Self {
-        Sub::sub(Wrapping(self), Wrapping(rhs)).0
-    }
-    fn multiply(self, rhs: Self) -> Self {
-        Mul::mul(Wrapping(self), Wrapping(rhs)).0
-    }
-    fn checked_divide(self, rhs: Self) -> Result<Self, ScalarError> {
-        if rhs == 0 {
-            return Err(ScalarError::DivisionByZero);
-        }
-        self.checked_div(rhs).ok_or(ScalarError::DivisionOverflow)
-    }
-    fn negate(self) -> Self {
-        Neg::neg(Wrapping(self)).0
+
+    fn from_arithmetic(value: Self::Arithmetic) -> Self {
+        value.0
     }
 }
 
 impl Numeric for i64 {
-    fn add(self, rhs: Self) -> Self {
-        Add::add(Wrapping(self), Wrapping(rhs)).0
+    type Arithmetic = Wrapping<Self>;
+
+    fn into_arithmetic(self) -> Self::Arithmetic {
+        Wrapping(self)
     }
-    fn subtract(self, rhs: Self) -> Self {
-        Sub::sub(Wrapping(self), Wrapping(rhs)).0
+
+    fn from_arithmetic(value: Self::Arithmetic) -> Self {
+        value.0
     }
-    fn multiply(self, rhs: Self) -> Self {
-        Mul::mul(Wrapping(self), Wrapping(rhs)).0
+}
+
+impl Numeric for f32 {
+    type Arithmetic = Self;
+
+    fn into_arithmetic(self) -> Self::Arithmetic {
+        self
     }
+
+    fn from_arithmetic(value: Self::Arithmetic) -> Self {
+        value
+    }
+}
+
+impl Numeric for f64 {
+    type Arithmetic = Self;
+
+    fn into_arithmetic(self) -> Self::Arithmetic {
+        self
+    }
+
+    fn from_arithmetic(value: Self::Arithmetic) -> Self {
+        value
+    }
+}
+
+trait CheckedDivide: Sized {
+    fn checked_divide(self, rhs: Self) -> Result<Self, ScalarError>;
+}
+
+impl CheckedDivide for i16 {
     fn checked_divide(self, rhs: Self) -> Result<Self, ScalarError> {
         if rhs == 0 {
             return Err(ScalarError::DivisionByZero);
         }
         self.checked_div(rhs).ok_or(ScalarError::DivisionOverflow)
     }
-    fn negate(self) -> Self {
-        Neg::neg(Wrapping(self)).0
+}
+
+impl CheckedDivide for i32 {
+    fn checked_divide(self, rhs: Self) -> Result<Self, ScalarError> {
+        if rhs == 0 {
+            return Err(ScalarError::DivisionByZero);
+        }
+        self.checked_div(rhs).ok_or(ScalarError::DivisionOverflow)
     }
 }
 
-impl Numeric for f32 {
-    fn add(self, rhs: Self) -> Self {
-        Add::add(self, rhs)
+impl CheckedDivide for i64 {
+    fn checked_divide(self, rhs: Self) -> Result<Self, ScalarError> {
+        if rhs == 0 {
+            return Err(ScalarError::DivisionByZero);
+        }
+        self.checked_div(rhs).ok_or(ScalarError::DivisionOverflow)
     }
-    fn subtract(self, rhs: Self) -> Self {
-        Sub::sub(self, rhs)
-    }
-    fn multiply(self, rhs: Self) -> Self {
-        Mul::mul(self, rhs)
-    }
+}
+
+impl CheckedDivide for f32 {
     fn checked_divide(self, rhs: Self) -> Result<Self, ScalarError> {
         if rhs == 0.0 {
             Err(ScalarError::DivisionByZero)
@@ -403,21 +228,9 @@ impl Numeric for f32 {
             Ok(self / rhs)
         }
     }
-    fn negate(self) -> Self {
-        Neg::neg(self)
-    }
 }
 
-impl Numeric for f64 {
-    fn add(self, rhs: Self) -> Self {
-        Add::add(self, rhs)
-    }
-    fn subtract(self, rhs: Self) -> Self {
-        Sub::sub(self, rhs)
-    }
-    fn multiply(self, rhs: Self) -> Self {
-        Mul::mul(self, rhs)
-    }
+impl CheckedDivide for f64 {
     fn checked_divide(self, rhs: Self) -> Result<Self, ScalarError> {
         if rhs == 0.0 {
             Err(ScalarError::DivisionByZero)
@@ -425,164 +238,13 @@ impl Numeric for f64 {
             Ok(self / rhs)
         }
     }
-    fn negate(self) -> Self {
-        Neg::neg(self)
-    }
 }
 
-trait PromoteInto<T> {
-    fn promote(self) -> T;
-}
-
-impl<T> PromoteInto<T> for T {
-    fn promote(self) -> T {
-        self
-    }
-}
-
-impl PromoteInto<i32> for i16 {
-    fn promote(self) -> i32 {
-        self.into()
-    }
-}
-
-impl PromoteInto<i64> for i16 {
-    fn promote(self) -> i64 {
-        self.into()
-    }
-}
-
-impl PromoteInto<f32> for i16 {
-    fn promote(self) -> f32 {
-        self.into()
-    }
-}
-
-impl PromoteInto<f64> for i16 {
-    fn promote(self) -> f64 {
-        self.into()
-    }
-}
-
-impl PromoteInto<i64> for i32 {
-    fn promote(self) -> i64 {
-        self.into()
-    }
-}
-
-impl PromoteInto<f64> for i32 {
-    fn promote(self) -> f64 {
-        self.into()
-    }
-}
-
-impl PromoteInto<f64> for f32 {
-    fn promote(self) -> f64 {
-        self.into()
-    }
-}
-
-pub(crate) struct NumericBinary<L, R, O> {
-    operator: ArithmeticOperator,
-    marker: PhantomData<(L, R, O)>,
-}
-impl<L, R, O> CheckedBinaryScalarFunction for NumericBinary<L, R, O>
+fn lossless_try_from<T, U>(value: U) -> T
 where
-    L: Numeric + PromoteInto<O>,
-    R: Numeric + PromoteInto<O>,
-    O: Numeric,
-    for<'a> L: Scalar<RefType<'a> = L>,
-    for<'a> R: Scalar<RefType<'a> = R>,
+    T: TryFrom<U, Error = std::convert::Infallible>,
 {
-    type Left = L;
-    type Right = R;
-    type Output = O;
-    fn evaluate<'a>(&self, left: L, right: R) -> Result<O, ScalarError> {
-        let left = left.promote();
-        let right = right.promote();
-        match self.operator {
-            ArithmeticOperator::Add => Ok(left.add(right)),
-            ArithmeticOperator::Subtract => Ok(left.subtract(right)),
-            ArithmeticOperator::Multiply => Ok(left.multiply(right)),
-            ArithmeticOperator::Divide => left.checked_divide(right),
-        }
-    }
-}
-
-pub(crate) struct NumericNeg<O>(PhantomData<O>);
-impl<O> CheckedUnaryScalarFunction for NumericNeg<O>
-where
-    O: Numeric,
-    for<'a> O: Scalar<RefType<'a> = O>,
-{
-    type Input = O;
-    type Output = O;
-    fn evaluate<'a>(&self, input: O) -> Result<O, ScalarError> {
-        Ok(input.negate())
-    }
-}
-
-pub(crate) struct NumericClamp<A, B, C, O>(PhantomData<(A, B, C, O)>);
-impl<A, B, C, O> CheckedTernaryScalarFunction for NumericClamp<A, B, C, O>
-where
-    A: Numeric + PromoteInto<O>,
-    B: Numeric + PromoteInto<O>,
-    C: Numeric + PromoteInto<O>,
-    O: Numeric,
-    for<'a> A: Scalar<RefType<'a> = A>,
-    for<'a> B: Scalar<RefType<'a> = B>,
-    for<'a> C: Scalar<RefType<'a> = C>,
-    for<'a> O: Scalar<RefType<'a> = O>,
-{
-    type First = A;
-    type Second = B;
-    type Third = C;
-    type Output = O;
-    fn evaluate<'a>(&self, value: A, lower: B, upper: C) -> Result<O, ScalarError> {
-        let value = value.promote();
-        let lower = lower.promote();
-        let upper = upper.promote();
-        if lower.partial_cmp(&upper) != Some(Ordering::Less)
-            && lower.partial_cmp(&upper) != Some(Ordering::Equal)
-        {
-            return Err(ScalarError::InvalidClampBounds);
-        }
-        if value < lower {
-            Ok(lower)
-        } else if value > upper {
-            Ok(upper)
-        } else {
-            Ok(value)
-        }
-    }
-}
-
-pub(crate) struct NumericCompare<L, R, O> {
-    operator: ComparisonOperator,
-    marker: PhantomData<(L, R, O)>,
-}
-impl<L, R, O> CheckedBinaryScalarFunction for NumericCompare<L, R, O>
-where
-    L: Numeric + PromoteInto<O>,
-    R: Numeric + PromoteInto<O>,
-    O: Numeric,
-    for<'a> L: Scalar<RefType<'a> = L>,
-    for<'a> R: Scalar<RefType<'a> = R>,
-{
-    type Left = L;
-    type Right = R;
-    type Output = bool;
-    fn evaluate<'a>(&self, left: L, right: R) -> Result<bool, ScalarError> {
-        let (left, right) = (left.promote(), right.promote());
-        Ok(match self.operator {
-            ComparisonOperator::Less => left < right,
-            ComparisonOperator::LessOrEqual => left <= right,
-            ComparisonOperator::Greater => left > right,
-            ComparisonOperator::GreaterOrEqual => left >= right,
-            ComparisonOperator::Equal => left == right,
-            ComparisonOperator::NotEqual => left != right,
-        })
-    }
+    T::try_from(value).unwrap_or_else(|never| match never {})
 }
 
 type NumericBinaryBatchKernel = for<'a> fn(
@@ -729,11 +391,12 @@ fn evaluate_numeric_binary<L, R, O>(
     inputs: &[ColumnViewImpl<'_>],
 ) -> Result<ArrayImpl, ExpressionError>
 where
-    L: Numeric + PromoteInto<O>,
-    R: Numeric + PromoteInto<O>,
-    O: Numeric,
-    L::ArrayType: 'static,
-    R::ArrayType: 'static,
+    L: Numeric,
+    R: Numeric,
+    O: Numeric
+        + CheckedDivide
+        + TryFrom<L, Error = std::convert::Infallible>
+        + TryFrom<R, Error = std::convert::Infallible>,
     for<'a> L: Scalar<RefType<'a> = L>,
     for<'a> R: Scalar<RefType<'a> = R>,
     for<'a> &'a L::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
@@ -741,14 +404,42 @@ where
     for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
 {
-    CheckedBinaryExpression::new(
-        expression.name,
-        NumericBinary::<L, R, O> {
-            operator: expression.operator,
-            marker: PhantomData,
-        },
-    )
-    .evaluate(inputs)
+    let len = validate_expression_inputs(inputs, &expression.input_types)?;
+    let left = ColumnView::<L>::try_from(inputs[0].clone())?;
+    let right = ColumnView::<R>::try_from(inputs[1].clone())?;
+    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(len);
+    for row in 0..len {
+        let value = match (left.get(row), right.get(row)) {
+            (Some(left), Some(right)) => {
+                let left = lossless_try_from::<O, L>(left);
+                let right = lossless_try_from::<O, R>(right);
+                let value = match expression.operator {
+                    ArithmeticOperator::Add => Ok(O::from_arithmetic(Add::add(
+                        left.into_arithmetic(),
+                        right.into_arithmetic(),
+                    ))),
+                    ArithmeticOperator::Subtract => Ok(O::from_arithmetic(Sub::sub(
+                        left.into_arithmetic(),
+                        right.into_arithmetic(),
+                    ))),
+                    ArithmeticOperator::Multiply => Ok(O::from_arithmetic(Mul::mul(
+                        left.into_arithmetic(),
+                        right.into_arithmetic(),
+                    ))),
+                    ArithmeticOperator::Divide => left.checked_divide(right),
+                }
+                .map_err(|error| ExpressionError::ScalarEvaluation {
+                    function: expression.name,
+                    row,
+                    error,
+                })?;
+                Some(value)
+            }
+            _ => None,
+        };
+        output.push(value.as_ref().map(Scalar::as_scalar_ref));
+    }
+    Ok(output.finish().into())
 }
 
 fn evaluate_numeric_comparison<L, R, O>(
@@ -756,11 +447,11 @@ fn evaluate_numeric_comparison<L, R, O>(
     inputs: &[ColumnViewImpl<'_>],
 ) -> Result<ArrayImpl, ExpressionError>
 where
-    L: Numeric + PromoteInto<O>,
-    R: Numeric + PromoteInto<O>,
-    O: Numeric,
-    L::ArrayType: 'static,
-    R::ArrayType: 'static,
+    L: Numeric,
+    R: Numeric,
+    O: Numeric
+        + TryFrom<L, Error = std::convert::Infallible>
+        + TryFrom<R, Error = std::convert::Infallible>,
     for<'a> L: Scalar<RefType<'a> = L>,
     for<'a> R: Scalar<RefType<'a> = R>,
     for<'a> &'a L::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
@@ -768,14 +459,29 @@ where
     for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
 {
-    CheckedBinaryExpression::new(
-        expression.name,
-        NumericCompare::<L, R, O> {
-            operator: expression.operator,
-            marker: PhantomData,
-        },
-    )
-    .evaluate(inputs)
+    let len = validate_expression_inputs(inputs, &expression.input_types)?;
+    let left = ColumnView::<L>::try_from(inputs[0].clone())?;
+    let right = ColumnView::<R>::try_from(inputs[1].clone())?;
+    let mut output = <<bool as Scalar>::ArrayType as Array>::Builder::with_capacity(len);
+    for row in 0..len {
+        let value = match (left.get(row), right.get(row)) {
+            (Some(left), Some(right)) => {
+                let left = lossless_try_from::<O, L>(left);
+                let right = lossless_try_from::<O, R>(right);
+                Some(match expression.operator {
+                    ComparisonOperator::Less => left < right,
+                    ComparisonOperator::LessOrEqual => left <= right,
+                    ComparisonOperator::Greater => left > right,
+                    ComparisonOperator::GreaterOrEqual => left >= right,
+                    ComparisonOperator::Equal => left == right,
+                    ComparisonOperator::NotEqual => left != right,
+                })
+            }
+            _ => None,
+        };
+        output.push(value);
+    }
+    Ok(output.finish().into())
 }
 
 struct NumericKernels {
@@ -883,12 +589,20 @@ fn evaluate_numeric_neg<O>(
 ) -> Result<ArrayImpl, ExpressionError>
 where
     O: Numeric,
-    O::ArrayType: 'static,
     for<'a> O: Scalar<RefType<'a> = O>,
     for<'a> &'a O::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
     for<'a> O::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
 {
-    UnaryExpression::new(expression.name, NumericNeg::<O>(PhantomData)).evaluate(inputs)
+    let len = validate_expression_inputs(inputs, &expression.input_types)?;
+    let input = ColumnView::<O>::try_from(inputs[0].clone())?;
+    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(len);
+    for row in 0..len {
+        let value = input
+            .get(row)
+            .map(|value| O::from_arithmetic(Neg::neg(value.into_arithmetic())));
+        output.push(value.as_ref().map(Scalar::as_scalar_ref));
+    }
+    Ok(output.finish().into())
 }
 
 fn numeric_neg_kernel(input: &PhysicalType) -> NumericNegBatchKernel {
@@ -907,13 +621,13 @@ fn evaluate_numeric_clamp<A, B, C, O>(
     inputs: &[ColumnViewImpl<'_>],
 ) -> Result<ArrayImpl, ExpressionError>
 where
-    A: Numeric + PromoteInto<O>,
-    B: Numeric + PromoteInto<O>,
-    C: Numeric + PromoteInto<O>,
-    O: Numeric,
-    A::ArrayType: 'static,
-    B::ArrayType: 'static,
-    C::ArrayType: 'static,
+    A: Numeric,
+    B: Numeric,
+    C: Numeric,
+    O: Numeric
+        + TryFrom<A, Error = std::convert::Infallible>
+        + TryFrom<B, Error = std::convert::Infallible>
+        + TryFrom<C, Error = std::convert::Infallible>,
     for<'a> A: Scalar<RefType<'a> = A>,
     for<'a> B: Scalar<RefType<'a> = B>,
     for<'a> C: Scalar<RefType<'a> = C>,
@@ -925,8 +639,40 @@ where
     for<'a> B::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> C::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
 {
-    TernaryExpression::new(expression.name, NumericClamp::<A, B, C, O>(PhantomData))
-        .evaluate(inputs)
+    let len = validate_expression_inputs(inputs, &expression.input_types)?;
+    let value = ColumnView::<A>::try_from(inputs[0].clone())?;
+    let lower = ColumnView::<B>::try_from(inputs[1].clone())?;
+    let upper = ColumnView::<C>::try_from(inputs[2].clone())?;
+    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(len);
+    for row in 0..len {
+        let result = match (value.get(row), lower.get(row), upper.get(row)) {
+            (Some(value), Some(lower), Some(upper)) => {
+                let value = lossless_try_from::<O, A>(value);
+                let lower = lossless_try_from::<O, B>(lower);
+                let upper = lossless_try_from::<O, C>(upper);
+                let result = if lower.partial_cmp(&upper) != Some(Ordering::Less)
+                    && lower.partial_cmp(&upper) != Some(Ordering::Equal)
+                {
+                    Err(ScalarError::InvalidClampBounds)
+                } else if value < lower {
+                    Ok(lower)
+                } else if value > upper {
+                    Ok(upper)
+                } else {
+                    Ok(value)
+                }
+                .map_err(|error| ExpressionError::ScalarEvaluation {
+                    function: expression.name,
+                    row,
+                    error,
+                })?;
+                Some(result)
+            }
+            _ => None,
+        };
+        output.push(result.as_ref().map(Scalar::as_scalar_ref));
+    }
+    Ok(output.finish().into())
 }
 
 fn numeric_clamp_after_int16_pair<A, B>(
@@ -934,26 +680,24 @@ fn numeric_clamp_after_int16_pair<A, B>(
     output: &PhysicalType,
 ) -> NumericClampBatchKernel
 where
-    A: Numeric
-        + PromoteInto<i16>
-        + PromoteInto<i32>
-        + PromoteInto<i64>
-        + PromoteInto<f32>
-        + PromoteInto<f64>,
-    B: Numeric
-        + PromoteInto<i16>
-        + PromoteInto<i32>
-        + PromoteInto<i64>
-        + PromoteInto<f32>
-        + PromoteInto<f64>,
-    A::ArrayType: 'static,
-    B::ArrayType: 'static,
+    A: Numeric,
+    B: Numeric,
     for<'a> A: Scalar<RefType<'a> = A>,
     for<'a> B: Scalar<RefType<'a> = B>,
     for<'a> &'a A::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
     for<'a> &'a B::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
     for<'a> A::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> B::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    i16:
+        TryFrom<A, Error = std::convert::Infallible> + TryFrom<B, Error = std::convert::Infallible>,
+    i32:
+        TryFrom<A, Error = std::convert::Infallible> + TryFrom<B, Error = std::convert::Infallible>,
+    i64:
+        TryFrom<A, Error = std::convert::Infallible> + TryFrom<B, Error = std::convert::Infallible>,
+    f32:
+        TryFrom<A, Error = std::convert::Infallible> + TryFrom<B, Error = std::convert::Infallible>,
+    f64:
+        TryFrom<A, Error = std::convert::Infallible> + TryFrom<B, Error = std::convert::Infallible>,
 {
     match (third, output) {
         (PhysicalType::Int16, PhysicalType::Int16) => evaluate_numeric_clamp::<A, B, i16, i16>,
@@ -970,16 +714,20 @@ fn numeric_clamp_after_int32_pair<A, B>(
     output: &PhysicalType,
 ) -> NumericClampBatchKernel
 where
-    A: Numeric + PromoteInto<i32> + PromoteInto<i64> + PromoteInto<f64>,
-    B: Numeric + PromoteInto<i32> + PromoteInto<i64> + PromoteInto<f64>,
-    A::ArrayType: 'static,
-    B::ArrayType: 'static,
+    A: Numeric,
+    B: Numeric,
     for<'a> A: Scalar<RefType<'a> = A>,
     for<'a> B: Scalar<RefType<'a> = B>,
     for<'a> &'a A::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
     for<'a> &'a B::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
     for<'a> A::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> B::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    i32:
+        TryFrom<A, Error = std::convert::Infallible> + TryFrom<B, Error = std::convert::Infallible>,
+    i64:
+        TryFrom<A, Error = std::convert::Infallible> + TryFrom<B, Error = std::convert::Infallible>,
+    f64:
+        TryFrom<A, Error = std::convert::Infallible> + TryFrom<B, Error = std::convert::Infallible>,
 {
     match (third, output) {
         (PhysicalType::Int16, PhysicalType::Int32) => evaluate_numeric_clamp::<A, B, i16, i32>,
@@ -996,16 +744,16 @@ fn numeric_clamp_after_int64_pair<A, B>(
     output: &PhysicalType,
 ) -> NumericClampBatchKernel
 where
-    A: Numeric + PromoteInto<i64>,
-    B: Numeric + PromoteInto<i64>,
-    A::ArrayType: 'static,
-    B::ArrayType: 'static,
+    A: Numeric,
+    B: Numeric,
     for<'a> A: Scalar<RefType<'a> = A>,
     for<'a> B: Scalar<RefType<'a> = B>,
     for<'a> &'a A::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
     for<'a> &'a B::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
     for<'a> A::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> B::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    i64:
+        TryFrom<A, Error = std::convert::Infallible> + TryFrom<B, Error = std::convert::Infallible>,
 {
     match (third, output) {
         (PhysicalType::Int16, PhysicalType::Int64) => evaluate_numeric_clamp::<A, B, i16, i64>,
@@ -1020,16 +768,18 @@ fn numeric_clamp_after_float32_pair<A, B>(
     output: &PhysicalType,
 ) -> NumericClampBatchKernel
 where
-    A: Numeric + PromoteInto<f32> + PromoteInto<f64>,
-    B: Numeric + PromoteInto<f32> + PromoteInto<f64>,
-    A::ArrayType: 'static,
-    B::ArrayType: 'static,
+    A: Numeric,
+    B: Numeric,
     for<'a> A: Scalar<RefType<'a> = A>,
     for<'a> B: Scalar<RefType<'a> = B>,
     for<'a> &'a A::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
     for<'a> &'a B::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
     for<'a> A::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> B::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    f32:
+        TryFrom<A, Error = std::convert::Infallible> + TryFrom<B, Error = std::convert::Infallible>,
+    f64:
+        TryFrom<A, Error = std::convert::Infallible> + TryFrom<B, Error = std::convert::Infallible>,
 {
     match (third, output) {
         (PhysicalType::Int16, PhysicalType::Float32) => evaluate_numeric_clamp::<A, B, i16, f32>,
@@ -1045,16 +795,16 @@ fn numeric_clamp_after_float64_pair<A, B>(
     output: &PhysicalType,
 ) -> NumericClampBatchKernel
 where
-    A: Numeric + PromoteInto<f64>,
-    B: Numeric + PromoteInto<f64>,
-    A::ArrayType: 'static,
-    B::ArrayType: 'static,
+    A: Numeric,
+    B: Numeric,
     for<'a> A: Scalar<RefType<'a> = A>,
     for<'a> B: Scalar<RefType<'a> = B>,
     for<'a> &'a A::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
     for<'a> &'a B::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
     for<'a> A::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> B::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    f64:
+        TryFrom<A, Error = std::convert::Infallible> + TryFrom<B, Error = std::convert::Infallible>,
 {
     match (third, output) {
         (PhysicalType::Int16, PhysicalType::Float64) => evaluate_numeric_clamp::<A, B, i16, f64>,

@@ -1,8 +1,8 @@
 use crate::{
-    Array, ArrayImpl, CheckedTernaryScalarFunction, ColumnViewImpl, ExpressionError, I16Array,
-    I64Array, PhysicalType, ScalarError, ScalarRefImpl, TernaryExpression, TypeMismatch,
-    validate_expression_inputs,
+    Array, ArrayImpl, ColumnViewImpl, ExpressionError, I16Array, I64Array, PhysicalType, ScalarError,
+    ScalarRefImpl, TypeMismatch, validate_expression_inputs,
 };
+use crate::operators::build_numeric_clamp_expression;
 
 // === Chapter 6 checkpoint 1 ===
 
@@ -62,32 +62,17 @@ fn checkpoint_1_validates_arity_then_type_then_length_for_any_arity() {
 
 // === Chapter 6 checkpoint 2 ===
 
-struct MixedClamp;
-
-impl CheckedTernaryScalarFunction for MixedClamp {
-    type First = i16;
-    type Second = i32;
-    type Third = i64;
-    type Output = i64;
-
-    fn evaluate<'a>(
-        &self,
-        value: i16,
-        lower: i32,
-        upper: i64,
-    ) -> Result<i64, ScalarError> {
-        let value = i64::from(value);
-        let lower = i64::from(lower);
-        if lower > upper {
-            return Err(ScalarError::InvalidClampBounds);
-        }
-        Ok(value.clamp(lower, upper))
-    }
-}
-
 #[test]
 fn checkpoint_2_runs_one_mixed_typed_ternary_loop() {
-    let expression = TernaryExpression::new("mixed_clamp", MixedClamp);
+    let expression = build_numeric_clamp_expression(
+        "mixed_clamp",
+        [
+            PhysicalType::Int16,
+            PhysicalType::Int32,
+            PhysicalType::Int64,
+        ],
+        PhysicalType::Int64,
+    );
     let values: ArrayImpl = I16Array::from_slice(&[Some(5), None, Some(25)]).into();
     let uppers: ArrayImpl = I64Array::from_values(vec![20, 0, 20]).into();
     let output = expression

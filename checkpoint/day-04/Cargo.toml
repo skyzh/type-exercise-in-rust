@@ -9,4 +9,5 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
+anyhow = "1"
 bitvec = "1"

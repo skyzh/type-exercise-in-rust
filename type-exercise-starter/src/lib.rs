@@ -20,10 +20,7 @@ mod variant_catalog;
 // mod expression;
 // mod operators;
 // pub use expression::{BinaryScalarFunction, ExpressionError, I32Add, ScalarError, evaluate_binary};
-// pub use operators::{
-//     CheckedBinaryExpression, CheckedBinaryScalarFunction, CheckedUnaryScalarFunction,
-//     UnaryExpression,
-// };
+// pub use operators::{BatchExpression, BatchKernel};
 // Day 5, checkpoint 1: uncomment after implementing numeric promotion.
 // mod promotion;
 // pub use promotion::{NUMERIC_PROMOTIONS, NumericPromotion, promote_numeric};
@@ -39,7 +36,8 @@ mod variant_catalog;
 // };
 // Day 8, checkpoint 1: extend the expression re-exports with the erased boundary and catalog.
 // pub use expression::{
-//     BinaryExpression, BUILTIN_EXPRESSION_NAMES, Expression, build_builtin_expression,
+//     BinaryBatchKernel, BinaryExpression, BUILTIN_EXPRESSION_NAMES, Expression,
+//     build_builtin_expression,
 // };
 // Day 10, checkpoint 1: extend the expression re-export with `PrimitiveBinaryExpression` and
 // `PrimitiveLoop`; `Nullability` is exported beside `PhysicalType`.

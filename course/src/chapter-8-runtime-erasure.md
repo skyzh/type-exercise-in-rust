@@ -25,21 +25,21 @@ The first run should fail on the object-safe expression boundary or physical cat
 The runtime path is:
 
 ```text
-physical name → Box<dyn Expression> → typed whole-batch kernel → typed scalar function
+physical name → Box<dyn Expression> → typed whole-batch kernel → typed row loop
 ```
 
 The object erases one already-vectorized evaluator. Its stored batch-kernel pointer selects the
-typed adapter once; that adapter validates the batch, converts columns to typed views, and enters
-the row loop. It must not erase a scalar callback or match on `ScalarRefImpl` to select an operator
-for every row.
+typed implementation once; that implementation validates the batch, converts columns to typed
+views, and enters the row loop. It must not erase a scalar callback or match on `ScalarRefImpl` to
+select an operator for every row.
 
 ## Checkpoint 1: make the batch contract safe to erase
 
-- **Target:** `type-exercise-starter/src/expression.rs::{Expression, BinaryExpression, ExpressionError}`.
+- **Target:** `type-exercise-starter/src/expression.rs::{Expression, BinaryExpression, BinaryBatchKernel, ExpressionError}`.
 - **Change:** keep `name`, `arity`, `input_types`, `output_type`, and `evaluate` free of associated
   types, and require `Any + Send + Sync` for checked recovery and sharing, so the trait is
-  object-safe from this chapter on; `BinaryExpression::new` pairs a runtime name with one typed
-  binary function.
+  object-safe from this chapter on; `BinaryExpression::new` pairs runtime physical metadata with
+  one whole-batch kernel pointer.
 - **Preserve:** metadata is borrowed or copied from the selected expression; runtime inputs stay
   borrowed.
 - **Run:** the Chapter 8 focused test.
@@ -50,16 +50,22 @@ Wire the erased boundary and catalog into the starter crate root like the earlie
 
 ```rust,ignore
 pub use expression::{
-    BinaryExpression, BUILTIN_EXPRESSION_NAMES, Expression, build_builtin_expression,
+    BinaryBatchKernel, BinaryExpression, BUILTIN_EXPRESSION_NAMES, Expression,
+    build_builtin_expression,
 };
 ```
 
-## Checkpoint 2: adapt typed shells
+## Checkpoint 2: erase the fixed-arity batch shell
 
-- **Target:** `Expression` implementations for `UnaryExpression`, `CheckedBinaryExpression`, and
-  `TernaryExpression` in `type-exercise-starter/src/operators.rs`, plus the original
-  `BinaryExpression` compatibility implementation in `type-exercise-starter/src/expression.rs`.
-- **Change:** publish physical metadata and delegate to the typed row loop.
+- **Target:** the `Expression` implementation for `BatchExpression<N>` in
+  `type-exercise-starter/src/operators.rs`, plus the original
+  `BinaryExpression` implementation in `type-exercise-starter/src/expression.rs`.
+- **Change:** publish physical metadata and call the selected whole-batch kernel. One declarative
+  catalog row owns each built-in's name, input and output physical types, kernel, and optional loop
+  specialization; that same row list generates both the public name list and constructor lookup.
+  The typed `i32_add` and `string_concat` kernels own their row loops; `BinaryExpression` never
+  stores or invokes a scalar callback. Its erased boundary also checks that the returned array's
+  physical type matches the declared output type.
 - **Preserve:** arity is checked before indexing; type and length errors keep their original shape.
 - **Run:** focused and cumulative tests.
 - **Passing means:** erasure adds selection, not a second evaluator.
@@ -75,7 +81,7 @@ pub use expression::{
 
 ## Required and extension work
 
-Checked runtime erasure and a complete physical catalog are required. The concrete shells from
+Checked runtime erasure and a complete physical catalog are required. The vectorized kernels from
 Chapters 4–6 keep the same batch behavior; this chapter changes how the engine selects them.
 Dynamic plugin loading and per-row erased dispatch are extensions outside this course.
 

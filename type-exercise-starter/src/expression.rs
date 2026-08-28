@@ -24,11 +24,11 @@
 //     /* fn arity(&self) -> usize */
 //     /* fn input_types(&self) -> &[PhysicalType] */
 //     /* fn output_type(&self) -> PhysicalType */
-//     /* fn output_nullability(&self, inputs: &[Nullability]) -> Nullability */
 //     /* fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> */
 // }
-// pub struct BinaryExpression<F> { /* typed function plus runtime metadata */ }
-// impl<F> BinaryExpression<F> { /* pub fn new(name, function) -> Self */ }
+// pub type BinaryBatchKernel = /* one function pointer over a complete borrowed input batch */;
+// pub struct BinaryExpression { /* physical metadata plus one whole-batch kernel */ }
+// impl BinaryExpression { /* pub fn new(name, input_types, output_type, kernel) -> Self */ }
 //
 //! Day 8, checkpoint 3: add the builtin catalog here.
 // pub fn build_builtin_expression(name: &str) -> Option<Box<dyn Expression>>;
@@ -37,6 +37,9 @@
 //! Day 10, checkpoint 1: add one representative batch loop choice here. Select a dense loop only
 //! when both checked input views carry `Nullability::NonNull`; read the same primitive arrays'
 //! `values()` without adding another array representation.
+//     /* fn output_nullability(&self, inputs: &[Nullability]) -> Nullability */
+// pub type BinaryLoopKernel = /* whole-batch kernel plus selected PrimitiveLoop */;
+// impl BinaryExpression { /* pub fn new_with_loop(..., kernel, loop_kernel) -> Self */ }
 // pub enum PrimitiveLoop { /* supported dense loops plus general fallback */ }
 // pub struct PrimitiveBinaryExpression<F> { /* typed i32 function plus runtime metadata */ }
 // impl<F> PrimitiveBinaryExpression<F> {

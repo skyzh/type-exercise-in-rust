@@ -1,4 +1,6 @@
-use crate::{DecimalError, DecimalType, PhysicalType};
+use anyhow::Result;
+
+use crate::{DecimalType, PhysicalType};
 
 /// A planner-visible type that maps to one physical scalar and array family.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -45,7 +47,7 @@ impl DataType {
         )
     }
 
-    pub fn decimal(precision: u8, scale: u8) -> Result<Self, DecimalError> {
+    pub fn decimal(precision: u8, scale: u8) -> Result<Self> {
         DecimalType::try_new(precision, scale).map(Self::Decimal)
     }
 }

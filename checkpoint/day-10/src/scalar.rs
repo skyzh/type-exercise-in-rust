@@ -1,7 +1,8 @@
+use anyhow::anyhow;
 use std::fmt::Debug;
 
 use crate::variant_catalog::for_each_physical_family;
-use crate::{Array, Decimal, DecimalError, PhysicalType, TypeMismatch};
+use crate::{Array, Decimal, PhysicalType, TypeMismatch};
 
 /// An owned scalar and its associated borrowed value and array representation.
 pub trait Scalar:
@@ -224,14 +225,15 @@ macro_rules! define_scalar_family {
         }
 
         impl TryFrom<ScalarImpl> for Decimal {
-            type Error = DecimalError;
+            type Error = anyhow::Error;
 
             fn try_from(value: ScalarImpl) -> Result<Self, Self::Error> {
                 match value {
                     ScalarImpl::$variant(value) => Ok(value),
-                    other => Err(DecimalError::ExpectedDecimal {
-                        actual: other.physical_type(),
-                    }),
+                    other => Err(anyhow!(
+                        "expected a Decimal value, got {:?}",
+                        other.physical_type()
+                    )),
                 }
             }
         }
@@ -243,14 +245,15 @@ macro_rules! define_scalar_family {
         }
 
         impl TryFrom<ScalarRefImpl<'_>> for Decimal {
-            type Error = DecimalError;
+            type Error = anyhow::Error;
 
             fn try_from(value: ScalarRefImpl<'_>) -> Result<Self, Self::Error> {
                 match value {
                     ScalarRefImpl::$variant(value) => Ok(value),
-                    other => Err(DecimalError::ExpectedDecimal {
-                        actual: other.physical_type(),
-                    }),
+                    other => Err(anyhow!(
+                        "expected a Decimal value, got {:?}",
+                        other.physical_type()
+                    )),
                 }
             }
         }

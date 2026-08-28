@@ -4,7 +4,7 @@ use std::time::Duration;
 use criterion::{Criterion, criterion_group, criterion_main};
 use type_exercise::{
     Array, ArrayBuilder, ArrayImpl, BinaryExpression, ColumnView, ColumnViewImpl, Expression,
-    I32Add, I32Array, PhysicalType, PrimitiveBinaryExpression, ScalarRefImpl,
+    ExpressionError, I32Add, I32Array, PhysicalType, PrimitiveBinaryExpression, ScalarRefImpl,
 };
 
 const ROWS: usize = 65_536;
@@ -30,6 +30,10 @@ fn handwritten_general_add(inputs: &[ColumnViewImpl<'_>]) -> ArrayImpl {
         });
     }
     output.finish().into()
+}
+
+fn general_add_batch(inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+    Ok(handwritten_general_add(inputs))
 }
 
 fn handwritten_add(
@@ -77,7 +81,12 @@ fn benchmark_case(
     inputs: [ColumnViewImpl<'_>; 2],
     handwritten: [HandwrittenColumn<'_>; 2],
 ) {
-    let general = BinaryExpression::new("i32_add_general", I32Add);
+    let general = BinaryExpression::new(
+        "i32_add_general",
+        [PhysicalType::Int32, PhysicalType::Int32],
+        PhysicalType::Int32,
+        general_add_batch,
+    );
     let specialized = PrimitiveBinaryExpression::new("i32_add", I32Add);
     let expected = handwritten_add(&inputs, handwritten);
     assert_eq!(general.evaluate(&inputs).unwrap(), expected);

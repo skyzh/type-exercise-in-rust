@@ -10,10 +10,11 @@ pub use primitive_array::{
 };
 pub use string_array::{StringArray, StringArrayBuilder};
 
+use anyhow::anyhow;
 use std::fmt::Debug;
 
 use crate::variant_catalog::for_each_physical_family;
-use crate::{DecimalError, PhysicalType, Scalar, ScalarRef, ScalarRefImpl, TypeMismatch};
+use crate::{PhysicalType, Scalar, ScalarRef, ScalarRefImpl, TypeMismatch};
 
 macro_rules! erased_array_physical_type {
     (copy, $variant:ident, $array:ident) => {{
@@ -148,25 +149,27 @@ macro_rules! define_array_family {
         }
 
         impl TryFrom<ArrayImpl> for $array {
-            type Error = DecimalError;
+            type Error = anyhow::Error;
             fn try_from(array: ArrayImpl) -> Result<Self, Self::Error> {
                 match array {
                     ArrayImpl::$variant(array) => Ok(array),
-                    other => Err(DecimalError::ExpectedDecimal {
-                        actual: other.physical_type(),
-                    }),
+                    other => Err(anyhow!(
+                        "expected a Decimal value, got {:?}",
+                        other.physical_type()
+                    )),
                 }
             }
         }
 
         impl<'a> TryFrom<&'a ArrayImpl> for &'a $array {
-            type Error = DecimalError;
+            type Error = anyhow::Error;
             fn try_from(array: &'a ArrayImpl) -> Result<Self, Self::Error> {
                 match array {
                     ArrayImpl::$variant(array) => Ok(array),
-                    other => Err(DecimalError::ExpectedDecimal {
-                        actual: other.physical_type(),
-                    }),
+                    other => Err(anyhow!(
+                        "expected a Decimal value, got {:?}",
+                        other.physical_type()
+                    )),
                 }
             }
         }

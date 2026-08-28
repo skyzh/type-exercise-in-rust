@@ -1,6 +1,7 @@
+use anyhow::{Result, bail};
 use bitvec::vec::BitVec;
 
-use crate::{Decimal, DecimalError, DecimalType, PrimitiveArray, PrimitiveArrayBuilder};
+use crate::{Decimal, DecimalType, PrimitiveArray, PrimitiveArrayBuilder};
 
 /// A nullable Decimal array with one descriptor shared by all rows.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -14,12 +15,13 @@ impl DecimalArray {
         decimal_type: DecimalType,
         values: Vec<i128>,
         validity: BitVec,
-    ) -> Result<Self, DecimalError> {
+    ) -> Result<Self> {
         if values.len() != validity.len() {
-            return Err(DecimalError::ValueValidityLength {
-                values: values.len(),
-                validity: validity.len(),
-            });
+            bail!(
+                "Decimal value/validity length mismatch: {} values, {} validity bits",
+                values.len(),
+                validity.len()
+            );
         }
         for (value, valid) in values.iter().copied().zip(validity.iter().by_vals()) {
             if valid {
@@ -32,10 +34,7 @@ impl DecimalArray {
         })
     }
 
-    pub fn try_from_slice(
-        decimal_type: DecimalType,
-        values: &[Option<Decimal>],
-    ) -> Result<Self, DecimalError> {
+    pub fn try_from_slice(decimal_type: DecimalType, values: &[Option<Decimal>]) -> Result<Self> {
         let mut builder = DecimalArrayBuilder::try_with_type(decimal_type, values.len())?;
         for value in values {
             builder.try_push(*value)?;
@@ -84,7 +83,7 @@ pub struct DecimalArrayBuilder {
 }
 
 impl DecimalArrayBuilder {
-    pub fn try_with_type(decimal_type: DecimalType, capacity: usize) -> Result<Self, DecimalError> {
+    pub fn try_with_type(decimal_type: DecimalType, capacity: usize) -> Result<Self> {
         // `DecimalType` can only be created by its checked constructor. Keep this
         // result fallible so metadata-bearing builders share one explicit boundary.
         Ok(Self {
@@ -93,13 +92,14 @@ impl DecimalArrayBuilder {
         })
     }
 
-    pub fn try_push(&mut self, value: Option<Decimal>) -> Result<(), DecimalError> {
+    pub fn try_push(&mut self, value: Option<Decimal>) -> Result<()> {
         if let Some(value) = value {
             if value.decimal_type() != self.decimal_type {
-                return Err(DecimalError::MetadataMismatch {
-                    expected: self.decimal_type,
-                    actual: value.decimal_type(),
-                });
+                bail!(
+                    "Decimal metadata mismatch: expected {:?}, got {:?}",
+                    self.decimal_type,
+                    value.decimal_type()
+                );
             }
             self.decimal_type.validate_unscaled(value.unscaled())?;
             self.storage.push_raw(value.unscaled(), true);

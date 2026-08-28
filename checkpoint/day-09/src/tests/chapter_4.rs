@@ -1,10 +1,9 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::{
-    Array, ArrayImpl, BinaryScalarFunction, CheckedBinaryExpression, CheckedBinaryScalarFunction,
-    CheckedUnaryScalarFunction, ColumnViewImpl, ExpressionError, I32Add, I32Array, PhysicalType,
-    ScalarError, ScalarRefImpl, StringArray, UnaryExpression, evaluate_binary,
+    Array, ArrayBuilder, ArrayImpl, BatchExpression, BinaryScalarFunction, ColumnView,
+    ColumnViewImpl, ExpressionError, I32Add, I32Array, PhysicalType, ScalarError, ScalarRefImpl,
+    StringArray, evaluate_binary,
 };
 
 struct StringLengthAdd;
@@ -136,76 +135,108 @@ fn rejects_physical_types_before_evaluating_rows() {
     );
 }
 
-struct CheckedNeg;
-
-impl CheckedUnaryScalarFunction for CheckedNeg {
-    type Input = i32;
-    type Output = i32;
-
-    fn evaluate<'a>(&self, input: i32) -> Result<i32, ScalarError> {
-        Ok(input.wrapping_neg())
+fn checked_neg_batch(
+    _expression: &BatchExpression<1>,
+    inputs: &[ColumnViewImpl<'_>],
+) -> Result<ArrayImpl, ExpressionError> {
+    let input = ColumnView::<i32>::try_from(inputs[0].clone())?;
+    let mut output = <I32Array as Array>::Builder::with_capacity(input.len());
+    for row in 0..input.len() {
+        output.push(input.get(row).map(i32::wrapping_neg));
     }
+    Ok(output.finish().into())
 }
 
-struct CheckedAdd;
-
-impl CheckedBinaryScalarFunction for CheckedAdd {
-    type Left = i32;
-    type Right = i32;
-    type Output = i32;
-
-    fn evaluate<'a>(&self, left: i32, right: i32) -> Result<i32, ScalarError> {
-        Ok(left.wrapping_add(right))
+fn checked_add_batch(
+    _expression: &BatchExpression<2>,
+    inputs: &[ColumnViewImpl<'_>],
+) -> Result<ArrayImpl, ExpressionError> {
+    let left = ColumnView::<i32>::try_from(inputs[0].clone())?;
+    let right = ColumnView::<i32>::try_from(inputs[1].clone())?;
+    let mut output = <I32Array as Array>::Builder::with_capacity(left.len());
+    for row in 0..left.len() {
+        output.push(
+            left.get(row)
+                .zip(right.get(row))
+                .map(|(left, right)| left.wrapping_add(right)),
+        );
     }
+    Ok(output.finish().into())
 }
 
-struct CheckedFailOnSeven;
-
-impl CheckedUnaryScalarFunction for CheckedFailOnSeven {
-    type Input = i32;
-    type Output = i32;
-
-    fn evaluate<'a>(&self, input: i32) -> Result<i32, ScalarError> {
-        if input == 7 {
-            return Err(ScalarError::DivisionByZero);
+fn checked_fail_on_seven_batch(
+    _expression: &BatchExpression<1>,
+    inputs: &[ColumnViewImpl<'_>],
+) -> Result<ArrayImpl, ExpressionError> {
+    let input = ColumnView::<i32>::try_from(inputs[0].clone())?;
+    let mut output = <I32Array as Array>::Builder::with_capacity(input.len());
+    for row in 0..input.len() {
+        let value = input.get(row);
+        if value == Some(7) {
+            return Err(ExpressionError::ScalarEvaluation {
+                function: "checked_fail_on_seven",
+                row,
+                error: ScalarError::DivisionByZero,
+            });
         }
-        Ok(input)
+        output.push(value);
     }
+    Ok(output.finish().into())
 }
 
-struct CheckedAddFailOnSecondCall {
-    calls: Arc<AtomicUsize>,
+static BATCH_CALLS: AtomicUsize = AtomicUsize::new(0);
+
+fn checked_add_fail_on_second_call_batch(
+    _expression: &BatchExpression<2>,
+    inputs: &[ColumnViewImpl<'_>],
+) -> Result<ArrayImpl, ExpressionError> {
+    let left = ColumnView::<i32>::try_from(inputs[0].clone())?;
+    let right = ColumnView::<i32>::try_from(inputs[1].clone())?;
+    let mut output = <I32Array as Array>::Builder::with_capacity(left.len());
+    for row in 0..left.len() {
+        let value = match (left.get(row), right.get(row)) {
+            (Some(left), Some(right)) => {
+                if BATCH_CALLS.fetch_add(1, Ordering::SeqCst) == 1 {
+                    return Err(ExpressionError::ScalarEvaluation {
+                        function: "checked_add_fail_on_second_call",
+                        row,
+                        error: ScalarError::DivisionByZero,
+                    });
+                }
+                Some(left.wrapping_add(right))
+            }
+            _ => None,
+        };
+        output.push(value);
+    }
+    Ok(output.finish().into())
 }
 
-impl CheckedBinaryScalarFunction for CheckedAddFailOnSecondCall {
-    type Left = i32;
-    type Right = i32;
-    type Output = i32;
-
-    fn evaluate<'a>(&self, left: i32, right: i32) -> Result<i32, ScalarError> {
-        if self.calls.fetch_add(1, Ordering::SeqCst) == 1 {
-            return Err(ScalarError::DivisionByZero);
-        }
-        Ok(left.wrapping_add(right))
+fn checked_string_length_add_batch(
+    _expression: &BatchExpression<2>,
+    inputs: &[ColumnViewImpl<'_>],
+) -> Result<ArrayImpl, ExpressionError> {
+    let left = ColumnView::<String>::try_from(inputs[0].clone())?;
+    let right = ColumnView::<i32>::try_from(inputs[1].clone())?;
+    let mut output = <I32Array as Array>::Builder::with_capacity(left.len());
+    for row in 0..left.len() {
+        output.push(
+            left.get(row)
+                .zip(right.get(row))
+                .map(|(left, right)| i32::try_from(left.len()).unwrap().wrapping_add(right)),
+        );
     }
-}
-
-struct CheckedStringLengthAdd;
-
-impl CheckedBinaryScalarFunction for CheckedStringLengthAdd {
-    type Left = String;
-    type Right = i32;
-    type Output = i32;
-
-    fn evaluate(&self, left: &str, right: i32) -> Result<i32, ScalarError> {
-        Ok(i32::try_from(left.len()).unwrap().wrapping_add(right))
-    }
+    Ok(output.finish().into())
 }
 
 #[test]
-fn checked_hooks_receive_typed_borrowed_inputs() {
-    let expression =
-        CheckedBinaryExpression::new("checked_string_length_add", CheckedStringLengthAdd);
+fn batch_kernel_receives_typed_borrowed_inputs() {
+    let expression = BatchExpression::new(
+        "checked_string_length_add",
+        [PhysicalType::String, PhysicalType::Int32],
+        PhysicalType::Int32,
+        checked_string_length_add_batch,
+    );
     let strings: ArrayImpl = StringArray::from_slice(&[Some("typed"), None]).into();
     let output = expression
         .evaluate(&[
@@ -223,8 +254,13 @@ fn checked_hooks_receive_typed_borrowed_inputs() {
 }
 
 #[test]
-fn concrete_unary_and_binary_shells_agree_on_validation_nulls_and_output() {
-    let unary = UnaryExpression::new("checked_neg", CheckedNeg);
+fn fixed_arity_batches_agree_on_validation_nulls_and_output() {
+    let unary = BatchExpression::new(
+        "checked_neg",
+        [PhysicalType::Int32],
+        PhysicalType::Int32,
+        checked_neg_batch,
+    );
     let unary_output = unary
         .evaluate(&[ColumnViewImpl::constant(ScalarRefImpl::Int32(7), 2)])
         .unwrap();
@@ -236,7 +272,12 @@ fn concrete_unary_and_binary_shells_agree_on_validation_nulls_and_output() {
         vec![Some(-7), Some(-7)]
     );
 
-    let binary = CheckedBinaryExpression::new("checked_add", CheckedAdd);
+    let binary = BatchExpression::new(
+        "checked_add",
+        [PhysicalType::Int32, PhysicalType::Int32],
+        PhysicalType::Int32,
+        checked_add_batch,
+    );
     let binary_output = binary
         .evaluate(&[
             ColumnViewImpl::null(PhysicalType::Int32, 2),
@@ -253,8 +294,13 @@ fn concrete_unary_and_binary_shells_agree_on_validation_nulls_and_output() {
 }
 
 #[test]
-fn shells_reject_extra_or_missing_inputs_before_indexing() {
-    let binary = CheckedBinaryExpression::new("checked_add", CheckedAdd);
+fn batch_expressions_reject_extra_or_missing_inputs_before_indexing() {
+    let binary = BatchExpression::new(
+        "checked_add",
+        [PhysicalType::Int32, PhysicalType::Int32],
+        PhysicalType::Int32,
+        checked_add_batch,
+    );
     assert!(
         binary
             .evaluate(&[
@@ -270,7 +316,12 @@ fn shells_reject_extra_or_missing_inputs_before_indexing() {
             .is_err()
     );
 
-    let unary = UnaryExpression::new("checked_neg", CheckedNeg);
+    let unary = BatchExpression::new(
+        "checked_neg",
+        [PhysicalType::Int32],
+        PhysicalType::Int32,
+        checked_neg_batch,
+    );
     assert!(
         unary
             .evaluate(&[
@@ -283,9 +334,14 @@ fn shells_reject_extra_or_missing_inputs_before_indexing() {
 }
 
 #[test]
-fn shells_reject_the_second_input_physical_type() {
+fn batch_expressions_reject_the_second_input_physical_type() {
     let strings: ArrayImpl = StringArray::from_slice(&[Some("wrong")]).into();
-    let binary = CheckedBinaryExpression::new("checked_add", CheckedAdd);
+    let binary = BatchExpression::new(
+        "checked_add",
+        [PhysicalType::Int32, PhysicalType::Int32],
+        PhysicalType::Int32,
+        checked_add_batch,
+    );
     assert!(
         binary
             .evaluate(&[
@@ -297,8 +353,13 @@ fn shells_reject_the_second_input_physical_type() {
 }
 
 #[test]
-fn shells_reject_mismatched_input_lengths() {
-    let binary = CheckedBinaryExpression::new("checked_add", CheckedAdd);
+fn batch_expressions_reject_mismatched_input_lengths() {
+    let binary = BatchExpression::new(
+        "checked_add",
+        [PhysicalType::Int32, PhysicalType::Int32],
+        PhysicalType::Int32,
+        checked_add_batch,
+    );
     assert!(
         binary
             .evaluate(&[
@@ -311,7 +372,12 @@ fn shells_reject_mismatched_input_lengths() {
 
 #[test]
 fn scalar_errors_propagate_as_batch_errors_not_null_rows() {
-    let unary = UnaryExpression::new("checked_fail_on_seven", CheckedFailOnSeven);
+    let unary = BatchExpression::new(
+        "checked_fail_on_seven",
+        [PhysicalType::Int32],
+        PhysicalType::Int32,
+        checked_fail_on_seven_batch,
+    );
     assert!(
         unary
             .evaluate(&[ColumnViewImpl::constant(ScalarRefImpl::Int32(7), 1)])
@@ -326,12 +392,12 @@ fn scalar_errors_propagate_as_batch_errors_not_null_rows() {
 
 #[test]
 fn binary_scalar_errors_propagate_and_stop_later_rows() {
-    let calls = Arc::new(AtomicUsize::new(0));
-    let binary = CheckedBinaryExpression::new(
+    BATCH_CALLS.store(0, Ordering::SeqCst);
+    let binary = BatchExpression::new(
         "checked_add_fail_on_second_call",
-        CheckedAddFailOnSecondCall {
-            calls: Arc::clone(&calls),
-        },
+        [PhysicalType::Int32, PhysicalType::Int32],
+        PhysicalType::Int32,
+        checked_add_fail_on_second_call_batch,
     );
     let strings: ArrayImpl = StringArray::from_slice(&[Some("wrong")]).into();
     assert!(
@@ -342,7 +408,7 @@ fn binary_scalar_errors_propagate_and_stop_later_rows() {
             ])
             .is_err()
     );
-    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    assert_eq!(BATCH_CALLS.load(Ordering::SeqCst), 0);
 
     let error = binary
         .evaluate(&[
@@ -359,5 +425,5 @@ fn binary_scalar_errors_propagate_and_stop_later_rows() {
         }
     );
     // The error stops the row loop: the third row is never evaluated.
-    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    assert_eq!(BATCH_CALLS.load(Ordering::SeqCst), 2);
 }

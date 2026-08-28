@@ -27,15 +27,6 @@ pub type F32ArrayBuilder = PrimitiveArrayBuilder<f32>;
 pub type F64Array = PrimitiveArray<f64>;
 pub type F64ArrayBuilder = PrimitiveArrayBuilder<f64>;
 
-trait SupportedPrimitive: Scalar + Copy + Default {}
-
-impl SupportedPrimitive for i16 {}
-impl SupportedPrimitive for i32 {}
-impl SupportedPrimitive for i64 {}
-impl SupportedPrimitive for bool {}
-impl SupportedPrimitive for f32 {}
-impl SupportedPrimitive for f64 {}
-
 impl<T> PrimitiveArray<T> {
     pub fn from_values(values: Vec<T>) -> Self {
         Self {
@@ -86,7 +77,7 @@ impl<T> PrimitiveArrayBuilder<T> {
 
 impl<T> Array for PrimitiveArray<T>
 where
-    T: SupportedPrimitive + Scalar<ArrayType = Self>,
+    T: Scalar<ArrayType = Self> + Copy + Default,
     for<'a> T: ScalarRef<'a, ScalarType = T, ArrayType = Self>,
     for<'a> T: Scalar<RefType<'a> = T>,
     Self: Into<ArrayImpl> + TryFrom<ArrayImpl, Error = TypeMismatch>,
@@ -106,7 +97,7 @@ where
 
 impl<T> ArrayBuilder for PrimitiveArrayBuilder<T>
 where
-    T: SupportedPrimitive + Scalar<ArrayType = PrimitiveArray<T>>,
+    T: Scalar<ArrayType = PrimitiveArray<T>> + Copy + Default,
     for<'a> T: ScalarRef<'a, ScalarType = T, ArrayType = PrimitiveArray<T>>,
     for<'a> T: Scalar<RefType<'a> = T>,
     PrimitiveArray<T>: Into<ArrayImpl> + TryFrom<ArrayImpl, Error = TypeMismatch>,
