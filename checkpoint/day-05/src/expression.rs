@@ -28,7 +28,6 @@ pub enum ExpressionError {
 pub enum ScalarError {
     DivisionByZero,
     DivisionOverflow,
-    InvalidClampBounds,
 }
 
 impl Display for ScalarError {
@@ -36,7 +35,6 @@ impl Display for ScalarError {
         match self {
             Self::DivisionByZero => formatter.write_str("division by zero"),
             Self::DivisionOverflow => formatter.write_str("signed integer division overflow"),
-            Self::InvalidClampBounds => formatter.write_str("invalid clamp bounds"),
         }
     }
 }

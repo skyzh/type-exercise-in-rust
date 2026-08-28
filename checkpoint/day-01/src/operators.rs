@@ -12,17 +12,22 @@
 //     type Output: Scalar;
 //     /* one checked scalar call receives the two associated borrowed types */
 // }
+// /* Both adapters return the public ExpressionError from expression.rs:
+//    TypeMismatch(TypeMismatch),
+//    InputArityMismatch { expected, actual },
+//    InputLengthMismatch { expected, actual, input_index }, and
+//    ScalarEvaluation { function, row, error }. Display wording remains your choice. */
 // pub struct UnaryExpression<F> { /* function and metadata */ }
 // impl<F> UnaryExpression<F> {
 //     /* pub fn new(name, function) derives the input type from F::Input */
 //     /* convert the erased column to ColumnView<F::Input> once before the row loop */
-//     /* pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, /* readable batch error of your choice */> */
+//     /* pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> */
 // }
 // pub struct CheckedBinaryExpression<F> { /* function and metadata */ }
 // impl<F> CheckedBinaryExpression<F> {
 //     /* pub fn new(name, function) derives the input types from F::Left and F::Right */
 //     /* convert both erased columns to typed views once before the row loop */
-//     /* pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, /* readable batch error of your choice */> */
+//     /* pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> */
 // }
 //
 //! Day 5, checkpoint 2: add arithmetic and numeric-comparison selection here.
@@ -44,7 +49,7 @@
 //
 //! Day 6, checkpoint 3: make the ternary path observable with clamp.
 // pub(crate) fn build_numeric_neg_expression(/* input type */) -> /* expression */;
-// pub(crate) fn build_numeric_clamp_expression(/* physical type */) -> /* expression */;
+// pub(crate) fn build_numeric_clamp_expression(/* three input types and one output type */) -> /* expression */;
 //
 //! Day 8, checkpoint 2: implement the erased Expression boundary for each checked shell here.
 // impl<F> Expression for UnaryExpression<F> { /* metadata and evaluation */ }

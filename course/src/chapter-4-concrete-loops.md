@@ -83,10 +83,13 @@ shape established in Chapter 1: a mixed-family function can receive `&str` from 
 `i32` from a primitive column without allocating either input value. The output family is
 independent of both inputs; an `i32, i32 -> String` function must build a `StringArray`.
 
-Choose a readable batch error for failed type or length validation. The course contract checks the
-behavior, not a particular public enum name, field layout, or display sentence. Enable
-`expression` in `src/lib.rs` and export the checkpoint's public function, trait, `I32Add`, and the
-error type you chose.
+Use the public `ExpressionError` enum for batch failures. Its completed Chapter 4 contract has four
+variants: `TypeMismatch(TypeMismatch)`, `InputArityMismatch { expected, actual }`,
+`InputLengthMismatch { expected, actual, input_index }`, and
+`ScalarEvaluation { function, row, error }`. Checkpoint 1 needs the type and length cases;
+Checkpoint 2 completes the arity and checked-scalar cases. The exact `Display` sentences remain
+your choice. Enable `expression` in `src/lib.rs` and export `ExpressionError` with the checkpoint's
+public function, trait, and `I32Add`.
 
 The copied Chapter 4 test also imports the Checkpoint 2 shells, so it cannot be green yet. Use an
 honest library boundary here:
@@ -137,10 +140,13 @@ all required inputs are set -> call the scalar function once
 scalar function returns Err -> stop; return a batch error and no output array
 ```
 
-Null and error are different results. A strict null is a valid row in the output. A scalar error
-ends evaluation; it must not be converted into a null row, and later rows must not run. Include the
-function name and row in your error if that helps you diagnose the failure, but the supplied test
-does not freeze a public error representation.
+Report the three validation failures as `ExpressionError::InputArityMismatch { expected, actual }`,
+`ExpressionError::TypeMismatch(TypeMismatch { expected, actual })`, and
+`ExpressionError::InputLengthMismatch { expected, actual, input_index }`. Null and error are
+different results: a strict null is a valid row in the output, while a scalar error ends evaluation
+and later rows must not run. Return that failure as
+`ExpressionError::ScalarEvaluation { function, row, error }`; the public variant and fields are
+part of the supplied contract, while their `Display` wording remains flexible.
 
 Both adapters build `F::Output::ArrayType` through its associated builder. They borrow every input
 view and return a new owned array. Do not materialize an input representation just to simplify the
