@@ -47,30 +47,39 @@ logical rows:
 | Array | `&'a ArrayImpl` | array length | array physical type |
 | Constant | one `ScalarRefImpl<'a>` plus a length | recorded length | scalar physical type |
 | Typed null | `PhysicalType` plus a length | recorded length | recorded physical type |
-| Indexed | `&'a [Option<usize>]` plus `&'a ArrayImpl` values | index count | values physical type |
+| Indexed | compact `&'a [u32]` keys plus `&'a ArrayImpl` values | key count | values physical type |
 
-The lifetime `'a` is the ownership boundary: the view may borrow an array, indices, or a string
+The lifetime `'a` is the ownership boundary: the view may borrow an array, keys, or a string
 scalar, but it does not own or copy those buffers. Implement `array`, `constant`, `null`, and
-`indexed`, together with `len`, `is_empty`, `physical_type`, and row access through `get`.
+`indexed`, together with `len`, `is_empty`, `physical_type`, and erased row access with this exact
+shape:
+
+```rust,ignore
+pub fn get(&self, row: usize) -> Option<ScalarRefImpl<'a>>
+```
+
+Keep the representation enum private behind the public `ColumnViewImpl` wrapper. This small split
+forces callers through the constructors, so they cannot bypass the indexed bounds check. It also
+leaves one place for later chapters to attach batch-wide metadata instead of repeating that state
+inside every representation variant.
 
 A typed null needs an explicit `PhysicalType` because it has no non-null scalar from which to
 recover one. The type still matters for overload selection and output allocation, including for an
 empty batch. Do not add nullable variants to `DataType`, `PhysicalType`, or the scalar families;
 this chapter continues to represent each logical row as `Some(value)` or `None`.
 
-For an indexed view, a null index produces a null row. A non-null index selects one row from the
-borrowed values array, which may itself be null. Both cases return `None`, but for different
-reasons:
+For an indexed view, each compact non-null `u32` key selects one row from the borrowed values
+array. A null logical row lives in that nullable values array rather than in the key buffer:
 
 ```text
-indices[row] = None                     -> None
-indices[row] = Some(i), values[i] null -> None
-indices[row] = Some(i), values[i] set  -> Some(values[i])
+keys[row] = i, values[i] null -> None
+keys[row] = i, values[i] set  -> Some(values[i])
 ```
 
-Validate every non-null index inside `indexed` before returning a view. If any index is outside the
-values array, return an error and expose no partially valid view. You may choose a useful error
-type; the supplied test does not require a particular public name, field layout, or display text.
+`array`, `constant`, and `null` are direct constructors. `indexed` is the fallible constructor:
+validate every key inside it before returning a view. If any key is outside the values array,
+return an ordinary `anyhow::Error` that identifies the row, key, and values length, and expose no
+partially valid view.
 
 Enable the module for this checkpoint and export only the type you have implemented:
 
@@ -124,18 +133,19 @@ The focused test proves five boundaries:
 - arrays, constants, and indexed values expose the same logical-row interface;
 - the primitive families added in Chapter 2 work without family-specific row loops;
 - typed-null and empty views retain their type and length;
-- every invalid non-null index is rejected during construction; and
+- every invalid key is rejected during construction; and
 - a physical-family mismatch fails before row access.
 
-Keep this chapter focused on borrowed execution views. The indexed form borrows ordinary nullable
-`usize` indices and an existing `ArrayImpl`; it is not a persisted dictionary-array format and adds
-no key type, builder, or storage encoding. Leave run-length encoding as an extension. Chapter 10
-adds primitive-loop specialization, and Chapter 11 reuses this representation boundary for List.
+Keep this chapter focused on borrowed execution views. The indexed form borrows compact `u32` keys
+and an existing nullable `ArrayImpl`; it is not a persisted dictionary-array format and adds no
+key-array family, builder, or storage encoding. Leave run-length encoding as an extension. Chapter
+10 adds primitive-loop specialization, and Chapter 11 reuses this representation boundary for
+List.
 
 Before continuing, make sure you can explain three boundaries in your own words:
 
 1. Why must an all-null or empty column carry a physical type instead of inferring one from rows?
-2. Why does `indexed` validate every non-null index before it returns a view?
+2. Why does `indexed` validate every key before it returns a view?
 3. Why can `ColumnView<'a, String>::get` return a borrowed `&'a str` without materializing a new
    `StringArray`?
 

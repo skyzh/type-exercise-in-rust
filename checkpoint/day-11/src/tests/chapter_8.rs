@@ -131,7 +131,7 @@ fn concatenates_borrowed_indexed_and_constant_strings() {
     assert_eq!(expression.output_type(), PhysicalType::String);
 
     let values: ArrayImpl = StringArray::from_slice(&[Some("rust"), None, Some("data")]).into();
-    let keys = [Some(2), Some(0), None, Some(1)];
+    let keys = [2, 0, 1, 1];
     let inputs = [
         ColumnViewImpl::indexed(&keys, &values).unwrap(),
         ColumnViewImpl::constant(ScalarRefImpl::String("base"), 4),

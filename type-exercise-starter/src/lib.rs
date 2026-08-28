@@ -15,6 +15,8 @@ mod variant_catalog;
 
 // Day 3, checkpoint 1: uncomment after implementing `src/column.rs`.
 // mod column;
+// pub use column::ColumnViewImpl;
+// Day 3, checkpoint 2: replace the export above with the typed export below.
 // pub use column::{ColumnView, ColumnViewImpl};
 // Day 4, checkpoints 1–2: uncomment after implementing the expression/operator skeletons.
 // mod expression;

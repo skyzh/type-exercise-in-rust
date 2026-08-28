@@ -45,8 +45,8 @@ fn vectorizes_addition_over_arrays_constants_and_indexed() {
         vec![Some(12), None, Some(32)]
     );
 
-    let values: ArrayImpl = I32Array::from_slice(&[Some(1), Some(2)]).into();
-    let keys = [Some(1), Some(0), None];
+    let values: ArrayImpl = I32Array::from_slice(&[Some(1), Some(2), None]).into();
+    let keys = [1, 0, 2];
     let result = evaluate_binary(
         &I32Add,
         ColumnViewImpl::indexed(&keys, &values).unwrap(),

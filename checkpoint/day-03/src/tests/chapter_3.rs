@@ -22,7 +22,7 @@ fn reads_arrays_constants_and_indexed_views_as_logical_rows() {
     );
 
     let values: ArrayImpl = StringArray::from_slice(&[Some("red"), None, Some("green")]).into();
-    let indices = [Some(2), None, Some(1), Some(0), Some(2)];
+    let indices = [2, 1, 1, 0, 2];
     let indexed =
         ColumnView::<String>::try_from(ColumnViewImpl::indexed(&indices, &values).unwrap())
             .unwrap();
@@ -37,7 +37,7 @@ fn reads_arrays_constants_and_indexed_views_as_logical_rows() {
 #[test]
 fn reads_expanded_families_through_array_constant_and_indexed_views() {
     let doubles: ArrayImpl = F64Array::from_slice(&[Some(-0.0), None, Some(f64::INFINITY)]).into();
-    let double_indices = [Some(2), Some(0), None];
+    let double_indices = [2, 0, 1];
     let double_indexed =
         ColumnView::<f64>::try_from(ColumnViewImpl::indexed(&double_indices, &doubles).unwrap())
             .unwrap();
@@ -80,7 +80,7 @@ fn preserves_the_type_and_length_of_null_and_empty_views() {
     assert_eq!(empty.physical_type(), PhysicalType::Int32);
 
     let values: ArrayImpl = I32Array::from_slice(&[Some(1)]).into();
-    let no_indices: [Option<usize>; 0] = [];
+    let no_indices: [u32; 0] = [];
     let indexed = ColumnViewImpl::indexed(&no_indices, &values).unwrap();
     assert!(indexed.is_empty());
 }
@@ -88,10 +88,18 @@ fn preserves_the_type_and_length_of_null_and_empty_views() {
 #[test]
 fn rejects_every_invalid_index_before_exposing_a_view() {
     let values: ArrayImpl = I32Array::from_slice(&[Some(1)]).into();
-    assert!(ColumnViewImpl::indexed(&[Some(0), Some(1)], &values).is_err());
+    let error = ColumnViewImpl::indexed(&[0, 1], &values).unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "index 1 at row 1 is out of bounds for a values array of length 1"
+    );
 
     let empty_values: ArrayImpl = I32Array::from_slice(&[]).into();
-    assert!(ColumnViewImpl::indexed(&[Some(0)], &empty_values).is_err());
+    let error = ColumnViewImpl::indexed(&[0], &empty_values).unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "index 0 at row 0 is out of bounds for a values array of length 0"
+    );
 }
 
 #[test]

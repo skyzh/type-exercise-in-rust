@@ -42,7 +42,7 @@ fn proves_physical_nullability_at_the_column_boundary() {
         ColumnViewImpl::null(PhysicalType::Int32, 2).nullability(),
         Nullability::Nullable
     );
-    let indices = [Some(0)];
+    let indices = [0];
     assert_eq!(
         ColumnViewImpl::indexed(&indices, &dense)
             .unwrap()
@@ -145,8 +145,8 @@ fn delegates_nullable_arrays_and_null_constants_to_the_general_loop() {
 #[test]
 fn delegates_dictionaries_to_the_general_loop() {
     let expression = PrimitiveBinaryExpression::new("i32_add", I32Add);
-    let dictionary_values: ArrayImpl = I32Array::from_values(vec![4, 8]).into();
-    let keys = [Some(1), None, Some(0)];
+    let dictionary_values: ArrayImpl = I32Array::from_slice(&[Some(4), Some(8), None]).into();
+    let keys = [1, 2, 0];
     let right: ArrayImpl = I32Array::from_values(vec![1, 2, 3]).into();
     let dictionary = ColumnViewImpl::indexed(&keys, &dictionary_values).unwrap();
     let inputs = [

@@ -175,7 +175,7 @@ fn erased_list_columns_cover_array_constant_null_and_indexed() {
         .unwrap();
     assert_eq!(null.get(0).unwrap(), None);
 
-    let keys = [Some(1), None, Some(0)];
+    let keys = [1, 2, 0];
     let indexed_view = ColumnViewImpl::indexed(&keys, &array)
         .unwrap()
         .try_as_list(PhysicalType::Int32)
