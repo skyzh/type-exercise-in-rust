@@ -25,13 +25,13 @@ The first run should fail on the object-safe expression boundary or physical cat
 The runtime path is:
 
 ```text
-physical name → Box<dyn Expression> → typed whole-batch kernel → typed scalar function
+physical name → Box<dyn Expression> → typed whole-batch kernel → typed row loop
 ```
 
 The object erases one already-vectorized evaluator. Its stored batch-kernel pointer selects the
-typed adapter once; that adapter validates the batch, converts columns to typed views, and enters
-the row loop. It must not erase a scalar callback or match on `ScalarRefImpl` to select an operator
-for every row.
+typed implementation once; that implementation validates the batch, converts columns to typed
+views, and enters the row loop. It must not erase a scalar callback or match on `ScalarRefImpl` to
+select an operator for every row.
 
 ## Checkpoint 1: make the batch contract safe to erase
 
@@ -54,12 +54,12 @@ pub use expression::{
 };
 ```
 
-## Checkpoint 2: adapt typed shells
+## Checkpoint 2: erase the fixed-arity batch shell
 
-- **Target:** `Expression` implementations for `UnaryExpression`, `CheckedBinaryExpression`, and
-  `TernaryExpression` in `type-exercise-starter/src/operators.rs`, plus the original
+- **Target:** the `Expression` implementation for `BatchExpression<N>` in
+  `type-exercise-starter/src/operators.rs`, plus the original
   `BinaryExpression` compatibility implementation in `type-exercise-starter/src/expression.rs`.
-- **Change:** publish physical metadata and delegate to the typed row loop.
+- **Change:** publish physical metadata and delegate to the selected whole-batch kernel.
 - **Preserve:** arity is checked before indexing; type and length errors keep their original shape.
 - **Run:** focused and cumulative tests.
 - **Passing means:** erasure adds selection, not a second evaluator.
@@ -75,7 +75,7 @@ pub use expression::{
 
 ## Required and extension work
 
-Checked runtime erasure and a complete physical catalog are required. The concrete shells from
+Checked runtime erasure and a complete physical catalog are required. The vectorized kernels from
 Chapters 4–6 keep the same batch behavior; this chapter changes how the engine selects them.
 Dynamic plugin loading and per-row erased dispatch are extensions outside this course.
 

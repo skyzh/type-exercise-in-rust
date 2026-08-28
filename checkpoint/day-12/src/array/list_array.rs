@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
-use crate::{ArrayImpl, DecimalError, PhysicalType, ScalarImpl, ScalarRefImpl, TypeMismatch};
+use crate::{ArrayImpl, PhysicalType, ScalarImpl, ScalarRefImpl, TypeMismatch};
 
 /// A checked failure while constructing or slicing a one-level List value.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -11,7 +11,7 @@ pub enum ListError {
         actual: PhysicalType,
     },
     TypeMismatch(TypeMismatch),
-    Decimal(DecimalError),
+    Decimal(String),
     OffsetCount {
         expected: usize,
         actual: usize,
@@ -94,9 +94,9 @@ impl From<TypeMismatch> for ListError {
     }
 }
 
-impl From<DecimalError> for ListError {
-    fn from(error: DecimalError) -> Self {
-        Self::Decimal(error)
+impl From<anyhow::Error> for ListError {
+    fn from(error: anyhow::Error) -> Self {
+        Self::Decimal(error.to_string())
     }
 }
 

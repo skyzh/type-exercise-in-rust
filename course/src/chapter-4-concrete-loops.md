@@ -8,9 +8,9 @@ batch expression.
 
 A batch adapter has more work to do than the addition itself. It must reject the wrong inputs
 before indexing, preserve strict nulls, build the correct output family, and stop cleanly if a row
-operation fails. This chapter writes that machinery for one unary and one binary shape. The two
-loops will look repetitive on purpose: you need to see the stable batch contract before Chapters 5
-and 6 generalize it.
+operation fails. This chapter writes that machinery as a fixed-arity whole-batch boundary. The
+kernel pointer is erased, but the operation it names is still vectorized: there is no dynamically
+dispatched object call for every scalar row.
 
 ## What is in the starter
 
@@ -19,14 +19,14 @@ Begin from your completed Chapter 3 workspace. `src/column.rs` already provides
 comment shells:
 
 - `src/expression.rs` names the first typed binary scalar function and evaluator;
-- `src/operators.rs` names checked unary and binary scalar hooks and their concrete adapters; and
+- `src/operators.rs` names the fixed-arity batch shell and its vectorized kernel pointer; and
 - `src/lib.rs` keeps both modules and their exports commented out.
 
 You own two additions in this chapter:
 
 1. one typed binary scalar operation lifted over nullable borrowed columns; and
-2. one checked unary adapter plus one checked binary adapter that make the repeated batch decisions
-   visible.
+2. one batch expression that validates a complete fixed-arity input contract before delegating to
+   a monomorphized row loop.
 
 The later comments are boundaries, not implementation work. Leave numeric promotion, ternary
 evaluation, the erased `Expression` trait and catalog, primitive fast paths, and asynchronous
@@ -103,26 +103,20 @@ will later exercise arrays, constants, and indexed views; strict nulls; a borrow
 function; an output family different from the inputs; explicit wrapping overflow; and type and
 length rejection.
 
-## Checkpoint 2: put two concrete arities side by side
+## Checkpoint 2: erase one complete batch operation
 
-Now open `src/operators.rs`. Define `CheckedUnaryScalarFunction` and
-`CheckedBinaryScalarFunction`. Give the unary hook an associated `Input` family and the binary hook
-associated `Left` and `Right` families, in addition to their associated owned output family. Their
-methods receive those families' borrowed scalar-reference types and may return `ScalarError`.
+Now open `src/operators.rs`. Define `BatchExpression<const N: usize>` with a static function name,
+an `[PhysicalType; N]` input contract, one output type, and a function pointer for a complete
+batch. Name that pointer type `BatchKernel<N>`. Its signature receives the expression metadata and
+the borrowed `&[ColumnViewImpl<'_>]`, and returns an owned `ArrayImpl` or `ExpressionError`.
 
-The batch adapters derive their expected `PhysicalType` values from those associated input
-families. After validating the whole batch, each adapter converts every erased column view once to
-the corresponding typed `ColumnView`. The row loop therefore passes `&str`, `i32`, or another
-declared borrowed type directly to the checked hook; no checked scalar hook accepts or matches on
-`ScalarRefImpl`.
+This is the important erasure boundary. A caller may select one monomorphized batch kernel at
+runtime, but that kernel converts each erased column to a typed `ColumnView` once and owns the
+whole row loop. Do not introduce unary, binary, or ternary checked scalar traits, and do not store
+a dynamically dispatched scalar operation inside the loop.
 
-Give both adapters a `new` constructor containing only a static function name and the function
-value. The constructor derives its fixed-size expected input-type array from the function's
-associated input families, so a caller cannot provide contradictory runtime metadata. Their
-inherent `evaluate` methods accept `&[ColumnViewImpl<'_>]` and return an owned `ArrayImpl` or a
-readable batch error.
-
-Before allocating an output or indexing `inputs[0]`, each adapter must validate in this order:
+`BatchExpression::new` receives the complete metadata and kernel. Its inherent `evaluate` method
+accepts `&[ColumnViewImpl<'_>]`. Before calling the kernel, validate in this order:
 
 1. the input count equals its arity;
 2. every input's physical family equals the corresponding expected family; and
@@ -130,14 +124,15 @@ Before allocating an output or indexing `inputs[0]`, each adapter must validate 
 
 That order is observable. An empty unary input slice is an arity error, not an indexing panic. A
 wrong second physical family is rejected before the row loop. A binary length mismatch is rejected
-before any scalar call.
+before the selected batch kernel runs.
 
-After validation, each row follows one strict rule:
+Write small test kernels for arity one and arity two. Inside each kernel, recover its typed views,
+allocate the associated output builder, and make each row follow one strict rule:
 
 ```text
-any required input is null  -> append null; do not call the scalar function
-all required inputs are set -> call the scalar function once
-scalar function returns Err -> stop; return a batch error and no output array
+any required input is null -> append null; do not perform the operation
+all required inputs are set -> perform the typed operation once
+typed operation returns Err -> stop; return a batch error and no output array
 ```
 
 Report the three validation failures as `ExpressionError::InputArityMismatch { expected, actual }`,
@@ -148,13 +143,12 @@ and later rows must not run. Return that failure as
 `ExpressionError::ScalarEvaluation { function, row, error }`; the public variant and fields are
 part of the supplied contract, while their `Display` wording remains flexible.
 
-Both adapters build `F::Output::ArrayType` through its associated builder. They borrow every input
-view and return a new owned array. Do not materialize an input representation just to simplify the
-loop.
+The kernel borrows every input view and returns a new owned array. Do not materialize an input
+representation just to simplify the loop.
 
-Enable `operators` in `src/lib.rs`. Export the two checked scalar traits, `UnaryExpression`, and
-`CheckedBinaryExpression`; also export `ScalarError` from `expression`. Keep the later
-`Expression` trait and runtime catalog commented out.
+Enable `operators` in `src/lib.rs`. Export `BatchExpression` and `BatchKernel`; also export
+`ScalarError` from `expression`. Keep the later `Expression` trait and runtime catalog commented
+out.
 
 Run the focused contract, then the cumulative learner-library suite:
 
@@ -163,19 +157,20 @@ cargo test -p type-exercise-starter chapter_4 --locked
 cargo test -p type-exercise-starter --lib --locked
 ```
 
-The 13 focused cases prove the complete boundary:
+The 14 focused cases prove the complete boundary:
 
 - one typed binary evaluator works over array, constant, typed-null, and indexed representations;
 - borrowed mixed-family inputs and an independent associated output family work without
   per-representation loops;
 - `i32` addition has explicit wrapping behavior;
-- unary and binary adapters reject arity, physical-family, and length errors before row access;
-- strict nulls skip the scalar hook and append null; and
-- unary or binary scalar failure stops the batch before later rows and returns no partial array.
+- fixed-arity batch expressions reject arity, physical-family, and length errors before kernel
+  entry;
+- strict nulls skip the typed operation and append null; and
+- a row error inside a whole-batch kernel stops later rows and returns no partial array.
 
-## Read the duplication as evidence
+## Read the shared boundary as evidence
 
-Compare the concrete unary and binary adapters you just wrote:
+Compare the arity-one and arity-two kernels you exercised through the same shell:
 
 | Decision | Unary | Binary | Same underlying rule? |
 | --- | --- | --- | --- |
@@ -183,21 +178,20 @@ Compare the concrete unary and binary adapters you just wrote:
 | Physical types | check one expected family | check two expected families | yes |
 | Length | establish one batch length | require both lengths to match | yes |
 | Strict null | skip on one null | skip if either input is null | yes |
-| Scalar failure | stop at the failing row | stop at the failing row | yes |
-| Output | associated builder | associated builder | yes |
+| Row failure | stop at the failing row | stop at the failing row | yes |
+| Output | typed builder in the kernel | typed builder in the kernel | yes |
 
-The repeated code is useful because it identifies an abstraction boundary from working cases.
-Chapter 5 will make numeric operation selection generic without replacing these batch rules.
-Chapter 6 will share validation across arities and add a checked ternary loop. Runtime erasure comes
-later, after the typed and checked paths have concrete behavior to preserve.
+The shell captures the repeated boundary decisions without erasing individual scalar operations.
+Chapter 5 will select generic numeric batch kernels while preserving these rules. Chapter 6 will
+make the shared validator public and add vectorized negation and clamp. Runtime trait-object
+erasure comes later, after the whole-batch path has concrete behavior to preserve.
 
 Before continuing, make sure you can explain three distinctions in your own words:
 
-1. Why is strict null propagation batch control flow rather than an error from the scalar
-   function?
+1. Why is strict null propagation batch control flow rather than a scalar-operation object?
 2. Why must arity, physical types, and lengths be checked before the first row is evaluated?
-3. What did writing unary and binary loops teach you that a generic N-ary loop written first would
-   have hidden?
+3. Why is a whole-batch function pointer a different boundary from a dynamically dispatched call
+   on every scalar row?
 
 You can now point to the exact work required to lift one scalar operation over a nullable batch.
 

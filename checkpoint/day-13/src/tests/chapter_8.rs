@@ -1,9 +1,8 @@
 use crate::{
-    Array, ArrayImpl, BUILTIN_EXPRESSION_NAMES, BinaryExpression, BinaryScalarFunction, BoolArray,
-    BooleanOperator, CheckedBinaryExpression, CheckedBinaryScalarFunction,
-    CheckedTernaryScalarFunction, CheckedUnaryScalarFunction, ColumnViewImpl, Expression, I32Array,
-    PhysicalType, ScalarError, ScalarRefImpl, StringArray, TernaryExpression, UnaryExpression,
-    build_boolean_expression, build_builtin_expression,
+    Array, ArrayBuilder, ArrayImpl, BUILTIN_EXPRESSION_NAMES, BatchExpression, BinaryExpression,
+    BinaryScalarFunction, BoolArray, BooleanOperator, ColumnView, ColumnViewImpl, Expression,
+    ExpressionError, I32Array, PhysicalType, ScalarRefImpl, StringArray, build_boolean_expression,
+    build_builtin_expression,
 };
 
 struct PanicOnCall;
@@ -198,45 +197,63 @@ fn boolean_expressions_delegate_through_the_erased_boundary() {
     );
 }
 
-struct CheckedNeg;
-
-impl CheckedUnaryScalarFunction for CheckedNeg {
-    type Input = i32;
-    type Output = i32;
-
-    fn evaluate<'a>(&self, input: i32) -> Result<i32, ScalarError> {
-        Ok(input.wrapping_neg())
+fn checked_neg_batch(
+    _expression: &BatchExpression<1>,
+    inputs: &[ColumnViewImpl<'_>],
+) -> Result<ArrayImpl, ExpressionError> {
+    let input = ColumnView::<i32>::try_from(inputs[0].clone())?;
+    let mut output = <I32Array as Array>::Builder::with_capacity(input.len());
+    for row in 0..input.len() {
+        output.push(input.get(row).map(i32::wrapping_neg));
     }
+    Ok(output.finish().into())
 }
 
-struct CheckedAdd;
-
-impl CheckedBinaryScalarFunction for CheckedAdd {
-    type Left = i32;
-    type Right = i32;
-    type Output = i32;
-
-    fn evaluate<'a>(&self, left: i32, right: i32) -> Result<i32, ScalarError> {
-        Ok(left.wrapping_add(right))
+fn checked_add_batch(
+    _expression: &BatchExpression<2>,
+    inputs: &[ColumnViewImpl<'_>],
+) -> Result<ArrayImpl, ExpressionError> {
+    let left = ColumnView::<i32>::try_from(inputs[0].clone())?;
+    let right = ColumnView::<i32>::try_from(inputs[1].clone())?;
+    let mut output = <I32Array as Array>::Builder::with_capacity(left.len());
+    for row in 0..left.len() {
+        output.push(
+            left.get(row)
+                .zip(right.get(row))
+                .map(|(left, right)| left.wrapping_add(right)),
+        );
     }
+    Ok(output.finish().into())
 }
 
-struct CheckedClamp;
-
-impl CheckedTernaryScalarFunction for CheckedClamp {
-    type First = i32;
-    type Second = i32;
-    type Third = i32;
-    type Output = i32;
-
-    fn evaluate<'a>(&self, value: i32, lower: i32, upper: i32) -> Result<i32, ScalarError> {
-        Ok(value.clamp(lower, upper))
+fn checked_clamp_batch(
+    _expression: &BatchExpression<3>,
+    inputs: &[ColumnViewImpl<'_>],
+) -> Result<ArrayImpl, ExpressionError> {
+    let value = ColumnView::<i32>::try_from(inputs[0].clone())?;
+    let lower = ColumnView::<i32>::try_from(inputs[1].clone())?;
+    let upper = ColumnView::<i32>::try_from(inputs[2].clone())?;
+    let mut output = <I32Array as Array>::Builder::with_capacity(value.len());
+    for row in 0..value.len() {
+        output.push(
+            value
+                .get(row)
+                .zip(lower.get(row))
+                .zip(upper.get(row))
+                .map(|((value, lower), upper)| value.clamp(lower, upper)),
+        );
     }
+    Ok(output.finish().into())
 }
 
 #[test]
-fn erased_unary_shell_delegates_metadata_and_rows() {
-    let expression: Box<dyn Expression> = Box::new(UnaryExpression::new("checked_neg", CheckedNeg));
+fn erased_unary_batch_delegates_metadata_and_rows() {
+    let expression: Box<dyn Expression> = Box::new(BatchExpression::new(
+        "checked_neg",
+        [PhysicalType::Int32],
+        PhysicalType::Int32,
+        checked_neg_batch,
+    ));
     assert_eq!(expression.name(), "checked_neg");
     assert_eq!(expression.arity(), 1);
     assert_eq!(expression.input_types(), &[PhysicalType::Int32]);
@@ -255,9 +272,13 @@ fn erased_unary_shell_delegates_metadata_and_rows() {
 }
 
 #[test]
-fn erased_binary_shell_delegates_metadata_and_rows() {
-    let expression: Box<dyn Expression> =
-        Box::new(CheckedBinaryExpression::new("checked_add", CheckedAdd));
+fn erased_binary_batch_delegates_metadata_and_rows() {
+    let expression: Box<dyn Expression> = Box::new(BatchExpression::new(
+        "checked_add",
+        [PhysicalType::Int32, PhysicalType::Int32],
+        PhysicalType::Int32,
+        checked_add_batch,
+    ));
     assert_eq!(expression.name(), "checked_add");
     assert_eq!(expression.arity(), 2);
     assert_eq!(
@@ -282,9 +303,17 @@ fn erased_binary_shell_delegates_metadata_and_rows() {
 }
 
 #[test]
-fn erased_ternary_shell_delegates_metadata_and_rows() {
-    let expression: Box<dyn Expression> =
-        Box::new(TernaryExpression::new("checked_clamp", CheckedClamp));
+fn erased_ternary_batch_delegates_metadata_and_rows() {
+    let expression: Box<dyn Expression> = Box::new(BatchExpression::new(
+        "checked_clamp",
+        [
+            PhysicalType::Int32,
+            PhysicalType::Int32,
+            PhysicalType::Int32,
+        ],
+        PhysicalType::Int32,
+        checked_clamp_batch,
+    ));
     assert_eq!(expression.name(), "checked_clamp");
     assert_eq!(expression.arity(), 3);
     assert_eq!(

@@ -9,7 +9,8 @@ implementations would make the boilerplate larger than the storage idea.
 
 This chapter separates ordinary generic storage from the finite runtime catalog. Six explicit
 aliases name the supported primitive arrays, while one generic `PrimitiveArray<T>` implementation
-owns their identical storage behavior behind a private supported-primitive marker. The physical
+owns their identical storage behavior. Its ordinary trait bounds require the complete scalar,
+array, builder, and erased-conversion relationship. The physical
 catalog remains for work Rust generics cannot express: erased enum variants and their
 variant-specific conversions. Then we will add Decimal as the important exception: its precision
 and scale are chosen at runtime. `DecimalArray` therefore wraps reused `PrimitiveArray<i128>`
@@ -21,7 +22,7 @@ The goal is not to hide the type system behind a general framework. It is to kee
 | --- | --- | --- |
 | What varies? | The Rust scalar, borrowed scalar, array, and builder types | Values that describe one physical family at runtime |
 | Examples | `i64` ↔ `I64Array`; `f64` ↔ `F64Array`; `String` ↔ `StringArray` | `DecimalType { precision, scale }` shared by a Decimal array |
-| Where is it enforced? | Explicit public aliases plus generic implementations guarded by a private marker | Checked constructors plus `PhysicalType::Decimal(decimal_type)` at erased boundaries |
+| Where is it enforced? | Explicit public aliases plus the complete `Scalar`/`Array`/conversion bounds on the generic implementation | Checked constructors plus `PhysicalType::Decimal(decimal_type)` at erased boundaries |
 
 ## What is in the starter
 
@@ -61,7 +62,7 @@ the `I32Array` aliases. The storage does not depend on `i32`: every copyable pri
 one contiguous `Vec<T>` plus one packed validity bitmap. What changes from family to family is the
 Rust scalar type and the public alias name.
 
-Generalize that implementation without making every `T` a supported database type. Write the six
+Generalize that implementation without inventing another marker trait. Write the six
 public primitive aliases explicitly, for example:
 
 ```rust,ignore
@@ -69,12 +70,12 @@ pub type F64Array = PrimitiveArray<f64>;
 pub type F64ArrayBuilder = PrimitiveArrayBuilder<f64>;
 ```
 
-Then add a private `SupportedPrimitive` marker implemented only for `i16`, `i32`, `i64`, `bool`,
-`f32`, and `f64`. Implement `Array` once for `PrimitiveArray<T>` and `ArrayBuilder` once for
+Implement `Array` once for `PrimitiveArray<T>` and `ArrayBuilder` once for
 `PrimitiveArrayBuilder<T>`, with bounds connecting `T` to the matching `Scalar`, `ScalarRef`, and
-erased `ArrayImpl` family. An arbitrary `PrimitiveArray<T>` remains useful as internal storage,
-but it does not become a database `Array` unless `T` carries the private marker and the complete
-static family relationship.
+erased `ArrayImpl` family. Those existing relationships are already the exact admission rule: an
+arbitrary `PrimitiveArray<T>` remains useful as internal storage, but it does not become a
+database `Array` unless `T` satisfies the complete static family contract. Do not duplicate that
+contract with a private marker trait.
 
 Keep the Chapter 1 layout unchanged. `push(None)` still appends a default placeholder and a false
 validity bit. `get` consults validity before returning the copied value. NaN, infinity, and signed
@@ -119,8 +120,8 @@ Chapter 1 for every static row:
 owned scalar <-> borrowed scalar <-> concrete array <-> builder
 ```
 
-Do not add `i128` to `SupportedPrimitive`. Checkpoint 4 will add Decimal's catalog row after the
-descriptor-bearing types exist. The Decimal wrapper may reuse `PrimitiveArray<i128>` as internal
+Do not implement the static `Scalar`/`Array` family contract for `i128`. Checkpoint 4 will add
+Decimal's catalog row after the descriptor-bearing types exist. The Decimal wrapper may reuse `PrimitiveArray<i128>` as internal
 coefficient and validity storage, but its builder still needs a runtime `DecimalType` before it can
 accept any row.
 
@@ -163,7 +164,9 @@ An `f64` value carries its interpretation in its bits. An `i128` coefficient doe
 whether `12345` means `12345`, `123.45`, or `12.345`. Decimal therefore cannot use the static
 primitive relationship unchanged.
 
-Implement `DecimalType`, `Decimal`, and `DecimalError` in `src/decimal.rs`. `DecimalType` owns the
+Add `anyhow` as the small shared error dependency, then implement `DecimalType` and `Decimal` in
+`src/decimal.rs` with `anyhow::Result`. This chapter needs readable checked failures, not a public
+Decimal-specific error taxonomy. `DecimalType` owns the
 precision and scale and accepts only:
 
 ```text
@@ -216,8 +219,8 @@ cargo test -p type-exercise-starter --lib --locked
 
 Before continuing, make sure you can explain three boundaries in your own words:
 
-1. Why does the private marker admit `PrimitiveArray<f64>` to the generic database-array
-   implementation, while an arbitrary `PrimitiveArray<T>` does not qualify?
+1. Which existing scalar, array, and conversion bounds admit `PrimitiveArray<f64>` to the generic
+   database-array implementation, while an arbitrary `PrimitiveArray<T>` does not qualify?
 2. Why do `Char { width }` and `Varchar` remain distinct logical types even though both map to
    `PhysicalType::String`?
 3. Why can `DecimalArray` reuse `PrimitiveArray<i128>` storage while `DecimalArrayBuilder` still cannot use the metadata-free `ArrayBuilder::with_capacity` constructor?

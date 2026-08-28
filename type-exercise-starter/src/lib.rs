@@ -20,10 +20,7 @@ mod variant_catalog;
 // mod expression;
 // mod operators;
 // pub use expression::{BinaryScalarFunction, ExpressionError, I32Add, ScalarError, evaluate_binary};
-// pub use operators::{
-//     CheckedBinaryExpression, CheckedBinaryScalarFunction, CheckedUnaryScalarFunction,
-//     UnaryExpression,
-// };
+// pub use operators::{BatchExpression, BatchKernel};
 // Day 5, checkpoint 1: uncomment after implementing numeric promotion.
 // mod promotion;
 // pub use promotion::{NUMERIC_PROMOTIONS, NumericPromotion, promote_numeric};
