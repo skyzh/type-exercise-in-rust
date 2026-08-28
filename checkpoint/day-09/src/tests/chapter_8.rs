@@ -1,8 +1,13 @@
+use std::any::Any;
+
 use crate::{
     Array, ArrayBuilder, ArrayImpl, BUILTIN_EXPRESSION_NAMES, BatchExpression, BinaryExpression,
     BoolArray, BooleanOperator, ColumnView, ColumnViewImpl, Expression, ExpressionError, I32Array,
-    PhysicalType, ScalarRefImpl, StringArray, build_boolean_expression, build_builtin_expression,
+    PhysicalType, ScalarRefImpl, StringArray, TypeMismatch, build_boolean_expression,
+    build_builtin_expression,
 };
+
+fn assert_expression_bounds<T: Any + Send + Sync + ?Sized>() {}
 
 fn panic_on_non_null_batch(inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
     let left = ColumnView::<i32>::try_from(inputs[0].clone())?;
@@ -78,6 +83,11 @@ fn evaluates_a_builtin_through_a_trait_object() {
 }
 
 #[test]
+fn erased_expression_boundary_is_any_send_and_sync() {
+    assert_expression_bounds::<dyn Expression>();
+}
+
+#[test]
 fn generates_the_complete_builtin_catalog() {
     assert_eq!(BUILTIN_EXPRESSION_NAMES, &["i32_add", "string_concat"]);
     for name in BUILTIN_EXPRESSION_NAMES {
@@ -85,6 +95,30 @@ fn generates_the_complete_builtin_catalog() {
     }
     assert!(build_builtin_expression("add").is_none());
     assert!(build_builtin_expression("missing").is_none());
+}
+
+#[test]
+fn rejects_a_kernel_result_that_disagrees_with_declared_metadata() {
+    let expression = BinaryExpression::new(
+        "mismatched_output",
+        [PhysicalType::String, PhysicalType::Int32],
+        PhysicalType::String,
+        string_length_add_batch,
+    );
+    let strings: ArrayImpl = StringArray::from_slice(&[Some("rust")]).into();
+    let error = expression
+        .evaluate(&[
+            ColumnViewImpl::array(&strings),
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 1),
+        ])
+        .unwrap_err();
+    assert_eq!(
+        error,
+        ExpressionError::TypeMismatch(TypeMismatch {
+            expected: PhysicalType::String,
+            actual: PhysicalType::Int32,
+        })
+    );
 }
 
 #[test]
@@ -175,20 +209,37 @@ fn delegates_length_errors_to_the_typed_boundary() {
 }
 
 #[test]
-fn binary_catalog_erases_a_whole_batch_kernel_not_a_scalar_callback() {
+fn i32_builtin_kernel_owns_its_row_operation_without_a_scalar_callback() {
     let source = include_str!("../expression.rs");
-    let start = source.find("pub type BinaryBatchKernel").unwrap();
-    let end = source[start..]
-        .find("pub const BUILTIN_EXPRESSION_NAMES")
+    let start = source.find("fn evaluate_i32_add_batch(").unwrap();
+    let body_start = source[start..]
+        .find('{')
         .map(|offset| start + offset)
         .unwrap();
-    let binary_catalog = &source[start..end];
+    let mut depth = 0_usize;
+    let mut body_end = None;
+    for (offset, character) in source[body_start..].char_indices() {
+        match character {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    body_end = Some(body_start + offset + 1);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let body = &source[body_start..body_end.unwrap()];
 
-    assert!(binary_catalog.contains("kernel: BinaryBatchKernel"));
-    assert!(binary_catalog.contains("(self.kernel)(inputs)"));
-    assert!(binary_catalog.contains("fn evaluate_i32_add_batch"));
-    assert!(binary_catalog.contains("fn evaluate_string_concat_batch"));
-    assert!(!binary_catalog.contains("BinaryScalarFunction"));
+    assert!(body.contains(".map(|(left, right)| left.wrapping_add(right))"));
+    assert!(
+        !body
+            .lines()
+            .any(|line| line.trim_start().starts_with("fn "))
+    );
+    assert!(!body.contains(": fn(i32, i32) -> i32"));
 }
 
 #[test]

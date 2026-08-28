@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
@@ -82,7 +83,7 @@ impl From<TypeMismatch> for ExpressionError {
     }
 }
 
-pub trait Expression {
+pub trait Expression: Any + Send + Sync {
     fn name(&self) -> &'static str;
     fn input_types(&self) -> &[crate::PhysicalType];
     fn arity(&self) -> usize {
@@ -203,7 +204,7 @@ pub struct PrimitiveBinaryExpression<F> {
 
 impl<F> PrimitiveBinaryExpression<F>
 where
-    F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32>,
+    F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32> + Send + Sync + 'static,
 {
     pub fn new(name: &'static str, function: F) -> Self {
         Self {
@@ -298,7 +299,7 @@ where
 
 impl<F> Expression for PrimitiveBinaryExpression<F>
 where
-    F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32>,
+    F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32> + Send + Sync + 'static,
 {
     fn name(&self) -> &'static str {
         self.name
@@ -413,10 +414,18 @@ impl Expression for BinaryExpression {
                 input_index: 1,
             });
         }
-        match self.loop_kernel {
+        let (output, selected_loop) = match self.loop_kernel {
             Some(kernel) => kernel(inputs),
             None => (self.kernel)(inputs).map(|output| (output, PrimitiveLoop::General)),
+        }?;
+        if output.physical_type() != self.output_type {
+            return Err(TypeMismatch {
+                expected: self.output_type.clone(),
+                actual: output.physical_type(),
+            }
+            .into());
         }
+        Ok((output, selected_loop))
     }
 }
 
@@ -501,23 +510,64 @@ fn evaluate_string_concat_batch(
     Ok(output.finish().into())
 }
 
-pub const BUILTIN_EXPRESSION_NAMES: &[&str] = &["i32_add", "string_concat"];
+#[derive(Clone)]
+struct BinaryBuiltin {
+    name: &'static str,
+    input_types: [crate::PhysicalType; 2],
+    output_type: crate::PhysicalType,
+    kernel: BinaryBatchKernel,
+    loop_kernel: Option<BinaryLoopKernel>,
+}
 
-pub fn build_builtin_expression(name: &str) -> Option<Box<dyn Expression>> {
-    match name {
-        "i32_add" => Some(Box::new(BinaryExpression::new_with_loop(
-            "i32_add",
-            [crate::PhysicalType::Int32, crate::PhysicalType::Int32],
-            crate::PhysicalType::Int32,
-            evaluate_i32_add_batch,
-            evaluate_i32_add_batch_with_loop,
-        ))),
-        "string_concat" => Some(Box::new(BinaryExpression::new(
-            "string_concat",
-            [crate::PhysicalType::String, crate::PhysicalType::String],
-            crate::PhysicalType::String,
-            evaluate_string_concat_batch,
-        ))),
-        _ => None,
+impl BinaryBuiltin {
+    fn build(&self) -> BinaryExpression {
+        let expression = BinaryExpression::new(
+            self.name,
+            self.input_types.clone(),
+            self.output_type.clone(),
+            self.kernel,
+        );
+        match self.loop_kernel {
+            Some(loop_kernel) => BinaryExpression::new_with_loop(
+                expression.name,
+                expression.input_types,
+                expression.output_type,
+                expression.kernel,
+                loop_kernel,
+            ),
+            None => expression,
+        }
     }
+}
+
+macro_rules! define_builtin_expressions {
+    ($( $name:literal => ($left:expr, $right:expr) -> $output:expr => $kernel:path $(, $loop_kernel:path)? ),+ $(,)?) => {
+        pub const BUILTIN_EXPRESSION_NAMES: &[&str] = &[$($name),+];
+
+        const BUILTIN_EXPRESSIONS: &[BinaryBuiltin] = &[
+            $(BinaryBuiltin {
+                name: $name,
+                input_types: [$left, $right],
+                output_type: $output,
+                kernel: $kernel,
+                loop_kernel: define_builtin_expressions!(@loop $($loop_kernel)?),
+            }),+
+        ];
+
+        pub fn build_builtin_expression(name: &str) -> Option<Box<dyn Expression>> {
+            BUILTIN_EXPRESSIONS
+                .iter()
+                .find(|builtin| builtin.name == name)
+                .map(|builtin| Box::new(builtin.build()) as Box<dyn Expression>)
+        }
+    };
+    (@loop) => { None };
+    (@loop $loop_kernel:path) => { Some($loop_kernel) };
+}
+
+define_builtin_expressions! {
+    "i32_add" => (crate::PhysicalType::Int32, crate::PhysicalType::Int32)
+        -> crate::PhysicalType::Int32 => evaluate_i32_add_batch, evaluate_i32_add_batch_with_loop,
+    "string_concat" => (crate::PhysicalType::String, crate::PhysicalType::String)
+        -> crate::PhysicalType::String => evaluate_string_concat_batch,
 }

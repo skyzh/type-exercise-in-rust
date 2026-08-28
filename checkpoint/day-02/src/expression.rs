@@ -27,8 +27,9 @@
 //     /* fn output_nullability(&self, inputs: &[Nullability]) -> Nullability */
 //     /* fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> */
 // }
-// pub struct BinaryExpression<F> { /* typed function plus runtime metadata */ }
-// impl<F> BinaryExpression<F> { /* pub fn new(name, function) -> Self */ }
+// pub type BinaryBatchKernel = /* one function pointer over a complete borrowed input batch */;
+// pub struct BinaryExpression { /* physical metadata plus one whole-batch kernel */ }
+// impl BinaryExpression { /* pub fn new(name, input_types, output_type, kernel) -> Self */ }
 //
 //! Day 8, checkpoint 3: add the builtin catalog here.
 // pub fn build_builtin_expression(name: &str) -> Option<Box<dyn Expression>>;

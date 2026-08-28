@@ -50,7 +50,8 @@ Wire the erased boundary and catalog into the starter crate root like the earlie
 
 ```rust,ignore
 pub use expression::{
-    BinaryExpression, BUILTIN_EXPRESSION_NAMES, Expression, build_builtin_expression,
+    BinaryBatchKernel, BinaryExpression, BUILTIN_EXPRESSION_NAMES, Expression,
+    build_builtin_expression,
 };
 ```
 
@@ -59,9 +60,12 @@ pub use expression::{
 - **Target:** the `Expression` implementation for `BatchExpression<N>` in
   `type-exercise-starter/src/operators.rs`, plus the original
   `BinaryExpression` implementation in `type-exercise-starter/src/expression.rs`.
-- **Change:** publish physical metadata and call the selected whole-batch kernel. The typed
-  `i32_add` and `string_concat` kernels own their row loops; `BinaryExpression` never stores or
-  invokes a scalar callback.
+- **Change:** publish physical metadata and call the selected whole-batch kernel. One declarative
+  catalog row owns each built-in's name, input and output physical types, kernel, and optional loop
+  specialization; that same row list generates both the public name list and constructor lookup.
+  The typed `i32_add` and `string_concat` kernels own their row loops; `BinaryExpression` never
+  stores or invokes a scalar callback. Its erased boundary also checks that the returned array's
+  physical type matches the declared output type.
 - **Preserve:** arity is checked before indexing; type and length errors keep their original shape.
 - **Run:** focused and cumulative tests.
 - **Passing means:** erasure adds selection, not a second evaluator.

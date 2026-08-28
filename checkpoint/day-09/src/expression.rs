@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
@@ -79,7 +80,7 @@ impl From<TypeMismatch> for ExpressionError {
     }
 }
 
-pub trait Expression {
+pub trait Expression: Any + Send + Sync {
     fn name(&self) -> &'static str;
     fn input_types(&self) -> &[crate::PhysicalType];
     fn arity(&self) -> usize {
@@ -228,7 +229,15 @@ impl Expression for BinaryExpression {
                 input_index: 1,
             });
         }
-        (self.kernel)(inputs)
+        let output = (self.kernel)(inputs)?;
+        if output.physical_type() != self.output_type {
+            return Err(TypeMismatch {
+                expected: self.output_type.clone(),
+                actual: output.physical_type(),
+            }
+            .into());
+        }
+        Ok(output)
     }
 }
 
@@ -264,22 +273,50 @@ fn evaluate_string_concat_batch(
     Ok(output.finish().into())
 }
 
-pub const BUILTIN_EXPRESSION_NAMES: &[&str] = &["i32_add", "string_concat"];
+#[derive(Clone)]
+struct BinaryBuiltin {
+    name: &'static str,
+    input_types: [crate::PhysicalType; 2],
+    output_type: crate::PhysicalType,
+    kernel: BinaryBatchKernel,
+}
 
-pub fn build_builtin_expression(name: &str) -> Option<Box<dyn Expression>> {
-    match name {
-        "i32_add" => Some(Box::new(BinaryExpression::new(
-            "i32_add",
-            [crate::PhysicalType::Int32, crate::PhysicalType::Int32],
-            crate::PhysicalType::Int32,
-            evaluate_i32_add_batch,
-        ))),
-        "string_concat" => Some(Box::new(BinaryExpression::new(
-            "string_concat",
-            [crate::PhysicalType::String, crate::PhysicalType::String],
-            crate::PhysicalType::String,
-            evaluate_string_concat_batch,
-        ))),
-        _ => None,
+impl BinaryBuiltin {
+    fn build(&self) -> BinaryExpression {
+        BinaryExpression::new(
+            self.name,
+            self.input_types.clone(),
+            self.output_type.clone(),
+            self.kernel,
+        )
     }
+}
+
+macro_rules! define_builtin_expressions {
+    ($( $name:literal => ($left:expr, $right:expr) -> $output:expr => $kernel:path ),+ $(,)?) => {
+        pub const BUILTIN_EXPRESSION_NAMES: &[&str] = &[$($name),+];
+
+        const BUILTIN_EXPRESSIONS: &[BinaryBuiltin] = &[
+            $(BinaryBuiltin {
+                name: $name,
+                input_types: [$left, $right],
+                output_type: $output,
+                kernel: $kernel,
+            }),+
+        ];
+
+        pub fn build_builtin_expression(name: &str) -> Option<Box<dyn Expression>> {
+            BUILTIN_EXPRESSIONS
+                .iter()
+                .find(|builtin| builtin.name == name)
+                .map(|builtin| Box::new(builtin.build()) as Box<dyn Expression>)
+        }
+    };
+}
+
+define_builtin_expressions! {
+    "i32_add" => (crate::PhysicalType::Int32, crate::PhysicalType::Int32)
+        -> crate::PhysicalType::Int32 => evaluate_i32_add_batch,
+    "string_concat" => (crate::PhysicalType::String, crate::PhysicalType::String)
+        -> crate::PhysicalType::String => evaluate_string_concat_batch,
 }
