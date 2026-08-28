@@ -725,27 +725,23 @@ where
     for<'a> &'a B::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
     for<'a> A::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> B::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-    i16: TryFrom<A, Error = std::convert::Infallible>
-        + TryFrom<B, Error = std::convert::Infallible>,
-    i32: TryFrom<A, Error = std::convert::Infallible>
-        + TryFrom<B, Error = std::convert::Infallible>,
-    i64: TryFrom<A, Error = std::convert::Infallible>
-        + TryFrom<B, Error = std::convert::Infallible>,
-    f32: TryFrom<A, Error = std::convert::Infallible>
-        + TryFrom<B, Error = std::convert::Infallible>,
-    f64: TryFrom<A, Error = std::convert::Infallible>
-        + TryFrom<B, Error = std::convert::Infallible>,
+    i16:
+        TryFrom<A, Error = std::convert::Infallible> + TryFrom<B, Error = std::convert::Infallible>,
+    i32:
+        TryFrom<A, Error = std::convert::Infallible> + TryFrom<B, Error = std::convert::Infallible>,
+    i64:
+        TryFrom<A, Error = std::convert::Infallible> + TryFrom<B, Error = std::convert::Infallible>,
+    f32:
+        TryFrom<A, Error = std::convert::Infallible> + TryFrom<B, Error = std::convert::Infallible>,
+    f64:
+        TryFrom<A, Error = std::convert::Infallible> + TryFrom<B, Error = std::convert::Infallible>,
 {
     match (third, output) {
         (PhysicalType::Int16, PhysicalType::Int16) => evaluate_numeric_clamp::<A, B, i16, i16>,
         (PhysicalType::Int32, PhysicalType::Int32) => evaluate_numeric_clamp::<A, B, i32, i32>,
         (PhysicalType::Int64, PhysicalType::Int64) => evaluate_numeric_clamp::<A, B, i64, i64>,
-        (PhysicalType::Float32, PhysicalType::Float32) => {
-            evaluate_numeric_clamp::<A, B, f32, f32>
-        }
-        (PhysicalType::Float64, PhysicalType::Float64) => {
-            evaluate_numeric_clamp::<A, B, f64, f64>
-        }
+        (PhysicalType::Float32, PhysicalType::Float32) => evaluate_numeric_clamp::<A, B, f32, f32>,
+        (PhysicalType::Float64, PhysicalType::Float64) => evaluate_numeric_clamp::<A, B, f64, f64>,
         _ => unreachable!("validated numeric clamp tuple after Int16 pair"),
     }
 }
@@ -763,23 +759,19 @@ where
     for<'a> &'a B::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
     for<'a> A::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> B::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-    i32: TryFrom<A, Error = std::convert::Infallible>
-        + TryFrom<B, Error = std::convert::Infallible>,
-    i64: TryFrom<A, Error = std::convert::Infallible>
-        + TryFrom<B, Error = std::convert::Infallible>,
-    f64: TryFrom<A, Error = std::convert::Infallible>
-        + TryFrom<B, Error = std::convert::Infallible>,
+    i32:
+        TryFrom<A, Error = std::convert::Infallible> + TryFrom<B, Error = std::convert::Infallible>,
+    i64:
+        TryFrom<A, Error = std::convert::Infallible> + TryFrom<B, Error = std::convert::Infallible>,
+    f64:
+        TryFrom<A, Error = std::convert::Infallible> + TryFrom<B, Error = std::convert::Infallible>,
 {
     match (third, output) {
         (PhysicalType::Int16, PhysicalType::Int32) => evaluate_numeric_clamp::<A, B, i16, i32>,
         (PhysicalType::Int32, PhysicalType::Int32) => evaluate_numeric_clamp::<A, B, i32, i32>,
         (PhysicalType::Int64, PhysicalType::Int64) => evaluate_numeric_clamp::<A, B, i64, i64>,
-        (PhysicalType::Float32, PhysicalType::Float64) => {
-            evaluate_numeric_clamp::<A, B, f32, f64>
-        }
-        (PhysicalType::Float64, PhysicalType::Float64) => {
-            evaluate_numeric_clamp::<A, B, f64, f64>
-        }
+        (PhysicalType::Float32, PhysicalType::Float64) => evaluate_numeric_clamp::<A, B, f32, f64>,
+        (PhysicalType::Float64, PhysicalType::Float64) => evaluate_numeric_clamp::<A, B, f64, f64>,
         _ => unreachable!("validated numeric clamp tuple after Int32 pair"),
     }
 }
@@ -797,8 +789,8 @@ where
     for<'a> &'a B::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
     for<'a> A::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> B::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-    i64: TryFrom<A, Error = std::convert::Infallible>
-        + TryFrom<B, Error = std::convert::Infallible>,
+    i64:
+        TryFrom<A, Error = std::convert::Infallible> + TryFrom<B, Error = std::convert::Infallible>,
 {
     match (third, output) {
         (PhysicalType::Int16, PhysicalType::Int64) => evaluate_numeric_clamp::<A, B, i16, i64>,
@@ -821,24 +813,16 @@ where
     for<'a> &'a B::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
     for<'a> A::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> B::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-    f32: TryFrom<A, Error = std::convert::Infallible>
-        + TryFrom<B, Error = std::convert::Infallible>,
-    f64: TryFrom<A, Error = std::convert::Infallible>
-        + TryFrom<B, Error = std::convert::Infallible>,
+    f32:
+        TryFrom<A, Error = std::convert::Infallible> + TryFrom<B, Error = std::convert::Infallible>,
+    f64:
+        TryFrom<A, Error = std::convert::Infallible> + TryFrom<B, Error = std::convert::Infallible>,
 {
     match (third, output) {
-        (PhysicalType::Int16, PhysicalType::Float32) => {
-            evaluate_numeric_clamp::<A, B, i16, f32>
-        }
-        (PhysicalType::Int32, PhysicalType::Float64) => {
-            evaluate_numeric_clamp::<A, B, i32, f64>
-        }
-        (PhysicalType::Float32, PhysicalType::Float32) => {
-            evaluate_numeric_clamp::<A, B, f32, f32>
-        }
-        (PhysicalType::Float64, PhysicalType::Float64) => {
-            evaluate_numeric_clamp::<A, B, f64, f64>
-        }
+        (PhysicalType::Int16, PhysicalType::Float32) => evaluate_numeric_clamp::<A, B, i16, f32>,
+        (PhysicalType::Int32, PhysicalType::Float64) => evaluate_numeric_clamp::<A, B, i32, f64>,
+        (PhysicalType::Float32, PhysicalType::Float32) => evaluate_numeric_clamp::<A, B, f32, f32>,
+        (PhysicalType::Float64, PhysicalType::Float64) => evaluate_numeric_clamp::<A, B, f64, f64>,
         _ => unreachable!("validated numeric clamp tuple after Float32 pair"),
     }
 }
@@ -856,22 +840,14 @@ where
     for<'a> &'a B::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
     for<'a> A::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> B::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-    f64: TryFrom<A, Error = std::convert::Infallible>
-        + TryFrom<B, Error = std::convert::Infallible>,
+    f64:
+        TryFrom<A, Error = std::convert::Infallible> + TryFrom<B, Error = std::convert::Infallible>,
 {
     match (third, output) {
-        (PhysicalType::Int16, PhysicalType::Float64) => {
-            evaluate_numeric_clamp::<A, B, i16, f64>
-        }
-        (PhysicalType::Int32, PhysicalType::Float64) => {
-            evaluate_numeric_clamp::<A, B, i32, f64>
-        }
-        (PhysicalType::Float32, PhysicalType::Float64) => {
-            evaluate_numeric_clamp::<A, B, f32, f64>
-        }
-        (PhysicalType::Float64, PhysicalType::Float64) => {
-            evaluate_numeric_clamp::<A, B, f64, f64>
-        }
+        (PhysicalType::Int16, PhysicalType::Float64) => evaluate_numeric_clamp::<A, B, i16, f64>,
+        (PhysicalType::Int32, PhysicalType::Float64) => evaluate_numeric_clamp::<A, B, i32, f64>,
+        (PhysicalType::Float32, PhysicalType::Float64) => evaluate_numeric_clamp::<A, B, f32, f64>,
+        (PhysicalType::Float64, PhysicalType::Float64) => evaluate_numeric_clamp::<A, B, f64, f64>,
         _ => unreachable!("validated numeric clamp tuple after Float64 pair"),
     }
 }

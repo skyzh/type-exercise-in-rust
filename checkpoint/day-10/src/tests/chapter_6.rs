@@ -1,32 +1,21 @@
 use crate::{
-    Array, ArrayImpl, CheckedTernaryScalarFunction, ColumnViewImpl, DataType, ExpressionError,
-    I16Array, I64Array, PhysicalType, ScalarError, ScalarRefImpl, TernaryExpression, TypeMismatch,
-    promote_numeric, validate_expression_inputs,
+    Array, ArrayImpl, ColumnViewImpl, DataType, ExpressionError, I16Array, I64Array, PhysicalType,
+    ScalarError, ScalarRefImpl, TypeMismatch, promote_numeric, validate_expression_inputs,
 };
 
 use crate::operators::{build_numeric_clamp_expression, build_numeric_neg_expression};
 
-struct MixedClamp;
-
-impl CheckedTernaryScalarFunction for MixedClamp {
-    type First = i16;
-    type Second = i32;
-    type Third = i64;
-    type Output = i64;
-
-    fn evaluate<'a>(&self, value: i16, lower: i32, upper: i64) -> Result<i64, ScalarError> {
-        let value = i64::from(value);
-        let lower = i64::from(lower);
-        if lower > upper {
-            return Err(ScalarError::InvalidClampBounds);
-        }
-        Ok(value.clamp(lower, upper))
-    }
-}
-
 #[test]
-fn direct_mixed_ternary_is_strict_and_reports_the_failing_row() {
-    let expression = TernaryExpression::new("mixed_clamp", MixedClamp);
+fn direct_mixed_batch_kernel_is_strict_and_reports_the_failing_row() {
+    let expression = build_numeric_clamp_expression(
+        "mixed_clamp",
+        [
+            PhysicalType::Int16,
+            PhysicalType::Int32,
+            PhysicalType::Int64,
+        ],
+        PhysicalType::Int64,
+    );
     let values: ArrayImpl = I16Array::from_slice(&[Some(5), None, Some(25)]).into();
     let uppers: ArrayImpl = I64Array::from_values(vec![20, 0, 20]).into();
     let output = expression
@@ -60,7 +49,7 @@ fn direct_mixed_ternary_is_strict_and_reports_the_failing_row() {
 }
 
 #[test]
-fn unary_and_real_ternary_adapters_are_strict_and_checked() {
+fn numeric_negation_and_clamp_batch_kernels_are_strict_and_checked() {
     let neg = build_numeric_neg_expression("numeric_neg", PhysicalType::Int64);
     let output = neg
         .evaluate(&[ColumnViewImpl::constant(ScalarRefImpl::Int64(i64::MIN), 1)])
