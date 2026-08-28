@@ -36,7 +36,8 @@ mod variant_catalog;
 // };
 // Day 8, checkpoint 1: extend the expression re-exports with the erased boundary and catalog.
 // pub use expression::{
-//     BinaryExpression, BUILTIN_EXPRESSION_NAMES, Expression, build_builtin_expression,
+//     BinaryBatchKernel, BinaryExpression, BUILTIN_EXPRESSION_NAMES, Expression,
+//     build_builtin_expression,
 // };
 // Day 10, checkpoint 1: extend the expression re-export with `PrimitiveBinaryExpression` and
 // `PrimitiveLoop`; `Nullability` is exported beside `PhysicalType`.

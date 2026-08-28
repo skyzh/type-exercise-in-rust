@@ -41,9 +41,11 @@ return to the general contract or the same structured error.
   `type-exercise-starter/src/column.rs::{ColumnViewImpl::nullability,
   ColumnViewImpl::try_non_null_array}`, and
   `type-exercise-starter/src/expression.rs::{Expression::output_nullability, PrimitiveLoop,
-  PrimitiveBinaryExpression::evaluate_with_loop}`.
+  PrimitiveBinaryExpression::evaluate_with_loop, BinaryExpression::new_with_loop}`.
 - **Change:** keep one primitive array representation, establish physical nullability at the
-  column boundary, and choose the dense `i32` path only after ordinary validation succeeds.
+  column boundary, and choose the dense `i32` path only after ordinary validation succeeds. The
+  builtin catalog stores that selection as another whole-batch kernel; it does not reintroduce a
+  scalar callback.
 - **Preserve:** output values, nulls, and errors are identical to `evaluate`.
 - **Run:** the Chapter 10 focused test.
 - **Passing means:** all four dense shapes report their selected loop and every fallback reports

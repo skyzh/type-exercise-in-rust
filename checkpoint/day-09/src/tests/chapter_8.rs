@@ -1,32 +1,35 @@
 use crate::{
     Array, ArrayBuilder, ArrayImpl, BUILTIN_EXPRESSION_NAMES, BatchExpression, BinaryExpression,
-    BinaryScalarFunction, BoolArray, BooleanOperator, ColumnView, ColumnViewImpl, Expression,
-    ExpressionError, I32Array, PhysicalType, ScalarRefImpl, StringArray, build_boolean_expression,
-    build_builtin_expression,
+    BoolArray, BooleanOperator, ColumnView, ColumnViewImpl, Expression, ExpressionError, I32Array,
+    PhysicalType, ScalarRefImpl, StringArray, build_boolean_expression, build_builtin_expression,
 };
 
-struct PanicOnCall;
-
-impl BinaryScalarFunction for PanicOnCall {
-    type Left = i32;
-    type Right = i32;
-    type Output = String;
-
-    fn evaluate(&self, _left: i32, _right: i32) -> String {
-        panic!("strict expressions must not evaluate a null row")
+fn panic_on_non_null_batch(inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+    let left = ColumnView::<i32>::try_from(inputs[0].clone())?;
+    let right = ColumnView::<i32>::try_from(inputs[1].clone())?;
+    let mut output = <StringArray as Array>::Builder::with_capacity(left.len());
+    for row in 0..left.len() {
+        let value = left
+            .get(row)
+            .zip(right.get(row))
+            .map(|_| panic!("strict expressions must not evaluate a null row"));
+        output.push(value);
     }
+    Ok(output.finish().into())
 }
 
-struct StringLengthAdd;
-
-impl BinaryScalarFunction for StringLengthAdd {
-    type Left = String;
-    type Right = i32;
-    type Output = i32;
-
-    fn evaluate(&self, left: &str, right: i32) -> i32 {
-        i32::try_from(left.len()).unwrap().wrapping_add(right)
+fn string_length_add_batch(inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+    let left = ColumnView::<String>::try_from(inputs[0].clone())?;
+    let right = ColumnView::<i32>::try_from(inputs[1].clone())?;
+    let mut output = <I32Array as Array>::Builder::with_capacity(left.len());
+    for row in 0..left.len() {
+        output.push(
+            left.get(row)
+                .zip(right.get(row))
+                .map(|(left, right)| i32::try_from(left.len()).unwrap().wrapping_add(right)),
+        );
     }
+    Ok(output.finish().into())
 }
 
 #[test]
@@ -52,8 +55,12 @@ fn evaluates_a_builtin_through_a_trait_object() {
         vec![Some(12), None, Some(32)]
     );
 
-    let expression: Box<dyn Expression> =
-        Box::new(BinaryExpression::new("string_length_add", StringLengthAdd));
+    let expression: Box<dyn Expression> = Box::new(BinaryExpression::new(
+        "string_length_add",
+        [PhysicalType::String, PhysicalType::Int32],
+        PhysicalType::Int32,
+        string_length_add_batch,
+    ));
     assert_eq!(
         expression.input_types(),
         &[PhysicalType::String, PhysicalType::Int32]
@@ -105,8 +112,12 @@ fn concatenates_borrowed_indexed_and_constant_strings() {
 
 #[test]
 fn preserves_strict_nulls_through_the_erased_adapter() {
-    let expression: Box<dyn Expression> =
-        Box::new(BinaryExpression::new("panic_on_call", PanicOnCall));
+    let expression: Box<dyn Expression> = Box::new(BinaryExpression::new(
+        "panic_on_call",
+        [PhysicalType::Int32, PhysicalType::Int32],
+        PhysicalType::String,
+        panic_on_non_null_batch,
+    ));
     assert_eq!(
         expression.input_types(),
         &[PhysicalType::Int32, PhysicalType::Int32]
@@ -123,8 +134,12 @@ fn preserves_strict_nulls_through_the_erased_adapter() {
 
 #[test]
 fn rejects_arity_before_indexing_or_converting_inputs() {
-    let expression: Box<dyn Expression> =
-        Box::new(BinaryExpression::new("string_length_add", StringLengthAdd));
+    let expression: Box<dyn Expression> = Box::new(BinaryExpression::new(
+        "string_length_add",
+        [PhysicalType::String, PhysicalType::Int32],
+        PhysicalType::Int32,
+        string_length_add_batch,
+    ));
     assert!(expression.evaluate(&[]).is_err());
 
     let inputs = [ColumnViewImpl::null(PhysicalType::String, 1)];
@@ -157,6 +172,23 @@ fn delegates_length_errors_to_the_typed_boundary() {
         ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 2),
     ];
     assert!(expression.evaluate(&inputs).is_err());
+}
+
+#[test]
+fn binary_catalog_erases_a_whole_batch_kernel_not_a_scalar_callback() {
+    let source = include_str!("../expression.rs");
+    let start = source.find("pub type BinaryBatchKernel").unwrap();
+    let end = source[start..]
+        .find("pub const BUILTIN_EXPRESSION_NAMES")
+        .map(|offset| start + offset)
+        .unwrap();
+    let binary_catalog = &source[start..end];
+
+    assert!(binary_catalog.contains("kernel: BinaryBatchKernel"));
+    assert!(binary_catalog.contains("(self.kernel)(inputs)"));
+    assert!(binary_catalog.contains("fn evaluate_i32_add_batch"));
+    assert!(binary_catalog.contains("fn evaluate_string_concat_batch"));
+    assert!(!binary_catalog.contains("BinaryScalarFunction"));
 }
 
 #[test]

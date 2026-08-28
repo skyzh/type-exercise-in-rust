@@ -35,11 +35,11 @@ select an operator for every row.
 
 ## Checkpoint 1: make the batch contract safe to erase
 
-- **Target:** `type-exercise-starter/src/expression.rs::{Expression, BinaryExpression, ExpressionError}`.
+- **Target:** `type-exercise-starter/src/expression.rs::{Expression, BinaryExpression, BinaryBatchKernel, ExpressionError}`.
 - **Change:** keep `name`, `arity`, `input_types`, `output_type`, and `evaluate` free of associated
   types, and require `Any + Send + Sync` for checked recovery and sharing, so the trait is
-  object-safe from this chapter on; `BinaryExpression::new` pairs a runtime name with one typed
-  binary function.
+  object-safe from this chapter on; `BinaryExpression::new` pairs runtime physical metadata with
+  one whole-batch kernel pointer.
 - **Preserve:** metadata is borrowed or copied from the selected expression; runtime inputs stay
   borrowed.
 - **Run:** the Chapter 8 focused test.
@@ -58,8 +58,10 @@ pub use expression::{
 
 - **Target:** the `Expression` implementation for `BatchExpression<N>` in
   `type-exercise-starter/src/operators.rs`, plus the original
-  `BinaryExpression` compatibility implementation in `type-exercise-starter/src/expression.rs`.
-- **Change:** publish physical metadata and delegate to the selected whole-batch kernel.
+  `BinaryExpression` implementation in `type-exercise-starter/src/expression.rs`.
+- **Change:** publish physical metadata and call the selected whole-batch kernel. The typed
+  `i32_add` and `string_concat` kernels own their row loops; `BinaryExpression` never stores or
+  invokes a scalar callback.
 - **Preserve:** arity is checked before indexing; type and length errors keep their original shape.
 - **Run:** focused and cumulative tests.
 - **Passing means:** erasure adds selection, not a second evaluator.
