@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod array;
+mod column;
 mod data_type;
 mod decimal;
 mod physical_type;
@@ -17,6 +18,7 @@ mod variant_catalog;
 mod tests;
 
 pub use array::*;
+pub use column::{ColumnView, ColumnViewImpl, InvalidIndex};
 pub use data_type::*;
 pub use decimal::*;
 pub use physical_type::*;
