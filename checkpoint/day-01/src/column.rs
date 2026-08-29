@@ -1,23 +1,25 @@
 //! Learner-owned column-view checkpoints.
 //!
 //! Day 3, checkpoint 1: uncomment and implement the borrowed representations here.
-// pub struct ColumnViewImpl<'a> { /* array, constant, null, or Indexed state */ }
+// pub struct ColumnViewImpl<'a> { /* public wrapper around private representation state */ }
 // impl<'a> ColumnViewImpl<'a> {
 //     pub fn array(array: &'a ArrayImpl) -> Self;
 //     pub fn constant(value: ScalarRefImpl<'a>, len: usize) -> Self;
 //     pub fn null(physical_type: PhysicalType, len: usize) -> Self;
 //     pub fn indexed(
-//         indices: &'a [Option<usize>],
+//         indices: &'a [u32],
 //         values: &'a ArrayImpl,
-//     ) -> Result<Self, /* choose a useful error type */>;
+//     ) -> anyhow::Result<Self>;
 //     pub fn len(&self) -> usize;
 //     pub fn is_empty(&self) -> bool;
 //     pub fn physical_type(&self) -> PhysicalType;
+//     pub fn get(&self, row: usize) -> Option<ScalarRefImpl<'a>>;
 // }
 //
-//! Day 10, checkpoint 1: carry physical `Nullability`; keep `array` conservative and add checked
-//! `try_non_null_array`. Constants with a value are non-null; typed nulls and indexed views remain
-//! nullable.
+//! Day 10, checkpoint 1: make `ColumnViewImpl` carry physical `Nullability`. Keep `array`
+//! conservatively `Nullable`; add a checked `try_non_null_array` constructor that proves every
+//! row valid once. Constants with a value are `NonNull`; typed nulls and indexed views remain
+//! `Nullable`.
 //
 //! Day 3, checkpoint 2: uncomment and implement the typed view here.
 // pub struct ColumnView<'a, S: Scalar> { /* checked borrowed state */ }
