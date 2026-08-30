@@ -33,7 +33,7 @@ mod variant_catalog;
 // Day 7, checkpoint 1: uncomment after implementing three-valued Boolean logic.
 // mod boolean_logic;
 // pub use boolean_logic::{
-//     BOOLEAN_TRUTH_TABLE, BooleanExpression, BooleanOperator, BooleanTruthRow,
+//     BooleanExpression, BooleanOperator,
 //     NullEvaluationPolicy, build_boolean_expression,
 // };
 // Day 8, checkpoint 1: extend the expression re-exports with the erased boundary and catalog.

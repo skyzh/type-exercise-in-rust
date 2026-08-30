@@ -1,9 +1,6 @@
 //! Day 7, checkpoint 1: three-valued Boolean logic.
 
-use crate::{
-    ArrayBuilder, ArrayImpl, BoolArrayBuilder, ColumnView, ColumnViewImpl, Expression,
-    PhysicalType, Scalar,
-};
+use crate::{ArrayImpl, ColumnViewImpl, Expression, PhysicalType};
 
 /// How null inputs reach the scalar Boolean function.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -22,149 +19,6 @@ pub enum BooleanOperator {
     Or,
     Not,
 }
-
-/// One row of the three-valued Boolean truth table.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct BooleanTruthRow {
-    pub operator: BooleanOperator,
-    pub left: Option<bool>,
-    pub right: Option<bool>,
-    pub result: Option<bool>,
-}
-
-/// The required nullable-Boolean rows: nine `AND` rows, nine `OR` rows, and
-/// three `NOT` rows (the right operand is unused for `NOT`).
-pub const BOOLEAN_TRUTH_TABLE: &[BooleanTruthRow] = &[
-    // AND
-    BooleanTruthRow {
-        operator: BooleanOperator::And,
-        left: Some(true),
-        right: Some(true),
-        result: Some(true),
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::And,
-        left: Some(true),
-        right: Some(false),
-        result: Some(false),
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::And,
-        left: Some(true),
-        right: None,
-        result: None,
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::And,
-        left: Some(false),
-        right: Some(true),
-        result: Some(false),
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::And,
-        left: Some(false),
-        right: Some(false),
-        result: Some(false),
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::And,
-        left: Some(false),
-        right: None,
-        result: Some(false),
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::And,
-        left: None,
-        right: Some(true),
-        result: None,
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::And,
-        left: None,
-        right: Some(false),
-        result: Some(false),
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::And,
-        left: None,
-        right: None,
-        result: None,
-    },
-    // OR
-    BooleanTruthRow {
-        operator: BooleanOperator::Or,
-        left: Some(true),
-        right: Some(true),
-        result: Some(true),
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::Or,
-        left: Some(true),
-        right: Some(false),
-        result: Some(true),
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::Or,
-        left: Some(true),
-        right: None,
-        result: Some(true),
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::Or,
-        left: Some(false),
-        right: Some(true),
-        result: Some(true),
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::Or,
-        left: Some(false),
-        right: Some(false),
-        result: Some(false),
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::Or,
-        left: Some(false),
-        right: None,
-        result: None,
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::Or,
-        left: None,
-        right: Some(true),
-        result: Some(true),
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::Or,
-        left: None,
-        right: Some(false),
-        result: None,
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::Or,
-        left: None,
-        right: None,
-        result: None,
-    },
-    // NOT
-    BooleanTruthRow {
-        operator: BooleanOperator::Not,
-        left: Some(true),
-        right: None,
-        result: Some(false),
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::Not,
-        left: Some(false),
-        right: None,
-        result: Some(true),
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::Not,
-        left: None,
-        right: None,
-        result: None,
-    },
-];
 
 /// Apply one three-valued Boolean operator.
 pub(crate) fn apply_boolean(
@@ -232,65 +86,36 @@ impl BooleanExpression {
 
     /// Strict concrete evaluation of one three-valued Boolean operator.
     pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-        let arity = match self.operator {
-            BooleanOperator::And | BooleanOperator::Or => 2,
-            BooleanOperator::Not => 1,
-        };
-        if inputs.len() != arity {
-            anyhow::bail!(
-                "input arity mismatch: expected {arity}, got {}",
-                inputs.len()
-            );
-        }
-        for (input_index, input) in inputs.iter().enumerate() {
-            if input.physical_type() != PhysicalType::Bool {
-                anyhow::bail!(
-                    "input {input_index} type mismatch: expected {:?}, got {:?}",
-                    PhysicalType::Bool,
-                    input.physical_type()
-                );
-            }
-        }
-        // Typed view conversion happens before length validation, so a wrong
-        // later input type can never be reported as a length-first failure
-        // even if the explicit type loop above were narrowed.
-        let left_view = ColumnView::<bool>::try_from(inputs[0].clone())?;
-        let right_view = inputs
-            .get(1)
-            .cloned()
-            .map(ColumnView::<bool>::try_from)
-            .transpose()?;
-        let len = inputs.first().map_or(0, ColumnViewImpl::len);
-        for (input_index, input) in inputs.iter().enumerate().skip(1) {
-            if input.len() != len {
-                anyhow::bail!(
-                    "input {input_index} length mismatch: expected {len}, got {}",
-                    input.len()
-                );
-            }
-        }
-
-        let mut output = BoolArrayBuilder::with_capacity(len);
-        for row in 0..len {
-            let left = left_view.get(row);
-            let right = right_view.as_ref().and_then(|view| view.get(row));
-            let value = match self.policy {
-                NullEvaluationPolicy::Strict => match self.operator {
-                    BooleanOperator::Not => {
-                        left.and_then(|value| apply_boolean(self.operator, Some(value), None))
-                    }
-                    BooleanOperator::And | BooleanOperator::Or => match (left, right) {
-                        (Some(left), Some(right)) => {
-                            apply_boolean(self.operator, Some(left), Some(right))
-                        }
-                        _ => None,
-                    },
+        crate::operators::validate_expression_inputs(inputs, self.input_types())?;
+        match self.operator {
+            BooleanOperator::Not => crate::operators::evaluate_nullable_unary::<bool, bool, _>(
+                inputs[0].clone(),
+                |left| {
+                    Ok(match self.policy {
+                        NullEvaluationPolicy::Strict => left.map(|left| !left),
+                        NullEvaluationPolicy::NonStrict => apply_boolean(self.operator, left, None),
+                    })
                 },
-                NullEvaluationPolicy::NonStrict => apply_boolean(self.operator, left, right),
-            };
-            output.push(value.as_ref().map(Scalar::as_scalar_ref));
+            ),
+            BooleanOperator::And | BooleanOperator::Or => {
+                crate::operators::evaluate_nullable_binary::<bool, bool, bool, _>(
+                    inputs[0].clone(),
+                    inputs[1].clone(),
+                    |left, right| {
+                        Ok(match self.policy {
+                            NullEvaluationPolicy::Strict => {
+                                left.zip(right).and_then(|(left, right)| {
+                                    apply_boolean(self.operator, Some(left), Some(right))
+                                })
+                            }
+                            NullEvaluationPolicy::NonStrict => {
+                                apply_boolean(self.operator, left, right)
+                            }
+                        })
+                    },
+                )
+            }
         }
-        Ok(output.finish().into())
     }
 }
 

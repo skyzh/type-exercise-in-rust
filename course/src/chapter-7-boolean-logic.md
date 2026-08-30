@@ -12,15 +12,14 @@ short-circuiting.
 
 - distinguish strict null short-circuiting from SQL's non-strict null semantics;
 - implement `AND`, `OR`, and `NOT` over `TRUE`/`FALSE`/`NULL`; and
-- publish one checked expression whose validation and row loop follow the same
-  arity-before-type-before-length contract as the earlier shells.
+- publish one checked expression that reuses Day 6's nullable unary/binary auto-vectorizers.
 
 ```console
 cargo x copy-test --chapter 7
 cargo test -p type-exercise-starter chapter_7 --locked
 ```
 
-The first run should fail on the missing Boolean operator, truth table, or expression builder.
+The first run should fail on the missing Boolean scalar operation or expression builder.
 
 ## Two null policies
 
@@ -30,22 +29,22 @@ operand can still decide the result when the other operand is absorbing (`FALSE 
 ...`). That is the `NonStrict` policy, where nulls are passed to the scalar function and the truth
 table decides.
 
-## Checkpoint 1: pin the truth table
+## Checkpoint 1: implement the scalar truth operation
 
-- **Target:** `type-exercise-starter/src/boolean_logic.rs::{NullEvaluationPolicy, BooleanOperator, BooleanTruthRow, BOOLEAN_TRUTH_TABLE}`.
-- **Change:** declare both policies, the three operators, and the 21 required nullable-Boolean rows
-  (nine `AND`, nine `OR`, three `NOT`), with `FALSE` absorbing for `AND`, `TRUE` absorbing for
-  `OR`, and `NOT NULL` staying null.
-- **Preserve:** the row order and values match the supplied expected table exactly.
+- **Target:** `type-exercise-starter/src/boolean_logic.rs::{NullEvaluationPolicy, BooleanOperator, apply_boolean}`.
+- **Change:** declare both policies, the three operators, and one scalar match expression, with
+  `FALSE` absorbing for `AND`, `TRUE` absorbing for `OR`, and `NOT NULL` staying null.
+- **Preserve:** the supplied test—not production—owns all 21 exhaustive input/result tuples.
 - **Run:** the Chapter 7 focused test.
-- **Passing means:** the table rows are exactly the required three-valued truth table.
+- **Passing means:** the scalar function matches every required three-valued truth row without a
+  public production table.
 
 ## Checkpoint 2: evaluate one operator
 
 - **Target:** `type-exercise-starter/src/boolean_logic.rs::{BooleanExpression, build_boolean_expression}`.
 - **Change:** validate arity (two for `AND`/`OR`, one for `NOT`), physical types, and lengths before
-  any row work, then build `Boolean` rows. `build_boolean_expression` selects the SQL `NonStrict`
-  policy; `BooleanExpression::new(operator, policy)` exposes the strict variant for comparison.
+  any row work, then call Day 6's nullable unary or binary auto-vectorizer with `apply_boolean`.
+  `build_boolean_expression` selects SQL `NonStrict`; `BooleanExpression::new` exposes `Strict`.
 - **Preserve:** the row error and null behavior stay inside the checked-expression contract; the
   error representation is your readable choice.
 - **Run:** the focused and cumulative tests.
@@ -54,7 +53,7 @@ table decides.
 
 ## Required and extension work
 
-Both policies, all three operators, the exact truth table, and the checked builder are required.
+Both policies, all three operators, the scalar truth operation, and the checked builder are required.
 Nested expression trees and short-circuit execution plans are extensions outside this course.
 
 ```console

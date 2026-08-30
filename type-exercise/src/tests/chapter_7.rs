@@ -1,8 +1,15 @@
 use crate::{
-    Array, ArrayImpl, BOOLEAN_TRUTH_TABLE, BoolArray, BooleanExpression, BooleanOperator,
-    BooleanTruthRow, ColumnViewImpl, NullEvaluationPolicy, PhysicalType, ScalarRefImpl,
-    build_boolean_expression,
+    Array, ArrayImpl, BoolArray, BooleanExpression, BooleanOperator, ColumnViewImpl,
+    NullEvaluationPolicy, PhysicalType, ScalarRefImpl, build_boolean_expression,
 };
+
+#[derive(Clone, Copy)]
+struct BooleanTruthRow {
+    operator: BooleanOperator,
+    left: Option<bool>,
+    right: Option<bool>,
+    result: Option<bool>,
+}
 
 const EXPECTED_TRUTH_TABLE: &[BooleanTruthRow] = &[
     // AND
@@ -143,7 +150,12 @@ fn bool_array(values: &[Option<bool>]) -> ArrayImpl {
 #[test]
 fn truth_table_matches_sql_three_valued_semantics() {
     assert_eq!(EXPECTED_TRUTH_TABLE.len(), 21);
-    assert_eq!(BOOLEAN_TRUTH_TABLE, EXPECTED_TRUTH_TABLE);
+    for row in EXPECTED_TRUTH_TABLE {
+        assert_eq!(
+            crate::boolean_logic::apply_boolean(row.operator, row.left, row.right),
+            row.result
+        );
+    }
 }
 
 #[test]

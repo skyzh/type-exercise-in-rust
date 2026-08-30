@@ -21,8 +21,8 @@ a function from runtime names. Repeating those decisions in every loop makes eac
 new place for type drift, null bugs, and inconsistent errors.
 
 This course builds the connections that move those decisions out of the row loop. You will first
-write the small cases by hand. Only after their duplication is visible will you introduce the
-catalogs and generic adapters that remove it.
+write the small cases by hand. Once their duplication is visible, generic unary, binary, and
+ternary auto-vectorizers let a new expression author supply only one scalar operation.
 
 ![Map of the typed expression engine](./assets/map-of-types.svg)
 
@@ -34,7 +34,8 @@ The map has three reading directions:
 3. `ColumnViewImpl` normalizes array, constant, Indexed, and typed-null representations before one
    selected typed expression enters its row loop.
 
-The numeric chapters keep scalar hooks statically typed and erase only whole-batch evaluators.
+The numeric chapters keep scalar hooks statically typed, auto-vectorize them through monomorphized
+generic helpers, and erase only whole-batch adapters.
 For signed addition, subtraction, and multiplication, `std::num::Wrapping<T>` makes the chosen
 cross-profile overflow behavior explicit while still using the standard operator traits.
 

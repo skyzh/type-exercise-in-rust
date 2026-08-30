@@ -5,8 +5,8 @@ borrow strings without copying, preserve nulls, read several column encodings, c
 select functions at runtime.
 
 This course builds the type families and checked boundaries that move those decisions out of each
-row loop. The result is a small vectorized expression engine whose generic code has a visible
-payoff: new types, operators, and arities reuse the same execution path.
+row loop. The result is a small auto-vectorized expression engine: authors write one scalar
+operation, while generic unary, binary, and ternary adapters reuse the checked batch path.
 
 ## Read the course
 

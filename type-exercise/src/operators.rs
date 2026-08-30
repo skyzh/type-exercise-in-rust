@@ -3,8 +3,8 @@ use std::num::Wrapping;
 use std::ops::{Add, Mul, Neg, Sub};
 
 use crate::{
-    Array, ArrayBuilder, ArrayImpl, ColumnView, ColumnViewImpl, Expression, PhysicalType, Scalar,
-    ScalarRefImpl, TypeMismatch,
+    Array, ArrayBuilder, ArrayImpl, BinaryExpression, ColumnView, ColumnViewImpl, Expression,
+    PhysicalType, Scalar, ScalarRefImpl, TypeMismatch,
 };
 
 /// Validate an expression boundary completely before row access or output allocation.
@@ -279,6 +279,40 @@ impl CheckedDivide for f64 {
     }
 }
 
+fn add_number<O: Numeric>(left: O, right: O) -> O {
+    O::from_arithmetic(Add::add(left.into_arithmetic(), right.into_arithmetic()))
+}
+
+fn subtract_number<O: Numeric>(left: O, right: O) -> O {
+    O::from_arithmetic(Sub::sub(left.into_arithmetic(), right.into_arithmetic()))
+}
+
+fn multiply_number<O: Numeric>(left: O, right: O) -> O {
+    O::from_arithmetic(Mul::mul(left.into_arithmetic(), right.into_arithmetic()))
+}
+
+fn divide_number<O: CheckedDivide>(left: O, right: O) -> anyhow::Result<O> {
+    left.checked_divide(right)
+}
+
+fn neg_number<O: Numeric>(value: O) -> O {
+    O::from_arithmetic(Neg::neg(value.into_arithmetic()))
+}
+
+fn clamp_number<O: Numeric>(value: O, lower: O, upper: O) -> anyhow::Result<O> {
+    if lower.partial_cmp(&upper) != Some(Ordering::Less)
+        && lower.partial_cmp(&upper) != Some(Ordering::Equal)
+    {
+        anyhow::bail!("invalid clamp bounds");
+    } else if value < lower {
+        Ok(lower)
+    } else if value > upper {
+        Ok(upper)
+    } else {
+        Ok(value)
+    }
+}
+
 fn lossless_try_from<T, U>(value: U) -> T
 where
     T: TryFrom<U, Error = std::convert::Infallible>,
@@ -286,42 +320,190 @@ where
     T::try_from(value).unwrap_or_else(|never| match never {})
 }
 
-type NumericBinaryBatchKernel =
-    for<'a> fn(&NumericBinaryExpression, &[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
+/// Auto-vectorize one scalar function over a nullable unary batch.
+pub(crate) fn evaluate_unary<I, O, F>(
+    input: ColumnViewImpl<'_>,
+    function: F,
+) -> anyhow::Result<ArrayImpl>
+where
+    I: Scalar + Copy,
+    O: Scalar + Copy,
+    F: Fn(I) -> O,
+    for<'a> I: Scalar<RefType<'a> = I>,
+    for<'a> &'a I::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> I::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+{
+    evaluate_nullable_unary::<I, O, _>(input, |value| Ok(value.map(&function)))
+}
+
+/// Auto-vectorize one nullable unary scalar function.
+pub(crate) fn evaluate_nullable_unary<I, O, F>(
+    input: ColumnViewImpl<'_>,
+    function: F,
+) -> anyhow::Result<ArrayImpl>
+where
+    I: Scalar + Copy,
+    O: Scalar + Copy,
+    F: Fn(Option<I>) -> anyhow::Result<Option<O>>,
+    for<'a> I: Scalar<RefType<'a> = I>,
+    for<'a> &'a I::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> I::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+{
+    validate_expression_inputs(std::slice::from_ref(&input), &[I::PHYSICAL_TYPE])?;
+    let input = ColumnView::<I>::try_from(input)?;
+    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(input.len());
+    for row in 0..input.len() {
+        let value = function(input.get(row))?;
+        output.push(value.as_ref().map(Scalar::as_scalar_ref));
+    }
+    Ok(output.finish().into())
+}
+
+/// Auto-vectorize one infallible scalar function over two nullable batches.
+pub(crate) fn auto_vectorize_binary<L, R, O, F>(
+    left: ColumnViewImpl<'_>,
+    right: ColumnViewImpl<'_>,
+    function: F,
+) -> anyhow::Result<ArrayImpl>
+where
+    L: Scalar + Copy,
+    R: Scalar + Copy,
+    O: Scalar + Copy,
+    F: Fn(L, R) -> O,
+    for<'a> L: Scalar<RefType<'a> = L>,
+    for<'a> R: Scalar<RefType<'a> = R>,
+    for<'a> &'a L::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a R::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+{
+    evaluate_nullable_binary::<L, R, O, _>(left, right, |left, right| {
+        Ok(left.zip(right).map(|(left, right)| function(left, right)))
+    })
+}
+
+/// Auto-vectorize one fallible scalar function and attach row context.
+pub(crate) fn try_evaluate_binary<L, R, O, F>(
+    left: ColumnViewImpl<'_>,
+    right: ColumnViewImpl<'_>,
+    function_name: &str,
+    function: F,
+) -> anyhow::Result<ArrayImpl>
+where
+    L: Scalar + Copy,
+    R: Scalar + Copy,
+    O: Scalar + Copy,
+    F: Fn(L, R) -> anyhow::Result<O>,
+    for<'a> L: Scalar<RefType<'a> = L>,
+    for<'a> R: Scalar<RefType<'a> = R>,
+    for<'a> &'a L::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a R::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+{
+    let mut row = 0;
+    evaluate_nullable_binary::<L, R, O, _>(left, right, |left, right| {
+        let result = left
+            .zip(right)
+            .map(|(left, right)| function(left, right))
+            .transpose()
+            .map_err(|error| {
+                if function_name.is_empty() {
+                    anyhow::anyhow!("row {row}: {error}")
+                } else {
+                    anyhow::anyhow!("function `{function_name}` failed at row {row}: {error}")
+                }
+            });
+        row += 1;
+        result
+    })
+}
+
+/// Auto-vectorize one nullable binary scalar function.
+pub(crate) fn evaluate_nullable_binary<L, R, O, F>(
+    left: ColumnViewImpl<'_>,
+    right: ColumnViewImpl<'_>,
+    mut function: F,
+) -> anyhow::Result<ArrayImpl>
+where
+    L: Scalar + Copy,
+    R: Scalar + Copy,
+    O: Scalar + Copy,
+    F: FnMut(Option<L>, Option<R>) -> anyhow::Result<Option<O>>,
+    for<'a> L: Scalar<RefType<'a> = L>,
+    for<'a> R: Scalar<RefType<'a> = R>,
+    for<'a> &'a L::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a R::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+{
+    validate_expression_inputs(
+        &[left.clone(), right.clone()],
+        &[L::PHYSICAL_TYPE, R::PHYSICAL_TYPE],
+    )?;
+    let left = ColumnView::<L>::try_from(left)?;
+    let right = ColumnView::<R>::try_from(right)?;
+    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(left.len());
+    for row in 0..left.len() {
+        let value = function(left.get(row), right.get(row))?;
+        output.push(value.as_ref().map(Scalar::as_scalar_ref));
+    }
+    Ok(output.finish().into())
+}
+
+/// Auto-vectorize one fallible ternary scalar function and attach row context.
+pub(crate) fn try_evaluate_ternary<A, B, C, O, F>(
+    first: ColumnViewImpl<'_>,
+    second: ColumnViewImpl<'_>,
+    third: ColumnViewImpl<'_>,
+    function_name: &str,
+    function: F,
+) -> anyhow::Result<ArrayImpl>
+where
+    A: Scalar + Copy,
+    B: Scalar + Copy,
+    C: Scalar + Copy,
+    O: Scalar + Copy,
+    F: Fn(A, B, C) -> anyhow::Result<O>,
+    for<'a> A: Scalar<RefType<'a> = A>,
+    for<'a> B: Scalar<RefType<'a> = B>,
+    for<'a> C: Scalar<RefType<'a> = C>,
+    for<'a> &'a A::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a B::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a C::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> A::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> B::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> C::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+{
+    validate_expression_inputs(
+        &[first.clone(), second.clone(), third.clone()],
+        &[A::PHYSICAL_TYPE, B::PHYSICAL_TYPE, C::PHYSICAL_TYPE],
+    )?;
+    let first = ColumnView::<A>::try_from(first)?;
+    let second = ColumnView::<B>::try_from(second)?;
+    let third = ColumnView::<C>::try_from(third)?;
+    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(first.len());
+    for row in 0..first.len() {
+        let value = match (first.get(row), second.get(row), third.get(row)) {
+            (Some(first), Some(second), Some(third)) => {
+                Some(function(first, second, third).map_err(|error| {
+                    anyhow::anyhow!("function `{function_name}` failed at row {row}: {error}")
+                })?)
+            }
+            _ => None,
+        };
+        output.push(value.as_ref().map(Scalar::as_scalar_ref));
+    }
+    Ok(output.finish().into())
+}
+
+type NumericBinaryBatchKernel = for<'a> fn(&[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
 type NumericComparisonBatchKernel =
     for<'a> fn(&NumericComparisonExpression, &[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
 type NumericNegBatchKernel =
     for<'a> fn(&NumericNegExpression, &[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
 type NumericClampBatchKernel =
     for<'a> fn(&NumericClampExpression, &[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
-pub(crate) struct NumericBinaryExpression {
-    name: &'static str,
-    input_types: [PhysicalType; 2],
-    output_type: PhysicalType,
-    kernel: NumericBinaryBatchKernel,
-}
-
-impl NumericBinaryExpression {
-    pub(crate) fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-        (self.kernel)(self, inputs)
-    }
-}
-
-impl Expression for NumericBinaryExpression {
-    fn name(&self) -> &'static str {
-        self.name
-    }
-    fn input_types(&self) -> &[PhysicalType] {
-        &self.input_types
-    }
-    fn output_type(&self) -> PhysicalType {
-        self.output_type.clone()
-    }
-    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-        self.evaluate(inputs)
-    }
-}
-
 pub(crate) struct NumericComparisonExpression {
     name: &'static str,
     input_types: [PhysicalType; 2],
@@ -331,6 +513,7 @@ pub(crate) struct NumericComparisonExpression {
 
 impl NumericComparisonExpression {
     pub(crate) fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        validate_expression_inputs(inputs, &self.input_types)?;
         (self.kernel)(self, inputs)
     }
 }
@@ -358,6 +541,7 @@ pub(crate) struct NumericNegExpression {
 
 impl NumericNegExpression {
     pub(crate) fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        validate_expression_inputs(inputs, &self.input_types)?;
         (self.kernel)(self, inputs)
     }
 }
@@ -386,7 +570,16 @@ pub(crate) struct NumericClampExpression {
 
 impl NumericClampExpression {
     pub(crate) fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-        (self.kernel)(self, inputs)
+        validate_expression_inputs(inputs, &self.input_types)?;
+        let output = (self.kernel)(self, inputs)?;
+        if output.physical_type() != self.output_type {
+            anyhow::bail!(
+                "output type mismatch: expected {:?}, got {:?}",
+                self.output_type,
+                output.physical_type()
+            );
+        }
+        Ok(output)
     }
 }
 
@@ -406,7 +599,6 @@ impl Expression for NumericClampExpression {
 }
 
 fn evaluate_numeric_infallible<L, R, O, Operation>(
-    expression: &NumericBinaryExpression,
     inputs: &[ColumnViewImpl<'_>],
     operation: Operation,
 ) -> anyhow::Result<ArrayImpl>
@@ -416,7 +608,7 @@ where
     O: Numeric
         + TryFrom<L, Error = std::convert::Infallible>
         + TryFrom<R, Error = std::convert::Infallible>,
-    Operation: Fn(O::Arithmetic, O::Arithmetic) -> O::Arithmetic,
+    Operation: Fn(O, O) -> O,
     for<'a> L: Scalar<RefType<'a> = L>,
     for<'a> R: Scalar<RefType<'a> = R>,
     for<'a> &'a L::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
@@ -424,31 +616,14 @@ where
     for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
 {
-    let len = validate_expression_inputs(inputs, &expression.input_types)?;
-    let left = ColumnView::<L>::try_from(inputs[0].clone())?;
-    let right = ColumnView::<R>::try_from(inputs[1].clone())?;
-    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(len);
-    for row in 0..len {
-        let value = match (left.get(row), right.get(row)) {
-            (Some(left), Some(right)) => {
-                let left = lossless_try_from::<O, L>(left);
-                let right = lossless_try_from::<O, R>(right);
-                Some(O::from_arithmetic(operation(
-                    left.into_arithmetic(),
-                    right.into_arithmetic(),
-                )))
-            }
-            _ => None,
-        };
-        output.push(value.as_ref().map(Scalar::as_scalar_ref));
-    }
-    Ok(output.finish().into())
+    auto_vectorize_binary::<L, R, O, _>(inputs[0].clone(), inputs[1].clone(), |left, right| {
+        let left = lossless_try_from::<O, L>(left);
+        let right = lossless_try_from::<O, R>(right);
+        operation(left, right)
+    })
 }
 
-fn evaluate_numeric_add<L, R, O>(
-    expression: &NumericBinaryExpression,
-    inputs: &[ColumnViewImpl<'_>],
-) -> anyhow::Result<ArrayImpl>
+fn evaluate_numeric_add<L, R, O>(inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl>
 where
     L: Numeric,
     R: Numeric,
@@ -462,13 +637,10 @@ where
     for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
 {
-    evaluate_numeric_infallible::<L, R, O, _>(expression, inputs, Add::add)
+    evaluate_numeric_infallible::<L, R, O, _>(inputs, add_number::<O>)
 }
 
-fn evaluate_numeric_subtract<L, R, O>(
-    expression: &NumericBinaryExpression,
-    inputs: &[ColumnViewImpl<'_>],
-) -> anyhow::Result<ArrayImpl>
+fn evaluate_numeric_subtract<L, R, O>(inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl>
 where
     L: Numeric,
     R: Numeric,
@@ -482,13 +654,10 @@ where
     for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
 {
-    evaluate_numeric_infallible::<L, R, O, _>(expression, inputs, Sub::sub)
+    evaluate_numeric_infallible::<L, R, O, _>(inputs, subtract_number::<O>)
 }
 
-fn evaluate_numeric_multiply<L, R, O>(
-    expression: &NumericBinaryExpression,
-    inputs: &[ColumnViewImpl<'_>],
-) -> anyhow::Result<ArrayImpl>
+fn evaluate_numeric_multiply<L, R, O>(inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl>
 where
     L: Numeric,
     R: Numeric,
@@ -502,13 +671,10 @@ where
     for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
 {
-    evaluate_numeric_infallible::<L, R, O, _>(expression, inputs, Mul::mul)
+    evaluate_numeric_infallible::<L, R, O, _>(inputs, multiply_number::<O>)
 }
 
-fn evaluate_numeric_divide<L, R, O>(
-    expression: &NumericBinaryExpression,
-    inputs: &[ColumnViewImpl<'_>],
-) -> anyhow::Result<ArrayImpl>
+fn evaluate_numeric_divide<L, R, O>(inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl>
 where
     L: Numeric,
     R: Numeric,
@@ -523,27 +689,11 @@ where
     for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
 {
-    let len = validate_expression_inputs(inputs, &expression.input_types)?;
-    let left = ColumnView::<L>::try_from(inputs[0].clone())?;
-    let right = ColumnView::<R>::try_from(inputs[1].clone())?;
-    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(len);
-    for row in 0..len {
-        let value = match (left.get(row), right.get(row)) {
-            (Some(left), Some(right)) => {
-                let left = lossless_try_from::<O, L>(left);
-                let right = lossless_try_from::<O, R>(right);
-                Some(left.checked_divide(right).map_err(|error| {
-                    anyhow::anyhow!(
-                        "function `{}` failed at row {row}: {error}",
-                        expression.name
-                    )
-                })?)
-            }
-            _ => None,
-        };
-        output.push(value.as_ref().map(Scalar::as_scalar_ref));
-    }
-    Ok(output.finish().into())
+    try_evaluate_binary::<L, R, O, _>(inputs[0].clone(), inputs[1].clone(), "", |left, right| {
+        let left = lossless_try_from::<O, L>(left);
+        let right = lossless_try_from::<O, R>(right);
+        divide_number(left, right)
+    })
 }
 
 fn numeric_binary_kernel<L, R, O>(operator: ArithmeticOperator) -> NumericBinaryBatchKernel
@@ -586,29 +736,18 @@ where
     for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
 {
-    let len = validate_expression_inputs(inputs, &expression.input_types)?;
-    let left = ColumnView::<L>::try_from(inputs[0].clone())?;
-    let right = ColumnView::<R>::try_from(inputs[1].clone())?;
-    let mut output = <<bool as Scalar>::ArrayType as Array>::Builder::with_capacity(len);
-    for row in 0..len {
-        let value = match (left.get(row), right.get(row)) {
-            (Some(left), Some(right)) => {
-                let left = lossless_try_from::<O, L>(left);
-                let right = lossless_try_from::<O, R>(right);
-                Some(match expression.operator {
-                    ComparisonOperator::Less => left < right,
-                    ComparisonOperator::LessOrEqual => left <= right,
-                    ComparisonOperator::Greater => left > right,
-                    ComparisonOperator::GreaterOrEqual => left >= right,
-                    ComparisonOperator::Equal => left == right,
-                    ComparisonOperator::NotEqual => left != right,
-                })
-            }
-            _ => None,
-        };
-        output.push(value);
-    }
-    Ok(output.finish().into())
+    auto_vectorize_binary::<L, R, bool, _>(inputs[0].clone(), inputs[1].clone(), |left, right| {
+        let left = lossless_try_from::<O, L>(left);
+        let right = lossless_try_from::<O, R>(right);
+        match expression.operator {
+            ComparisonOperator::Less => left < right,
+            ComparisonOperator::LessOrEqual => left <= right,
+            ComparisonOperator::Greater => left > right,
+            ComparisonOperator::GreaterOrEqual => left >= right,
+            ComparisonOperator::Equal => left == right,
+            ComparisonOperator::NotEqual => left != right,
+        }
+    })
 }
 
 struct NumericKernels {
@@ -712,7 +851,7 @@ fn numeric_kernels(
 }
 
 fn evaluate_numeric_neg<O>(
-    expression: &NumericNegExpression,
+    _expression: &NumericNegExpression,
     inputs: &[ColumnViewImpl<'_>],
 ) -> anyhow::Result<ArrayImpl>
 where
@@ -721,16 +860,7 @@ where
     for<'a> &'a O::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
     for<'a> O::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
 {
-    let len = validate_expression_inputs(inputs, &expression.input_types)?;
-    let input = ColumnView::<O>::try_from(inputs[0].clone())?;
-    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(len);
-    for row in 0..len {
-        let value = input
-            .get(row)
-            .map(|value| O::from_arithmetic(Neg::neg(value.into_arithmetic())));
-        output.push(value.as_ref().map(Scalar::as_scalar_ref));
-    }
-    Ok(output.finish().into())
+    evaluate_unary::<O, O, _>(inputs[0].clone(), neg_number::<O>)
 }
 
 fn numeric_neg_kernel(input: &PhysicalType) -> NumericNegBatchKernel {
@@ -767,38 +897,18 @@ where
     for<'a> B::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> C::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
 {
-    let len = validate_expression_inputs(inputs, &expression.input_types)?;
-    let value = ColumnView::<A>::try_from(inputs[0].clone())?;
-    let lower = ColumnView::<B>::try_from(inputs[1].clone())?;
-    let upper = ColumnView::<C>::try_from(inputs[2].clone())?;
-    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(len);
-    for row in 0..len {
-        let result = match (value.get(row), lower.get(row), upper.get(row)) {
-            (Some(value), Some(lower), Some(upper)) => {
-                let value = lossless_try_from::<O, A>(value);
-                let lower = lossless_try_from::<O, B>(lower);
-                let upper = lossless_try_from::<O, C>(upper);
-                let result = if lower.partial_cmp(&upper) != Some(Ordering::Less)
-                    && lower.partial_cmp(&upper) != Some(Ordering::Equal)
-                {
-                    anyhow::bail!(
-                        "function `{}` failed at row {row}: invalid clamp bounds",
-                        expression.name
-                    );
-                } else if value < lower {
-                    lower
-                } else if value > upper {
-                    upper
-                } else {
-                    value
-                };
-                Some(result)
-            }
-            _ => None,
-        };
-        output.push(result.as_ref().map(Scalar::as_scalar_ref));
-    }
-    Ok(output.finish().into())
+    try_evaluate_ternary::<A, B, C, O, _>(
+        inputs[0].clone(),
+        inputs[1].clone(),
+        inputs[2].clone(),
+        expression.name,
+        |value, lower, upper| {
+            let value = lossless_try_from::<O, A>(value);
+            let lower = lossless_try_from::<O, B>(lower);
+            let upper = lossless_try_from::<O, C>(upper);
+            clamp_number(value, lower, upper)
+        },
+    )
 }
 
 fn numeric_clamp_after_int16_pair<A, B>(
@@ -1019,14 +1129,9 @@ pub(crate) fn build_numeric_binary_expression(
     left: PhysicalType,
     right: PhysicalType,
     output: PhysicalType,
-) -> NumericBinaryExpression {
+) -> BinaryExpression {
     let kernel = numeric_kernels(operator, &left, &right, &output).binary;
-    NumericBinaryExpression {
-        name,
-        input_types: [left, right],
-        output_type: output,
-        kernel,
-    }
+    BinaryExpression::new_with_scalar_rows(name, [left, right], output, kernel)
 }
 
 pub(crate) fn build_numeric_neg_expression(

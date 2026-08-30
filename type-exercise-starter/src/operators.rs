@@ -19,14 +19,26 @@
 // pub enum ComparisonOperator { /* ordered comparisons */ }
 // /* use standard Add/Sub/Mul (with Wrapping<T> for signed integers); keep checked division separate */
 // /* use TryFrom for every admitted lossless promotion */
-// /* one concrete expression stores a monomorphized whole-batch kernel pointer selected from (left, right, output) */
+// /* BinaryExpression stores a monomorphized whole-batch adapter selected from (left, right, output) */
 // pub(crate) fn build_numeric_binary_expression(/* operator and types */) -> /* expression */;
 // pub(crate) fn build_numeric_comparison_expression(/* operator and types */) -> /* expression */;
 //
 //! Day 6, checkpoint 1: share arity, physical-type, and length validation here.
 // pub fn validate_expression_inputs(/* expected types and inputs */) -> anyhow::Result<usize>;
 //
-//! Day 6, checkpoints 2–3: add vectorized negation and clamp kernels.
+//! Day 6, checkpoint 2: write the three reusable auto-vectorizers. Each owns the only row loop
+//! for its arity; a generated adapter supplies one ordinary scalar function.
+// pub(crate) fn evaluate_unary<I, O>(/* column, Fn(I) -> O */) -> anyhow::Result<ArrayImpl>;
+// pub(crate) fn auto_vectorize_binary<L, R, O>(/* columns, Fn(L, R) -> O */)
+//     -> anyhow::Result<ArrayImpl>;
+// pub(crate) fn try_evaluate_ternary<A, B, C, O>(/* columns, name, fallible Fn */)
+//     -> anyhow::Result<ArrayImpl>;
+// /* nullable Boolean adapters reuse the same unary and binary loops */
+//
+//! Day 6, checkpoint 3: author only scalar numeric operations; generated physical adapters
+//! select types, perform promotion, and call the shared evaluator without a row loop.
+// fn neg_number<F>(value: F) -> F { /* one scalar operation */ }
+// fn clamp_number<F>(value: F, lower: F, upper: F) -> anyhow::Result<F> { /* one scalar operation */ }
 // pub(crate) fn build_numeric_neg_expression(/* input type */) -> /* expression */;
 // pub(crate) fn build_numeric_clamp_expression(/* three input types and one output type */) -> /* expression */;
 //

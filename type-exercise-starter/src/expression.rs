@@ -9,6 +9,12 @@
 //! Day 4, checkpoint 2: add the fixed-width scalar adapter and whole-batch shells. Their tests
 //! exercise contextual arity, type, length, and scalar-evaluation errors.
 //
+//! Day 5, checkpoint 2: pair selected binary metadata with one generated batch adapter.
+// pub type BinaryBatchKernel = /* one function pointer over a complete borrowed input batch */;
+// pub struct BinaryExpression { /* physical metadata plus one whole-batch kernel */ }
+// impl BinaryExpression { /* pub fn new(name, input_types, output_type, kernel) -> Self */ }
+// /* Keep any constructor used only to attach expression names to row errors crate-private. */
+//
 //! Day 8, checkpoint 1: add the object-safe runtime expression boundary here.
 // pub trait Expression: Any + Send + Sync {
 //     /* fn name(&self) -> &'static str */
@@ -17,10 +23,6 @@
 //     /* fn output_type(&self) -> PhysicalType */
 //     /* fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> */
 // }
-// pub type BinaryBatchKernel = /* one function pointer over a complete borrowed input batch */;
-// pub struct BinaryExpression { /* physical metadata plus one whole-batch kernel */ }
-// impl BinaryExpression { /* pub fn new(name, input_types, output_type, kernel) -> Self */ }
-//
 //! Day 8, checkpoint 3: add the builtin catalog here.
 // pub fn build_builtin_expression(name: &str) -> Option<Box<dyn Expression>>;
 // pub const BUILTIN_EXPRESSION_NAMES: &[&str];

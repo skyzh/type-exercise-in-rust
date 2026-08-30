@@ -311,6 +311,7 @@ pub struct BinaryExpression {
     output_type: crate::PhysicalType,
     kernel: BinaryBatchKernel,
     loop_kernel: Option<BinaryLoopKernel>,
+    reports_scalar_rows: bool,
 }
 
 impl BinaryExpression {
@@ -326,6 +327,7 @@ impl BinaryExpression {
             output_type,
             kernel,
             loop_kernel: None,
+            reports_scalar_rows: false,
         }
     }
 
@@ -342,7 +344,28 @@ impl BinaryExpression {
             output_type,
             kernel,
             loop_kernel: Some(loop_kernel),
+            reports_scalar_rows: false,
         }
+    }
+
+    pub(crate) fn new_with_scalar_rows(
+        name: &'static str,
+        input_types: [crate::PhysicalType; 2],
+        output_type: crate::PhysicalType,
+        kernel: BinaryBatchKernel,
+    ) -> Self {
+        Self {
+            name,
+            input_types,
+            output_type,
+            kernel,
+            loop_kernel: None,
+            reports_scalar_rows: true,
+        }
+    }
+
+    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        <Self as Expression>::evaluate(self, inputs)
     }
 }
 
@@ -392,7 +415,14 @@ impl Expression for BinaryExpression {
         let (output, selected_loop) = match self.loop_kernel {
             Some(kernel) => kernel(inputs),
             None => (self.kernel)(inputs).map(|output| (output, PrimitiveLoop::General)),
-        }?;
+        }
+        .map_err(|error| {
+            if self.reports_scalar_rows {
+                anyhow::anyhow!("function `{}` failed at {error}", self.name)
+            } else {
+                error
+            }
+        })?;
         if output.physical_type() != self.output_type {
             anyhow::bail!(
                 "output type mismatch: expected {:?}, got {:?}",
@@ -405,17 +435,18 @@ impl Expression for BinaryExpression {
 }
 
 fn evaluate_i32_add_batch(inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-    let left = ColumnView::<i32>::try_from(inputs[0].clone())?;
-    let right = ColumnView::<i32>::try_from(inputs[1].clone())?;
-    let mut output = <crate::I32Array as Array>::Builder::with_capacity(left.len());
-    for row in 0..left.len() {
-        output.push(
-            left.get(row)
-                .zip(right.get(row))
-                .map(|(left, right)| left.wrapping_add(right)),
-        );
-    }
-    Ok(output.finish().into())
+    crate::operators::auto_vectorize_binary::<i32, i32, i32, _>(
+        inputs[0].clone(),
+        inputs[1].clone(),
+        i32::wrapping_add,
+    )
+}
+
+fn concat_strings<'a>(left: &str, right: &str, writer: crate::Writer<'a>) -> crate::WriterUsed<'a> {
+    writer.write(|value| {
+        value.push_str(left);
+        value.push_str(right);
+    })
 }
 
 fn evaluate_i32_add_batch_with_loop(
@@ -473,11 +504,9 @@ fn evaluate_string_concat_batch(inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result
     let mut output = <crate::StringArray as Array>::Builder::with_capacity(left.len());
     for row in 0..left.len() {
         match (left.get(row), right.get(row)) {
-            (Some(left), Some(right)) => output.try_push_with(|writer| {
-                writer.push_str(left);
-                writer.push_str(right);
-                Ok::<_, std::convert::Infallible>(())
-            })?,
+            (Some(left), Some(right)) => {
+                concat_strings(left, right, output.writer()).into_builder();
+            }
             _ => output.push_null(),
         }
     }

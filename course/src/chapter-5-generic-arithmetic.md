@@ -21,6 +21,8 @@ surface is still deliberately small:
 
 - `src/promotion.rs` contains comment shells for one promotion row, the promotion catalog, and its
   lookup function;
+- `src/expression.rs` contains the general binary batch-kernel and expression shells first owned by
+  this chapter;
 - `src/operators.rs` ends with comments for the arithmetic and comparison selectors;
 - `src/array/primitive_array.rs` has the Arrow-style value and validity buffers but not the
   all-valid constructor used by this chapter's batch fixture; and
@@ -113,6 +115,13 @@ impl<T> PrimitiveArray<T> {
 This constructor is not a second array format and does not change null handling. It is simply the
 direct counterpart to building a batch whose rows are all non-null.
 
+In `src/expression.rs`, implement `BinaryBatchKernel` and `BinaryExpression` before selecting the
+numeric adapters. Its public constructor stores the name, two physical input types, output type,
+and one whole-batch function pointer. Evaluation validates inputs before calling that pointer and
+rejects an output whose physical type disagrees with the stored metadata. Keep any extra
+row-error-context construction crate-private; the public constructor stays the four-argument API
+shown by the starter.
+
 Now extend `src/operators.rs` with the public `ArithmeticOperator` variants `Add`, `Subtract`,
 `Multiply`, and `Divide`. Describe the five concrete numeric types with standard operator bounds,
 not another trait whose methods re-name arithmetic:
@@ -146,16 +155,17 @@ results such as infinity or NaN remain values.
 
 The important Rust boundary is where all three generic types become concrete. The physical
 builder matches the validated `(operator, left, right, output)` choice once and stores only the
-selected monomorphized whole-batch function pointer in `NumericBinaryExpression`; it does not keep
-an operator field for the row loop to inspect. Addition, subtraction, and multiplication select
+selected monomorphized adapter in the general `BinaryExpression`; it does not keep an operator
+field for the row loop to inspect. Addition, subtraction, and multiplication select
 their infallible typed kernels, while division alone selects the fallible typed kernel. Require
 `O: TryFrom<L, Error = Infallible> + TryFrom<R, Error = Infallible>` for the lossless conversions
 admitted by the promotion table. This uses Rust's standard conversion vocabulary; do not add a
 parallel conversion trait.
 
-That function pointer owns the complete vectorized evaluation. It converts each erased column to
-its typed view once, then the row loop receives `L` and `R` values directly, converts them to `O`
-with `TryFrom`, and applies the selected standard operation. Do not accept `ScalarRefImpl`, create
+For now that adapter owns the complete vectorized evaluation. It converts each erased column to
+its typed view once, then converts `L` and `R` values to `O` with `TryFrom` and applies the selected
+standard operation. Day 6 will extract the repeated row mechanics into shared auto-vectorizers.
+Do not accept `ScalarRefImpl`, create
 a per-scalar erased operation object, re-run logical promotion, or match physical variants inside
 every row. The caller must obtain the logical output from `promote_numeric` first; an unsupported
 pair never reaches the physical builder.

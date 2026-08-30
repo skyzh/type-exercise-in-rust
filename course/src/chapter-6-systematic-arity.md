@@ -2,33 +2,31 @@
 
 # Chapter 6: Make Arity Systematic
 
-Chapter 5 chose one typed binary kernel before each batch, then let that kernel own the typed row
-loop. Its validator already accepts a slice of expected input types, but it remains private inside
-the operator module. A new three-input function would still be easy to implement as another special
-case, repeating the arity, physical-type, length, null, output, and error work that Chapters 4 and 5
-separated from physical selection.
+Chapter 5 chose one typed binary adapter before each batch. The operation itself is still tiny—add,
+subtract, multiply, or divide two scalar values—but the adapters repeat the same nullable row loop.
+That is the wrong ownership boundary: adding a scalar operation should not require copying batch
+machinery.
 
-This chapter makes that boundary explicit. You will publish the shared validator already used by
-the existing batch kernels, add one typed three-input kernel with the same batch contract, and
-execute `clamp(value, lower, upper)` through it. The result is not a generic expression framework.
-It is one more concrete arity that shows which parts of evaluation vary with the number of inputs
-and which parts stay unchanged.
+This chapter writes the reusable machinery once. You will publish the validator and implement one
+monomorphized auto-vectorizer for each taught arity: unary, binary, and ternary. A generated physical
+adapter then supplies only an ordinary scalar function such as `neg_number(value)` or
+`clamp_number(value, lower, upper)`. There is no erased `dyn Fn` and no operation-specific row loop.
 
 ## What is in the starter
 
-Begin from your completed Chapter 5 workspace. In `src/operators.rs`, the unary and binary
-expressions already own monomorphized whole-batch kernels. Both paths call
-`validate_expression_inputs`, but that helper is private. The file ends with comment shells for the
-Day 6 additions:
+Begin from your completed Chapter 5 workspace. In `src/operators.rs`, selected arithmetic adapters
+still contain repeated batch mechanics. `validate_expression_inputs` is private. The file ends with
+comment shells for the Day 6 additions:
 
 - the public shared validator;
-- one mixed-family three-input clamp kernel and its physical selector;
+- the three shared auto-vectorizers and their nullable/fallible thin adapters;
+- scalar-only negation and clamp operations plus generated physical selectors;
 - the physical numeric `neg` and `clamp` builders; and
 - the exact re-export to add in `src/lib.rs`.
 
-You own those additions and the contextual invalid-bound error used by `clamp`. Keep the existing
-binary row loops intact. Logical function registration waits until Chapter 9, and concrete four-
-or five-input builtins are not part of this chapter.
+You own those additions and the contextual invalid-bound error used by `clamp`. Remove repeated
+operation loops as you route them through the shared helpers. Logical function registration waits
+until Chapter 9, and a fourth arity is not part of this chapter.
 
 Chapter 6 has three cumulative supplied checkpoints. Copy the first one before editing:
 
@@ -78,22 +76,21 @@ cargo test -p type-exercise-starter chapter_6 --locked
 Passing this checkpoint means the shared boundary works for an arbitrary expected-type slice.
 The ternary API is still absent.
 
-## Checkpoint 2: add one typed ternary batch loop
+## Checkpoint 2: write one reusable loop per arity
 
-Start `build_numeric_clamp_expression` with the exact mixed tuple used by this checkpoint:
-`(i16, i32, i64) -> i64`. A private `NumericClampExpression` stores the function name, those three
-physical input types, the output type, and one whole-batch function pointer. It does not store a
-scalar operation object.
+Implement the shared unary, binary, and ternary evaluators. Each is generic over concrete scalar
+families and the callback type, so Rust monomorphizes the call. Each helper validates and recovers
+typed borrowed columns once, then owns the only row loop for that arity. Start the ternary path with
+the checkpoint's `(i16, i32, i64) -> i64` witness.
 
-The selected `evaluate_numeric_clamp<i16, i32, i64, i64>` kernel follows the boundary you already
-built:
+The selected generated adapter follows the boundary you already built:
 
 1. call `validate_expression_inputs` before allocating output;
 2. convert the three erased columns to `ColumnView<i16>`, `ColumnView<i32>`, and `ColumnView<i64>`
    once;
 3. read all three positions for each row;
-4. use `TryFrom` to promote the three present values inside that row; and
-5. append the typed result, a strict null, or return an error with the function, row, and cause.
+4. call the supplied scalar function only when all three values are present; and
+5. append the result, a strict null, or return an error with the function, row, and cause.
 
 Return the ordinary cause `invalid clamp bounds` when the lower and upper values are reversed or
 unordered. The supplied witness uses it in a small mixed-family clamp with `i16`, `i32`, and `i64`
@@ -107,32 +104,30 @@ cargo x copy-test --chapter 6 --checkpoint 2
 cargo test -p type-exercise-starter chapter_6 --locked
 ```
 
-Passing now means one direct typed ternary batch kernel is complete. The full numeric `clamp`
-selector is still missing.
+Passing now means the reusable ternary auto-vectorizer works. The full generated `clamp` selector
+is still missing.
 
-## Checkpoint 3: select a real ternary kernel once
+## Checkpoint 3: author scalar work and generate adapters
 
 Finish `src/operators.rs` with the crate-private physical builders named by the starter:
 `build_numeric_neg_expression` and `build_numeric_clamp_expression`. They receive already-selected
 physical families, just as Chapter 5's binary builder does. Chapter 9 will place logical name
 binding in front of them.
 
-Numeric negation owns one typed unary batch kernel. For signed integers, apply the standard `Neg`
+`neg_number` owns only one scalar value. For signed integers, apply the standard `Neg`
 trait to `std::num::Wrapping<T>` and recover `.0`; negating `MIN` then has the same wrapping result
-in debug and release builds. Floating-point negation uses the ordinary standard operation. Its row
-loop remains strict over nulls.
+in debug and release builds. Floating-point negation uses the ordinary standard operation. The
+generated adapter calls `evaluate_unary(column, neg_number)` and contains no row loop.
 
-Clamp is the observable three-input path. Generalize the private
-`evaluate_numeric_clamp<A, B, C, O>` batch kernel from Checkpoint 2. Require `O: TryFrom<A> +
-TryFrom<B> + TryFrom<C>` with `Infallible` errors, then promote the value, lower bound, and upper
-bound to `O` inside each present row. Bounds are valid only when `lower.partial_cmp(&upper)` is
+Clamp is the observable three-input path. A generated adapter promotes `A`, `B`, and `C` to `O`
+with infallible `TryFrom`, then passes the values to scalar-only `clamp_number`. Bounds are valid
+only when `lower.partial_cmp(&upper)` is
 `Less` or `Equal`. A lower bound greater than the upper bound, or an unordered floating-point
 comparison involving `NaN`, returns the same contextual invalid-bound error.
 
-Choose the whole-batch kernel from the exact `(value, lower, upper, output)` physical tuple once,
-before evaluation begins. It validates the batch, converts the three columns once, and runs its
-single typed row loop. Do not materialize three promoted arrays or match erased scalar variants
-inside each row.
+Choose the generated adapter from the exact `(value, lower, upper, output)` physical tuple once,
+before evaluation begins. Do not materialize promoted arrays, match erased scalar variants inside
+each row, or copy the ternary loop into that adapter.
 
 The legal tuple comes from applying Chapter 5's lossless promotion table twice: first to `(value,
 lower)`, then to that result and `upper`. The second result is the output family. For example,
@@ -156,11 +151,10 @@ contracts in the same learner workspace.
 
 ## Read the shared boundary
 
-Unary, binary, and ternary expressions have different typed whole-batch kernels, but the surrounding
-contract is the same. The shared validator answers whether row evaluation may begin. Each kernel
-then recovers typed borrowed columns once, applies its arity-specific strict-null rule, and builds
-the associated output array. The physical clamp selector chooses one concrete instantiation before
-that work starts.
+Unary, binary, and ternary expressions share one auto-vectorizer per arity. The helpers own
+validation, typed view recovery, null handling, row context, and output construction. Generated
+physical adapters own promotion and select the scalar function; scalar functions own only one
+value-level operation.
 
 Before continuing, make sure you can explain these boundaries in your own words:
 

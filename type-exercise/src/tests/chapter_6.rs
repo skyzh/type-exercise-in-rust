@@ -3,6 +3,39 @@ use crate::{
     promote_numeric, validate_expression_inputs,
 };
 
+#[test]
+fn scalar_operations_reuse_exactly_one_loop_per_arity() {
+    let source = include_str!("../operators.rs");
+    let source = source
+        .split("pub(crate) struct StringBinaryExpression")
+        .next()
+        .unwrap();
+    assert_eq!(source.matches("for row in 0..").count(), 3);
+    assert!(source.contains("fn neg_number<O: Numeric>(value: O) -> O"));
+    assert!(source.contains("fn clamp_number<O: Numeric>"));
+
+    for adapter in [
+        "fn evaluate_numeric_add",
+        "fn evaluate_numeric_subtract",
+        "fn evaluate_numeric_multiply",
+        "fn evaluate_numeric_divide",
+        "fn evaluate_numeric_neg",
+        "fn evaluate_numeric_clamp",
+    ] {
+        let body = source
+            .split(adapter)
+            .nth(1)
+            .unwrap()
+            .split("\nfn ")
+            .next()
+            .unwrap();
+        assert!(
+            !body.contains("for row"),
+            "{adapter} duplicated the row loop"
+        );
+    }
+}
+
 use crate::operators::{build_numeric_clamp_expression, build_numeric_neg_expression};
 
 #[test]

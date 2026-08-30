@@ -74,3 +74,66 @@ where
     }
     Ok(output.finish().into())
 }
+
+/// One statically selected binary kernel over a complete borrowed batch.
+pub type BinaryBatchKernel = for<'a> fn(&[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
+
+/// Runtime metadata plus one monomorphized binary batch kernel.
+pub struct BinaryExpression {
+    name: &'static str,
+    input_types: [crate::PhysicalType; 2],
+    output_type: crate::PhysicalType,
+    kernel: BinaryBatchKernel,
+    reports_scalar_rows: bool,
+}
+
+impl BinaryExpression {
+    pub fn new(
+        name: &'static str,
+        input_types: [crate::PhysicalType; 2],
+        output_type: crate::PhysicalType,
+        kernel: BinaryBatchKernel,
+    ) -> Self {
+        Self {
+            name,
+            input_types,
+            output_type,
+            kernel,
+            reports_scalar_rows: false,
+        }
+    }
+
+    pub(crate) fn new_with_scalar_rows(
+        name: &'static str,
+        input_types: [crate::PhysicalType; 2],
+        output_type: crate::PhysicalType,
+        kernel: BinaryBatchKernel,
+    ) -> Self {
+        Self {
+            name,
+            input_types,
+            output_type,
+            kernel,
+            reports_scalar_rows: true,
+        }
+    }
+
+    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        crate::operators::validate_expression_inputs(inputs, &self.input_types)?;
+        let output = (self.kernel)(inputs).map_err(|error| {
+            if self.reports_scalar_rows {
+                anyhow::anyhow!("function `{}` failed at {error}", self.name)
+            } else {
+                error
+            }
+        })?;
+        if output.physical_type() != self.output_type {
+            anyhow::bail!(
+                "output type mismatch: expected {:?}, got {:?}",
+                self.output_type,
+                output.physical_type()
+            );
+        }
+        Ok(output)
+    }
+}

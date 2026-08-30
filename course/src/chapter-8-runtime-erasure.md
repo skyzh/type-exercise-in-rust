@@ -25,21 +25,20 @@ The first run should fail on the object-safe expression boundary or physical cat
 The runtime path is:
 
 ```text
-physical name → Box<dyn Expression> → typed whole-batch kernel → typed row loop
+physical name → Box<dyn Expression> → generated typed adapter → shared auto-vectorizer
 ```
 
-The object erases one already-vectorized evaluator. Its stored batch-kernel pointer selects the
-typed implementation once; that implementation validates the batch, converts columns to typed
-views, and enters the row loop. It must not erase a scalar callback or match on `ScalarRefImpl` to
-select an operator for every row.
+The object erases one generated adapter. Its stored batch-kernel pointer selects the typed
+implementation once; that adapter calls the shared Day 6 evaluator with an ordinary scalar
+function. It must not store `dyn Fn` or match on `ScalarRefImpl` for every row.
 
 ## Checkpoint 1: make the batch contract safe to erase
 
-- **Target:** `type-exercise-starter/src/expression.rs::{Expression, BinaryExpression, BinaryBatchKernel}`.
-- **Change:** keep `name`, `arity`, `input_types`, `output_type`, and `evaluate` free of associated
-  types, and require `Any + Send + Sync` for checked recovery and sharing, so the trait is
-  object-safe from this chapter on; `BinaryExpression::new` pairs runtime physical metadata with
-  one whole-batch kernel pointer.
+- **Target:** `type-exercise-starter/src/expression.rs::{Expression, BinaryExpression}`.
+- **Change:** add `Expression` with `name`, `arity`, `input_types`, `output_type`, and `evaluate`
+  free of associated types, and require `Any + Send + Sync` for checked recovery and sharing.
+  Implement it for the Day 5 `BinaryExpression`, whose constructor already pairs runtime physical
+  metadata with one whole-batch kernel pointer; do not recreate that shell here.
 - **Preserve:** metadata is borrowed or copied from the selected expression; runtime inputs stay
   borrowed.
 - **Run:** the Chapter 8 focused test.
@@ -64,12 +63,12 @@ pub use expression::{
 - **Change:** publish physical metadata and call the selected whole-batch kernel. One declarative
   catalog row owns each built-in's name, input and output physical types, kernel, and optional loop
   specialization; that same row list generates both the public name list and constructor lookup.
-  The typed `i32_add` and `string_concat` kernels own their row loops; `BinaryExpression` never
-  stores or invokes a scalar callback. String concatenation writes both borrowed fragments directly
-  into the final byte buffer through `StringValueWriter` and
-  `StringArrayBuilder::try_push_with`; `push_null` publishes null rows. A failed closure truncates
-  any bytes it appended before the builder publishes an offset or validity bit. The erased boundary
-  also checks that the returned array's physical type matches the declared output type.
+  The `i32_add` adapter reuses Day 6's binary auto-vectorizer. Variable-width output adds a
+  consumed typestate: a scalar string function receives `Writer<'a>`, calls `write(self, ...)`
+  exactly once, and returns `WriterUsed<'a>`. The evaluator alone recovers the builder for the next
+  row. Zero writes cannot return `WriterUsed`; a second write cannot reuse the consumed `Writer`.
+  The write closure may append both borrowed fragments directly through `StringValueWriter`, while
+  `push_null` publishes strict null rows. The erased boundary also checks the returned physical type.
 - **Preserve:** arity is checked before indexing; type and length messages retain their context;
   strict nulls skip the write closure; failed variable-width rows leave no partial bytes or metadata.
 - **Run:** focused and cumulative tests.
@@ -86,8 +85,8 @@ pub use expression::{
 
 ## Required and extension work
 
-Checked runtime erasure and a complete physical catalog are required. The vectorized kernels from
-Chapters 4–6 keep the same batch behavior; this chapter changes how the engine selects them.
+Checked runtime erasure and a complete physical catalog are required. The Day 6 auto-vectorizers
+keep the same batch behavior; this chapter selects their adapters and adds exactly-once string output.
 Dynamic plugin loading and per-row erased dispatch are extensions outside this course.
 
 ```console

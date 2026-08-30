@@ -18,6 +18,7 @@ pub use primitive_array::{I32Array, I32ArrayBuilder, PrimitiveArray, PrimitiveAr
 // Day 10, checkpoint 1: keep this single primitive representation; the checked non-null proof
 // belongs to `ColumnViewImpl` as physical `Nullability` metadata.
 pub use string_array::{StringArray, StringArrayBuilder};
+// Day 8, checkpoint 2: extend this re-export with `Writer` and `WriterUsed`.
 
 /// Day 1, checkpoint 3: add the bounds that connect an array to its scalar and builder forms.
 pub trait Array {

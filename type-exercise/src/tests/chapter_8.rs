@@ -128,9 +128,11 @@ fn string_concat_writes_fragments_directly_into_the_transactional_builder() {
         .next()
         .unwrap();
 
-    assert!(body.contains("output.try_push_with"));
-    assert!(body.contains("writer.push_str(left)"));
-    assert!(body.contains("writer.push_str(right)"));
+    assert!(body.contains("output.writer()"));
+    assert!(body.contains("concat_strings(left, right"));
+    assert!(source.contains("writer.write(|value|"));
+    assert!(source.contains("value.push_str(left)"));
+    assert!(source.contains("value.push_str(right)"));
     assert!(body.contains("output.push_null()"));
     assert!(!body.contains("format!"));
     assert!(!body.contains("String::with_capacity"));
@@ -224,7 +226,7 @@ fn delegates_length_errors_to_the_typed_boundary() {
 }
 
 #[test]
-fn i32_builtin_kernel_owns_its_row_operation_without_a_scalar_callback() {
+fn i32_builtin_uses_the_shared_binary_auto_vectorizer() {
     let source = include_str!("../expression.rs");
     let start = source.find("fn evaluate_i32_add_batch(").unwrap();
     let body_start = source[start..]
@@ -248,13 +250,9 @@ fn i32_builtin_kernel_owns_its_row_operation_without_a_scalar_callback() {
     }
     let body = &source[body_start..body_end.unwrap()];
 
-    assert!(body.contains(".map(|(left, right)| left.wrapping_add(right))"));
-    assert!(
-        !body
-            .lines()
-            .any(|line| line.trim_start().starts_with("fn "))
-    );
-    assert!(!body.contains(": fn(i32, i32) -> i32"));
+    assert!(body.contains("auto_vectorize_binary"));
+    assert!(body.contains("i32::wrapping_add"));
+    assert!(!body.contains("for row"));
 }
 
 #[test]
