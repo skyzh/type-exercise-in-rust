@@ -88,14 +88,14 @@ fn preserves_the_type_and_length_of_null_and_empty_views() {
 #[test]
 fn rejects_every_invalid_index_before_exposing_a_view() {
     let values: ArrayImpl = I32Array::from_slice(&[Some(1)]).into();
-    let error = ColumnViewImpl::indexed(&[0, 1], &values).unwrap_err();
+    let error = ColumnViewImpl::indexed(&[0, 1], &values).err().unwrap();
     assert_eq!(
         error.to_string(),
         "index 1 at row 1 is out of bounds for a values array of length 1"
     );
 
     let empty_values: ArrayImpl = I32Array::from_slice(&[]).into();
-    let error = ColumnViewImpl::indexed(&[0], &empty_values).unwrap_err();
+    let error = ColumnViewImpl::indexed(&[0], &empty_values).err().unwrap();
     assert_eq!(
         error.to_string(),
         "index 0 at row 0 is out of bounds for a values array of length 0"
