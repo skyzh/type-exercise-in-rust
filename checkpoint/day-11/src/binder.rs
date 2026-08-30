@@ -3,12 +3,12 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 
 use crate::{
-    ArithmeticOperator, ArrayImpl, AsyncExpression, BatchFuture, BooleanOperator, ColumnViewImpl,
-    ComparisonOperator, DataType, Expression, I32Add, Nullability, PhysicalType,
-    PrimitiveBinaryExpression, PrimitiveLoop, build_bool_comparison_expression,
-    build_boolean_expression, build_numeric_binary_expression, build_numeric_clamp_expression,
-    build_numeric_comparison_expression, build_numeric_neg_expression,
-    build_string_comparison_expression, build_string_contains_expression, promote_numeric,
+    ArithmeticOperator, ArrayImpl, BooleanOperator, ColumnViewImpl, ComparisonOperator, DataType,
+    Expression, I32Add, Nullability, PhysicalType, PrimitiveBinaryExpression, PrimitiveLoop,
+    build_bool_comparison_expression, build_boolean_expression, build_numeric_binary_expression,
+    build_numeric_clamp_expression, build_numeric_comparison_expression,
+    build_numeric_neg_expression, build_string_comparison_expression,
+    build_string_contains_expression, promote_numeric,
 };
 
 /// The two physical expressions available before logical binding is introduced.
@@ -149,14 +149,7 @@ impl BoundExpression {
     }
 }
 
-impl AsyncExpression for BoundExpression {
-    fn evaluate_async<'a>(&'a self, inputs: &'a [ColumnViewImpl<'a>]) -> BatchFuture<'a> {
-        Box::pin(async move { self.evaluate(inputs) })
-    }
-}
-
-type FunctionFactory =
-    dyn Fn(&[DataType]) -> Result<BoundExpression, BindError> + Send + Sync + 'static;
+type FunctionFactory = dyn Fn(&[DataType]) -> Result<BoundExpression, BindError>;
 
 /// Planning-time registry for logical functions of any arity.
 #[derive(Default)]
@@ -208,7 +201,7 @@ impl FunctionRegistry {
     pub fn register(
         &mut self,
         name: impl Into<String>,
-        factory: impl Fn(&[DataType]) -> Result<BoundExpression, BindError> + Send + Sync + 'static,
+        factory: impl Fn(&[DataType]) -> Result<BoundExpression, BindError> + 'static,
     ) {
         self.functions.insert(name.into(), Box::new(factory));
     }
@@ -217,10 +210,7 @@ impl FunctionRegistry {
     pub fn register_binary(
         &mut self,
         name: impl Into<String>,
-        factory: impl Fn(DataType, DataType) -> Result<BoundExpression, BindError>
-        + Send
-        + Sync
-        + 'static,
+        factory: impl Fn(DataType, DataType) -> Result<BoundExpression, BindError> + 'static,
     ) {
         let name = name.into();
         let error_name = name.clone();
@@ -239,7 +229,7 @@ impl FunctionRegistry {
     pub fn register_unary(
         &mut self,
         name: impl Into<String>,
-        factory: impl Fn(DataType) -> Result<BoundExpression, BindError> + Send + Sync + 'static,
+        factory: impl Fn(DataType) -> Result<BoundExpression, BindError> + 'static,
     ) {
         let name = name.into();
         let error_name = name.clone();
@@ -258,10 +248,7 @@ impl FunctionRegistry {
     pub fn register_ternary(
         &mut self,
         name: impl Into<String>,
-        factory: impl Fn(DataType, DataType, DataType) -> Result<BoundExpression, BindError>
-        + Send
-        + Sync
-        + 'static,
+        factory: impl Fn(DataType, DataType, DataType) -> Result<BoundExpression, BindError> + 'static,
     ) {
         let name = name.into();
         let error_name = name.clone();

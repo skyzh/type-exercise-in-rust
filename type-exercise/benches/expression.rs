@@ -3,8 +3,8 @@ use std::time::Duration;
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use type_exercise_expr::{
-    Array, ArrayBuilder, ArrayImpl, BinaryExpression, ColumnView, ColumnViewImpl, Expression,
-    I32Add, I32Array, PhysicalType, PrimitiveBinaryExpression, ScalarRefImpl,
+    Array, ArrayBuilder, ArrayImpl, BinaryExpression, ColumnView, ColumnViewImpl, I32Add, I32Array,
+    PhysicalType, PrimitiveBinaryExpression, ScalarRefImpl,
 };
 
 const ROWS: usize = 65_536;

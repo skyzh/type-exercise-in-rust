@@ -6,8 +6,8 @@ use std::ops::{Add, Mul, Neg, Sub};
 
 use crate::{
     ArrayImpl, BinaryExpression, ColumnViewImpl, ComparisonOperator, Expression, PhysicalType,
-    Scalar, ScalarRefImpl, TypeMismatch, auto_vectorize_binary, evaluate_borrowed_binary,
-    evaluate_unary, try_evaluate_binary, try_evaluate_ternary, validate_expression_inputs,
+    Scalar, ScalarRefImpl, TypeMismatch, auto_vectorize_binary, evaluate_unary,
+    try_evaluate_binary, try_evaluate_ternary, validate_expression_inputs,
 };
 
 /// One monomorphized evaluator for a complete input batch.
@@ -81,11 +81,6 @@ impl crate::BinaryScalarFunction for I32Add {
     fn evaluate<'a>(&self, left: i32, right: i32) -> i32 {
         left.wrapping_add(right)
     }
-}
-
-pub(crate) enum StringOperator {
-    Compare(ComparisonOperator),
-    Contains,
 }
 
 trait Numeric:
@@ -973,157 +968,5 @@ pub(crate) fn build_numeric_comparison_expression(
         input_types: [left, right],
         operator,
         kernel,
-    }
-}
-
-pub(crate) struct StringBinaryExpression {
-    name: &'static str,
-    input_types: [PhysicalType; 2],
-    operator: StringOperator,
-}
-
-impl StringBinaryExpression {
-    pub(crate) fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-        crate::validate_expression_inputs(inputs, &self.input_types)?;
-        let left = inputs[0].clone();
-        let right = inputs[1].clone();
-        match self.operator {
-            StringOperator::Contains => {
-                evaluate_borrowed_binary::<String, String, bool, _>(left, right, str::contains)
-            }
-            StringOperator::Compare(ComparisonOperator::Less) => {
-                evaluate_borrowed_binary::<String, String, bool, _>(
-                    left,
-                    right,
-                    crate::comparison::less,
-                )
-            }
-            StringOperator::Compare(ComparisonOperator::LessOrEqual) => {
-                evaluate_borrowed_binary::<String, String, bool, _>(
-                    left,
-                    right,
-                    crate::comparison::less_or_equal,
-                )
-            }
-            StringOperator::Compare(ComparisonOperator::Greater) => {
-                evaluate_borrowed_binary::<String, String, bool, _>(
-                    left,
-                    right,
-                    crate::comparison::greater,
-                )
-            }
-            StringOperator::Compare(ComparisonOperator::GreaterOrEqual) => {
-                evaluate_borrowed_binary::<String, String, bool, _>(
-                    left,
-                    right,
-                    crate::comparison::greater_or_equal,
-                )
-            }
-            StringOperator::Compare(ComparisonOperator::Equal) => {
-                evaluate_borrowed_binary::<String, String, bool, _>(
-                    left,
-                    right,
-                    crate::comparison::equal,
-                )
-            }
-            StringOperator::Compare(ComparisonOperator::NotEqual) => {
-                evaluate_borrowed_binary::<String, String, bool, _>(
-                    left,
-                    right,
-                    crate::comparison::not_equal,
-                )
-            }
-        }
-    }
-}
-
-impl Expression for StringBinaryExpression {
-    fn name(&self) -> &'static str {
-        self.name
-    }
-
-    fn input_types(&self) -> &[PhysicalType] {
-        &self.input_types
-    }
-
-    fn output_type(&self) -> PhysicalType {
-        PhysicalType::Bool
-    }
-
-    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-        self.evaluate(inputs)
-    }
-}
-
-pub(crate) struct BoolComparisonExpression {
-    name: &'static str,
-    input_types: [PhysicalType; 2],
-    operator: ComparisonOperator,
-}
-
-impl BoolComparisonExpression {
-    pub(crate) fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-        crate::validate_expression_inputs(inputs, &self.input_types)?;
-        let left = inputs[0].clone();
-        let right = inputs[1].clone();
-        match self.operator {
-            ComparisonOperator::Equal => {
-                auto_vectorize_binary::<bool, bool, bool, _>(left, right, crate::comparison::equal)
-            }
-            ComparisonOperator::NotEqual => auto_vectorize_binary::<bool, bool, bool, _>(
-                left,
-                right,
-                crate::comparison::not_equal,
-            ),
-            _ => unreachable!("ordered boolean comparison"),
-        }
-    }
-}
-
-impl Expression for BoolComparisonExpression {
-    fn name(&self) -> &'static str {
-        self.name
-    }
-
-    fn input_types(&self) -> &[PhysicalType] {
-        &self.input_types
-    }
-
-    fn output_type(&self) -> PhysicalType {
-        PhysicalType::Bool
-    }
-
-    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-        self.evaluate(inputs)
-    }
-}
-
-pub(crate) fn build_string_comparison_expression(
-    name: &'static str,
-    operator: ComparisonOperator,
-) -> StringBinaryExpression {
-    StringBinaryExpression {
-        name,
-        input_types: [PhysicalType::String, PhysicalType::String],
-        operator: StringOperator::Compare(operator),
-    }
-}
-
-pub(crate) fn build_string_contains_expression(name: &'static str) -> StringBinaryExpression {
-    StringBinaryExpression {
-        name,
-        input_types: [PhysicalType::String, PhysicalType::String],
-        operator: StringOperator::Contains,
-    }
-}
-
-pub(crate) fn build_bool_comparison_expression(
-    name: &'static str,
-    operator: ComparisonOperator,
-) -> BoolComparisonExpression {
-    BoolComparisonExpression {
-        name,
-        input_types: [PhysicalType::Bool, PhysicalType::Bool],
-        operator,
     }
 }

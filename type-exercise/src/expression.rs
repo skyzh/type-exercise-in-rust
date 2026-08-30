@@ -503,6 +503,14 @@ where
         }
     }
 
+    pub fn output_nullability(&self, inputs: &[Nullability]) -> Nullability {
+        <Self as Expression>::output_nullability(self, inputs)
+    }
+
+    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        <Self as Expression>::evaluate(self, inputs)
+    }
+
     pub fn evaluate_with_loop(
         &self,
         inputs: &[ColumnViewImpl<'_>],

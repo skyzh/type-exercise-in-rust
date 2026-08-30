@@ -1,14 +1,12 @@
 use anyhow::{Result, anyhow};
 
-use crate::{
-    Array, ArrayImpl, ListArray, ListError, ListScalarRef, Nullability, PhysicalType, Scalar,
-    ScalarRefImpl, TypeMismatch,
-};
+use crate::{Array, ArrayImpl, Nullability, PhysicalType, Scalar, ScalarRefImpl, TypeMismatch};
 
 /// A borrowed column whose scalar and array types are known only at runtime.
 ///
-/// The public wrapper keeps construction checked while the private kind prevents
-/// callers from bypassing those checks, and it stores batch nullability once.
+/// The public wrapper keeps its representation enum private, so callers must use the checked
+/// constructors instead of creating an unvalidated indexed view. It also carries nullability once
+/// for the whole batch instead of repeating that metadata in every representation variant.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ColumnViewImpl<'a> {
     kind: ColumnViewImplKind<'a>,
@@ -153,101 +151,6 @@ impl<'a> ColumnViewImpl<'a> {
                 len: *len,
             }),
             _ => None,
-        }
-    }
-
-    pub fn try_as_list(self, element_type: PhysicalType) -> Result<ListColumnView<'a>, ListError> {
-        if matches!(element_type, PhysicalType::List(_)) {
-            return Err(ListError::NestedList);
-        }
-        let expected = PhysicalType::List(Box::new(element_type));
-        let actual = self.physical_type();
-        if actual != expected {
-            return Err(TypeMismatch { expected, actual }.into());
-        }
-        match self.kind {
-            ColumnViewImplKind::Array(ArrayImpl::List(array)) => Ok(ListColumnView {
-                kind: ListColumnViewKind::Array(array),
-            }),
-            ColumnViewImplKind::Constant { value, len, .. } => {
-                let value = match value {
-                    Some(ScalarRefImpl::List(value)) => Some(value),
-                    None => None,
-                    Some(other) => {
-                        return Err(TypeMismatch {
-                            expected,
-                            actual: other.physical_type(),
-                        }
-                        .into());
-                    }
-                };
-                Ok(ListColumnView {
-                    kind: ListColumnViewKind::Constant { value, len },
-                })
-            }
-            ColumnViewImplKind::Indexed {
-                indices,
-                values: ArrayImpl::List(values),
-            } => Ok(ListColumnView {
-                kind: ListColumnViewKind::Indexed { indices, values },
-            }),
-            ColumnViewImplKind::Array(array) => Err(TypeMismatch {
-                expected,
-                actual: array.physical_type(),
-            }
-            .into()),
-            ColumnViewImplKind::Indexed { values, .. } => Err(TypeMismatch {
-                expected,
-                actual: values.physical_type(),
-            }
-            .into()),
-        }
-    }
-}
-
-/// A borrowed List column whose element physical type was checked once.
-#[derive(Debug)]
-pub struct ListColumnView<'a> {
-    kind: ListColumnViewKind<'a>,
-}
-
-#[derive(Debug)]
-enum ListColumnViewKind<'a> {
-    Array(&'a ListArray),
-    Constant {
-        value: Option<ListScalarRef<'a>>,
-        len: usize,
-    },
-    Indexed {
-        indices: &'a [u32],
-        values: &'a ListArray,
-    },
-}
-
-impl<'a> ListColumnView<'a> {
-    pub fn len(&self) -> usize {
-        match &self.kind {
-            ListColumnViewKind::Array(array) => array.len(),
-            ListColumnViewKind::Constant { len, .. } => *len,
-            ListColumnViewKind::Indexed { indices, .. } => indices.len(),
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    pub fn get(&self, row: usize) -> Result<Option<ListScalarRef<'a>>, ListError> {
-        if row >= self.len() {
-            return Err(ListError::RowOutOfBounds {
-                row,
-                len: self.len(),
-            });
-        }
-        match &self.kind {
-            ListColumnViewKind::Array(array) => array.get(row),
-            ListColumnViewKind::Constant { value, .. } => Ok(*value),
-            ListColumnViewKind::Indexed { indices, values } => values.get(indices[row] as usize),
         }
     }
 }

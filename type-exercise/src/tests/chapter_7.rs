@@ -1,5 +1,5 @@
 use crate::{
-    Array, ArrayImpl, ColumnViewImpl, Expression, I32Add, I32Array, Nullability, PhysicalType,
+    Array, ArrayImpl, ColumnViewImpl, I32Add, I32Array, Nullability, PhysicalType,
     PrimitiveBinaryExpression, PrimitiveLoop, ScalarRefImpl, StringArray,
 };
 

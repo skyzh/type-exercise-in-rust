@@ -72,13 +72,7 @@ impl DecimalArray {
         self.storage.values().is_empty()
     }
 
-    pub(crate) fn try_slice(&self, start: usize, end: usize) -> Result<Self> {
-        Self::try_from_raw_parts(
-            self.decimal_type,
-            self.storage.values()[start..end].to_vec(),
-            self.storage.validity()[start..end].to_bitvec(),
-        )
-    }
+    // Day 12 adds checked slicing for List child storage.
 }
 
 /// A fail-closed Decimal builder that requires metadata before any row.

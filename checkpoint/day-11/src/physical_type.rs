@@ -14,7 +14,7 @@ pub enum PhysicalType {
     Float64,
     String,
     Decimal(DecimalType),
-    List(Box<PhysicalType>),
+    // Day 12 adds `List(Box<PhysicalType>)`.
 }
 
 /// Whether a physical column may contain null rows.

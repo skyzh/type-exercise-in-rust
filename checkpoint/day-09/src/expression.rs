@@ -168,6 +168,14 @@ where
         }
     }
 
+    pub fn output_nullability(&self, inputs: &[Nullability]) -> Nullability {
+        <Self as Expression>::output_nullability(self, inputs)
+    }
+
+    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        <Self as Expression>::evaluate(self, inputs)
+    }
+
     pub fn evaluate_with_loop(
         &self,
         inputs: &[ColumnViewImpl<'_>],
@@ -614,40 +622,6 @@ where
             }
             _ => None,
         };
-        output.push(value.as_ref().map(Scalar::as_scalar_ref));
-    }
-    Ok(output.finish().into())
-}
-/// Lift a preselected borrowed scalar function over two strict nullable columns.
-pub fn evaluate_borrowed_binary<'a, L, R, O, F>(
-    left: ColumnViewImpl<'a>,
-    right: ColumnViewImpl<'a>,
-    function: F,
-) -> anyhow::Result<ArrayImpl>
-where
-    L: Scalar,
-    R: Scalar,
-    O: Scalar + Copy,
-    F: Fn(L::RefType<'a>, R::RefType<'a>) -> O,
-    L::ArrayType: 'a,
-    R::ArrayType: 'a,
-    &'a L::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
-    &'a R::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
-    L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-    R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-{
-    validate_expression_inputs(
-        &[left.clone(), right.clone()],
-        &[L::PHYSICAL_TYPE, R::PHYSICAL_TYPE],
-    )?;
-    let left = ColumnView::<L>::try_from(left)?;
-    let right = ColumnView::<R>::try_from(right)?;
-    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(left.len());
-    for row in 0..left.len() {
-        let value = left
-            .get(row)
-            .zip(right.get(row))
-            .map(|(left, right)| function(left, right));
         output.push(value.as_ref().map(Scalar::as_scalar_ref));
     }
     Ok(output.finish().into())

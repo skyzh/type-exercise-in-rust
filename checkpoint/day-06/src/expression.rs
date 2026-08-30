@@ -204,7 +204,7 @@ where
 }
 
 /// Lift one nullable-aware scalar function over a unary column.
-pub fn evaluate_nullable_unary<I, O, F>(
+fn evaluate_nullable_unary<I, O, F>(
     input: ColumnViewImpl<'_>,
     function: F,
 ) -> anyhow::Result<ArrayImpl>
@@ -264,7 +264,7 @@ where
 }
 
 /// Lift one nullable-aware scalar function over two columns.
-pub fn evaluate_nullable_binary<L, R, O, F>(
+fn evaluate_nullable_binary<L, R, O, F>(
     left: ColumnViewImpl<'_>,
     right: ColumnViewImpl<'_>,
     mut function: F,
@@ -336,40 +336,6 @@ where
             }
             _ => None,
         };
-        output.push(value.as_ref().map(Scalar::as_scalar_ref));
-    }
-    Ok(output.finish().into())
-}
-/// Lift a preselected borrowed scalar function over two strict nullable columns.
-pub fn evaluate_borrowed_binary<'a, L, R, O, F>(
-    left: ColumnViewImpl<'a>,
-    right: ColumnViewImpl<'a>,
-    function: F,
-) -> anyhow::Result<ArrayImpl>
-where
-    L: Scalar,
-    R: Scalar,
-    O: Scalar + Copy,
-    F: Fn(L::RefType<'a>, R::RefType<'a>) -> O,
-    L::ArrayType: 'a,
-    R::ArrayType: 'a,
-    &'a L::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
-    &'a R::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
-    L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-    R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-{
-    validate_expression_inputs(
-        &[left.clone(), right.clone()],
-        &[L::PHYSICAL_TYPE, R::PHYSICAL_TYPE],
-    )?;
-    let left = ColumnView::<L>::try_from(left)?;
-    let right = ColumnView::<R>::try_from(right)?;
-    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(left.len());
-    for row in 0..left.len() {
-        let value = left
-            .get(row)
-            .zip(right.get(row))
-            .map(|(left, right)| function(left, right));
         output.push(value.as_ref().map(Scalar::as_scalar_ref));
     }
     Ok(output.finish().into())

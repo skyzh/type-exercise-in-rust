@@ -1,6 +1,6 @@
 //! SQL three-valued Boolean scalar operations.
 
-use crate::{ArrayImpl, ColumnViewImpl, Expression, PhysicalType};
+use crate::{ArrayImpl, ColumnViewImpl, PhysicalType};
 
 /// One three-valued Boolean operator.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -90,31 +90,4 @@ impl BooleanExpression {
 /// Build the course's three-valued Boolean expression with SQL null semantics.
 pub fn build_boolean_expression(operator: BooleanOperator) -> BooleanExpression {
     BooleanExpression::new(operator)
-}
-
-impl Expression for BooleanExpression {
-    fn name(&self) -> &'static str {
-        match self.operator {
-            BooleanOperator::And => "boolean_and",
-            BooleanOperator::Or => "boolean_or",
-            BooleanOperator::Not => "boolean_not",
-        }
-    }
-
-    fn input_types(&self) -> &[PhysicalType] {
-        const BOOL_PAIR: [PhysicalType; 2] = [PhysicalType::Bool, PhysicalType::Bool];
-        const BOOL_SINGLE: [PhysicalType; 1] = [PhysicalType::Bool];
-        match self.operator {
-            BooleanOperator::And | BooleanOperator::Or => &BOOL_PAIR,
-            BooleanOperator::Not => &BOOL_SINGLE,
-        }
-    }
-
-    fn output_type(&self) -> PhysicalType {
-        PhysicalType::Bool
-    }
-
-    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-        self.evaluate(inputs)
-    }
 }

@@ -8,7 +8,7 @@ pub use primitive_array::{
     I16ArrayBuilder, I32Array, I32ArrayBuilder, I64Array, I64ArrayBuilder, PrimitiveArray,
     PrimitiveArrayBuilder,
 };
-pub use string_array::{StringArray, StringArrayBuilder, Writer, WriterUsed};
+pub use string_array::{StringArray, StringArrayBuilder};
 
 use anyhow::anyhow;
 use std::fmt::Debug;

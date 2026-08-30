@@ -1,38 +1,9 @@
-use std::any::Any;
-
 use crate::Nullability;
 use crate::column::DenseI32Column;
 use crate::{
     Array, ArrayBuilder, ArrayImpl, ColumnView, ColumnViewImpl, I32Array, Scalar, ScalarRefImpl,
     TypeMismatch,
 };
-
-pub trait Expression: Any + Send + Sync {
-    fn name(&self) -> &'static str;
-    fn input_types(&self) -> &[crate::PhysicalType];
-    fn arity(&self) -> usize {
-        self.input_types().len()
-    }
-    fn output_type(&self) -> crate::PhysicalType;
-    fn output_nullability(&self, inputs: &[Nullability]) -> Nullability {
-        if inputs
-            .iter()
-            .all(|nullability| *nullability == Nullability::NonNull)
-        {
-            Nullability::NonNull
-        } else {
-            Nullability::Nullable
-        }
-    }
-    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl>;
-    fn evaluate_with_loop(
-        &self,
-        inputs: &[ColumnViewImpl<'_>],
-    ) -> anyhow::Result<(ArrayImpl, PrimitiveLoop)> {
-        self.evaluate(inputs)
-            .map(|output| (output, PrimitiveLoop::General))
-    }
-}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PrimitiveLoop {
@@ -158,7 +129,7 @@ where
 
 impl<F> PrimitiveBinaryExpression<F>
 where
-    F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32> + Send + Sync + 'static,
+    F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32>,
 {
     pub fn new(name: &'static str, function: F) -> Self {
         Self {
@@ -166,6 +137,37 @@ where
             input_types: [crate::PhysicalType::Int32, crate::PhysicalType::Int32],
             function,
         }
+    }
+
+    pub fn name(&self) -> &'static str {
+        self.name
+    }
+
+    pub fn input_types(&self) -> &[crate::PhysicalType] {
+        &self.input_types
+    }
+
+    pub fn arity(&self) -> usize {
+        self.input_types.len()
+    }
+
+    pub fn output_type(&self) -> crate::PhysicalType {
+        crate::PhysicalType::Int32
+    }
+
+    pub fn output_nullability(&self, inputs: &[Nullability]) -> Nullability {
+        if inputs
+            .iter()
+            .all(|nullability| *nullability == Nullability::NonNull)
+        {
+            Nullability::NonNull
+        } else {
+            Nullability::Nullable
+        }
+    }
+
+    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        self.evaluate_with_loop(inputs).map(|(output, _)| output)
     }
 
     pub fn evaluate_with_loop(
@@ -235,34 +237,6 @@ where
     }
 }
 
-impl<F> Expression for PrimitiveBinaryExpression<F>
-where
-    F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32> + Send + Sync + 'static,
-{
-    fn name(&self) -> &'static str {
-        self.name
-    }
-
-    fn input_types(&self) -> &[crate::PhysicalType] {
-        &self.input_types
-    }
-
-    fn output_type(&self) -> crate::PhysicalType {
-        crate::PhysicalType::Int32
-    }
-
-    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-        self.evaluate_with_loop(inputs).map(|(output, _)| output)
-    }
-
-    fn evaluate_with_loop(
-        &self,
-        inputs: &[ColumnViewImpl<'_>],
-    ) -> anyhow::Result<(ArrayImpl, PrimitiveLoop)> {
-        PrimitiveBinaryExpression::evaluate_with_loop(self, inputs)
-    }
-}
-
 pub type BinaryBatchKernel = for<'a> fn(&[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
 pub type BinaryLoopKernel =
     for<'a> fn(&[ColumnViewImpl<'a>]) -> anyhow::Result<(ArrayImpl, PrimitiveLoop)>;
@@ -328,35 +302,10 @@ impl BinaryExpression {
     }
 
     pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-        <Self as Expression>::evaluate(self, inputs)
-    }
-
-    pub fn evaluate_with_loop(
-        &self,
-        inputs: &[ColumnViewImpl<'_>],
-    ) -> anyhow::Result<(ArrayImpl, PrimitiveLoop)> {
-        <Self as Expression>::evaluate_with_loop(self, inputs)
-    }
-}
-
-impl Expression for BinaryExpression {
-    fn name(&self) -> &'static str {
-        self.name
-    }
-
-    fn input_types(&self) -> &[crate::PhysicalType] {
-        &self.input_types
-    }
-
-    fn output_type(&self) -> crate::PhysicalType {
-        self.output_type.clone()
-    }
-
-    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         self.evaluate_with_loop(inputs).map(|(output, _)| output)
     }
 
-    fn evaluate_with_loop(
+    pub fn evaluate_with_loop(
         &self,
         inputs: &[ColumnViewImpl<'_>],
     ) -> anyhow::Result<(ArrayImpl, PrimitiveLoop)> {
@@ -401,6 +350,33 @@ impl Expression for BinaryExpression {
             );
         }
         Ok((output, selected_loop))
+    }
+
+    pub fn name(&self) -> &'static str {
+        self.name
+    }
+
+    pub fn input_types(&self) -> &[crate::PhysicalType] {
+        &self.input_types
+    }
+
+    pub fn arity(&self) -> usize {
+        self.input_types.len()
+    }
+
+    pub fn output_type(&self) -> crate::PhysicalType {
+        self.output_type.clone()
+    }
+
+    pub fn output_nullability(&self, inputs: &[Nullability]) -> Nullability {
+        if inputs
+            .iter()
+            .all(|nullability| *nullability == Nullability::NonNull)
+        {
+            Nullability::NonNull
+        } else {
+            Nullability::Nullable
+        }
     }
 }
 
@@ -614,40 +590,6 @@ where
             }
             _ => None,
         };
-        output.push(value.as_ref().map(Scalar::as_scalar_ref));
-    }
-    Ok(output.finish().into())
-}
-/// Lift a preselected borrowed scalar function over two strict nullable columns.
-pub fn evaluate_borrowed_binary<'a, L, R, O, F>(
-    left: ColumnViewImpl<'a>,
-    right: ColumnViewImpl<'a>,
-    function: F,
-) -> anyhow::Result<ArrayImpl>
-where
-    L: Scalar,
-    R: Scalar,
-    O: Scalar + Copy,
-    F: Fn(L::RefType<'a>, R::RefType<'a>) -> O,
-    L::ArrayType: 'a,
-    R::ArrayType: 'a,
-    &'a L::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
-    &'a R::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
-    L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-    R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-{
-    validate_expression_inputs(
-        &[left.clone(), right.clone()],
-        &[L::PHYSICAL_TYPE, R::PHYSICAL_TYPE],
-    )?;
-    let left = ColumnView::<L>::try_from(left)?;
-    let right = ColumnView::<R>::try_from(right)?;
-    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(left.len());
-    for row in 0..left.len() {
-        let value = left
-            .get(row)
-            .zip(right.get(row))
-            .map(|(left, right)| function(left, right));
         output.push(value.as_ref().map(Scalar::as_scalar_ref));
     }
     Ok(output.finish().into())
