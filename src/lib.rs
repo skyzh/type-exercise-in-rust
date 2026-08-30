@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod array;
+mod boolean_logic;
 mod column;
 mod data_type;
 mod decimal;
@@ -21,6 +22,7 @@ mod variant_catalog;
 mod tests;
 
 pub use array::*;
+pub use boolean_logic::*;
 pub use column::{ColumnView, ColumnViewImpl};
 pub use data_type::*;
 pub use decimal::*;
