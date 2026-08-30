@@ -57,7 +57,7 @@ cargo test -p type-exercise-starter-expr --lib --locked
 cargo check -p type-exercise-starter-core --locked
 ```
 
-The 18 focused tests cover successful numeric, Boolean, comparison, and string calls; unknown
+The 19 focused tests cover successful numeric, Boolean, comparison, and string calls; unknown
 names; unsupported and lossy signatures; inconsistent factory metadata; arbitrary arity slices;
 custom registration; checked runtime errors; and nullability propagation through both physical
 and bound expressions.
