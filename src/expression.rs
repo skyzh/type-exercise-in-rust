@@ -458,7 +458,7 @@ where
 }
 
 /// Lift one nullable-aware scalar function over a unary column.
-fn evaluate_nullable_unary<I, O, F>(
+pub fn evaluate_nullable_unary<I, O, F>(
     input: ColumnViewImpl<'_>,
     function: F,
 ) -> anyhow::Result<ArrayImpl>
@@ -518,7 +518,7 @@ where
 }
 
 /// Lift one nullable-aware scalar function over two columns.
-fn evaluate_nullable_binary<L, R, O, F>(
+pub fn evaluate_nullable_binary<L, R, O, F>(
     left: ColumnViewImpl<'_>,
     right: ColumnViewImpl<'_>,
     mut function: F,
