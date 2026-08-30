@@ -1,63 +1,29 @@
 #![forbid(unsafe_code)]
 
-mod array;
-mod physical_type;
-mod scalar;
-mod variant_catalog;
+pub use type_exercise_starter_core::*;
 
-// Day 2, checkpoints 3–4: uncomment these modules and exports after implementing logical types
-// and Decimal metadata/storage in `src/data_type.rs`, `src/decimal.rs`, and
-// `src/array/decimal_array.rs`.
-// mod data_type;
-// mod decimal;
-// pub use data_type::*;
-// pub use decimal::*;
+// This crate is the concrete-expression facade. The nested core package owns storage, views,
+// evaluator families, erasure, and the generic registry from Day 1 onward.
 
-// Day 3, checkpoint 1: uncomment after implementing `src/column.rs`.
-// mod column;
-// pub use column::ColumnViewImpl;
-// Day 3, checkpoint 2: replace the export above with the typed export below.
-// pub use column::{ColumnView, ColumnViewImpl};
-// Day 4, checkpoints 1–2: uncomment after implementing the expression/operator skeletons.
-// mod expression;
-// mod operators;
-// pub use expression::{BinaryScalarFunction, I32Add, evaluate_binary};
-// pub use operators::{BatchExpression, BatchKernel};
-// Day 5, checkpoint 1: uncomment after implementing numeric promotion.
-// mod promotion;
-// pub use promotion::{NUMERIC_PROMOTIONS, NumericPromotion, promote_numeric};
-// Day 5, checkpoint 2: extend the operators re-export with the selection enums.
-// pub use operators::{ArithmeticOperator, ComparisonOperator};
-// Day 6, checkpoint 1: extend the operators re-export with the shared validator.
-// pub use operators::validate_expression_inputs;
-// Day 7, checkpoint 1: uncomment after implementing three-valued Boolean logic.
-// mod boolean_logic;
-// pub use boolean_logic::{
-//     BooleanExpression, BooleanOperator,
-//     NullEvaluationPolicy, build_boolean_expression,
-// };
-// Day 8, checkpoint 1: extend the expression re-exports with the erased boundary and catalog.
-// pub use expression::{
-//     BinaryBatchKernel, BinaryExpression, BUILTIN_EXPRESSION_NAMES, Expression,
-//     build_builtin_expression,
-// };
-// Day 10, checkpoint 1: extend the expression re-export with `PrimitiveBinaryExpression` and
-// `PrimitiveLoop`; `Nullability` is exported beside `PhysicalType`.
-// Day 9, checkpoint 1: uncomment after implementing the binder and registry.
+// Day 4: enable the first scalar arithmetic implementation.
+// mod arithmetic;
+// pub use arithmetic::*;
+
+// Day 5: enable scalar numeric comparison; promotion selection is exported by the core package.
+// mod comparison;
+// pub use comparison::*;
+
+// Day 8: enable strict NOT and nullable-aware AND/OR scalar operations.
+// mod boolean;
+// pub use boolean::*;
+
+// Day 10: enable variable-width scalar operations after the core writer evaluator exists.
+// mod string;
+// pub use string::*;
+
+// Day 11: enable logical binding and the builtin catalog.
 // mod binder;
-// pub use binder::{BindError, BoundExpression, FunctionRegistry};
-// Day 13, checkpoints 1–3: extend the expression re-export with `AsyncExpression`,
-// `AsyncExpressionAdapter`, `BatchFuture`, and `evaluate_static`; `BoundExpression` implements the
-// async adapter through the enabled binder module.
-
-// Day 11, checkpoints 1–3: the active `pub use array::*` below exports `ListArray`, `ListError`,
-// `ListScalar`, and `ListScalarRef` after their module is enabled. Replace the Day 3 column
-// re-export with the extended line below; `try_as_list` remains a `ColumnViewImpl` method.
-// pub use column::{ColumnView, ColumnViewImpl, ListColumnView};
+// pub use binder::*;
 
 #[cfg(test)]
 mod tests;
-
-pub use array::*;
-pub use physical_type::*;
-pub use scalar::*;

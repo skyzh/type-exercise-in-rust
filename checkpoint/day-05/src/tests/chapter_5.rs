@@ -6,11 +6,11 @@ use crate::{
     NumericPromotion, PhysicalType, ScalarRefImpl, StringArray, promote_numeric,
 };
 
-use crate::operators::{build_numeric_binary_expression, build_numeric_comparison_expression};
+use crate::arithmetic::{build_numeric_binary_expression, build_numeric_comparison_expression};
 
 #[test]
 fn arithmetic_selects_one_infallible_or_fallible_batch_kernel() {
-    let source = include_str!("../operators.rs");
+    let source = include_str!("../arithmetic.rs");
     let expression = include_str!("../expression.rs");
     assert!(expression.contains("pub struct BinaryExpression"));
     assert!(expression.contains("kernel: BinaryBatchKernel"));

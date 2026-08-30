@@ -1,31 +1,11 @@
 #![forbid(unsafe_code)]
 
-mod array;
-mod column;
-mod data_type;
-mod decimal;
-mod expression;
-mod operators;
-mod physical_type;
-mod promotion;
-mod scalar;
-mod variant_catalog;
-
-// Day 3 adds and exports `column`.
-// Day 4 adds and exports `expression` and `operators`.
-// Day 5 adds and exports `promotion`.
-// Day 7 adds and exports `boolean_logic`.
-// Day 9 adds and exports `binder`.
+mod arithmetic;
+mod comparison;
 
 #[cfg(test)]
 mod tests;
 
-pub use array::*;
-pub use column::{ColumnView, ColumnViewImpl};
-pub use data_type::*;
-pub use decimal::*;
-pub use expression::*;
-pub use operators::*;
-pub use physical_type::*;
-pub use promotion::*;
-pub use scalar::*;
+pub use arithmetic::*;
+pub use comparison::*;
+pub use type_exercise_checkpoint_06_core::*;

@@ -5,20 +5,20 @@ mod string_array;
 // mod decimal_array;
 // pub use decimal_array::{DecimalArray, DecimalArrayBuilder};
 
-// Day 11, checkpoints 1–2: uncomment this module and its public surface after implementing
+// Day 12, checkpoints 1–2: uncomment this module and its public surface after implementing
 // `array/list_array.rs`; keep `ListArrayBuilder` private to the module.
 // mod list_array;
 // pub use list_array::{ListArray, ListError, ListScalar, ListScalarRef};
-// Day 12, checkpoint 1: uncomment when replacing `Array::iter` with the private iterator.
+// Day 13, checkpoint 1: uncomment when replacing `Array::iter` with the private iterator.
 // mod iterator;
 
 pub use primitive_array::{I32Array, I32ArrayBuilder, PrimitiveArray, PrimitiveArrayBuilder};
 // Day 2, checkpoint 1: extend the primitive re-export with I16, I64, Bool, F32, and F64 arrays
 // and builders.
-// Day 10, checkpoint 1: keep this single primitive representation; the checked non-null proof
+// Day 7, checkpoint 1: keep this single primitive representation; the checked non-null proof
 // belongs to `ColumnViewImpl` as physical `Nullability` metadata.
 pub use string_array::{StringArray, StringArrayBuilder};
-// Day 8, checkpoint 2: extend this re-export with `Writer` and `WriterUsed`.
+// Day 10, checkpoint 2: extend this re-export with `Writer` and `WriterUsed`.
 
 /// Day 1, checkpoint 3: add the bounds that connect an array to its scalar and builder forms.
 pub trait Array {
@@ -51,7 +51,7 @@ pub enum ArrayImpl {
     Int32(I32Array),
     String(StringArray),
     // Day 2: add the remaining primitive and Decimal variants.
-    // Day 11: add `List(ListArray)`.
+    // Day 12: add `List(ListArray)`.
 }
 
 // Day 1, checkpoint 4: add erased dispatch plus owned and borrowed checked conversions for both

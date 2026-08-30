@@ -1,6 +1,6 @@
 //! Learner-owned one-level List checkpoints.
 //!
-//! Day 11, checkpoint 1: uncomment these declarations, choose useful private fields, and add the
+//! Day 12: uncomment these declarations, choose useful private fields, and add the
 //! checked owned/borrowed List behavior described by the chapter.
 // #[derive(Clone, Debug, Eq, PartialEq)]
 // pub enum ListError { /* invalid shape, type, range, and nesting failures */ }
@@ -24,7 +24,7 @@
 //     pub fn to_owned_scalar(self) -> Result<ListScalar, ListError>;
 // }
 //
-//! Day 11, checkpoint 2: uncomment these declarations and add checked outer List storage here.
+//! Day 12: uncomment these declarations and add checked outer List storage here.
 // #[derive(Clone, Debug, PartialEq)]
 // pub struct ListArray { /* child type, child values, offsets, and outer validity */ }
 // pub(crate) struct ListArrayBuilder { /* rollback-safe construction state */ }

@@ -1,14 +1,20 @@
+use std::cell::Cell;
+
 use crate::{
-    Array, ArrayImpl, ColumnViewImpl, DataType, I16Array, I64Array, PhysicalType, ScalarRefImpl,
-    promote_numeric, validate_expression_inputs,
+    Array, ArrayImpl, ColumnViewImpl, DataType, I16Array, I32Array, I64Array, PhysicalType,
+    ScalarRefImpl, evaluate_unary, promote_numeric, validate_expression_inputs,
 };
 
 #[test]
 fn scalar_operations_reuse_exactly_one_loop_per_arity() {
-    let source = include_str!("../operators.rs");
-    assert_eq!(source.matches("for row in 0..").count(), 3);
-    assert!(source.contains("fn neg_number<O: Numeric>(value: O) -> O"));
-    assert!(source.contains("fn clamp_number<O: Numeric>"));
+    let facade = include_str!("../arithmetic.rs");
+    let core = include_str!("../expression.rs");
+    assert!(facade.contains("fn neg_number<O: Numeric>(value: O) -> O"));
+    assert!(facade.contains("fn clamp_number<O: Numeric>"));
+    assert!(core.contains("pub fn evaluate_unary"));
+    assert!(core.contains("pub fn auto_vectorize_binary"));
+    assert!(core.contains("pub fn try_evaluate_ternary"));
+    assert!(!facade.contains("for row in 0.."));
 
     for adapter in [
         "fn evaluate_numeric_add",
@@ -18,7 +24,7 @@ fn scalar_operations_reuse_exactly_one_loop_per_arity() {
         "fn evaluate_numeric_neg",
         "fn evaluate_numeric_clamp",
     ] {
-        let body = source
+        let body = facade
             .split(adapter)
             .nth(1)
             .unwrap()
@@ -32,7 +38,27 @@ fn scalar_operations_reuse_exactly_one_loop_per_arity() {
     }
 }
 
-use crate::operators::{build_numeric_clamp_expression, build_numeric_neg_expression};
+#[test]
+fn strict_vectorization_skips_the_scalar_function_for_null_rows() {
+    let calls = Cell::new(0);
+    let input: ArrayImpl = I32Array::from_slice(&[Some(1), None, Some(3)]).into();
+    let output = evaluate_unary::<i32, i32, _>(ColumnViewImpl::array(&input), |value| {
+        calls.set(calls.get() + 1);
+        value + 10
+    })
+    .unwrap();
+
+    assert_eq!(calls.get(), 2);
+    assert_eq!(
+        <&I32Array>::try_from(&output)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![Some(11), None, Some(13)]
+    );
+}
+
+use crate::arithmetic::{build_numeric_clamp_expression, build_numeric_neg_expression};
 
 #[test]
 fn direct_mixed_batch_kernel_is_strict_and_reports_the_failing_row() {

@@ -1,12 +1,16 @@
 # Course checkpoints
 
-Each `day-NN` crate is a solved snapshot at the end of that course day. Compare adjacent
-directories to see which declarations, bounds, and implementations the day adds.
+Each `day-NN` directory is an authoritative, cumulative, runnable end-of-day snapshot. Its
+`*-expr` facade depends in one direction on its nested `*-core` package. Compare adjacent
+directories to see exactly which declarations, bounds, and implementations the day adds.
 
-These snapshots are a learning and navigation aid. They are **not actively maintained**: a bug
-fix, test improvement, or documentation correction in the canonical course may not be copied back
-to every earlier day.
+Run a snapshot's own facade contract from the repository root:
 
-We therefore do not guarantee that every checkpoint contains the latest implementation, passes
-every future test, or has current documentation comments. Use the root `type-exercise` crate as the
-supported reference solution and `type-exercise-starter` as the current learner starting point.
+```console
+cargo test -p type-exercise-checkpoint-NN-expr --lib --locked
+cargo check -p type-exercise-checkpoint-NN-core --locked
+```
+
+An earlier day intentionally lacks future APIs, but it is not allowed to be stale for the boundary
+that day teaches. Use its tests and its adjacent diff; do not substitute the maintained reference
+when reviewing a checkpoint.

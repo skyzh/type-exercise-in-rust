@@ -41,7 +41,7 @@ Copy the cumulative supplied test before editing:
 
 ```console
 cargo x copy-test --chapter 2
-cargo test -p type-exercise-starter chapter_2 --locked
+cargo test -p type-exercise-starter-expr chapter_2 --locked
 ```
 
 The Chapter 2 test is one final contract, not four progressive test files. Its first run should
@@ -52,7 +52,7 @@ modules together after both implementations exist. The focused Chapter 2 test be
 all four checkpoints are complete.
 
 ```console
-cargo check -p type-exercise-starter --lib --locked
+cargo check -p type-exercise-starter-expr --lib --locked
 ```
 
 ## Checkpoint 1: Generalize the primitive array family
@@ -87,7 +87,7 @@ The six aliases are ordinary Rust declarations, not generated execution code. Re
 the remaining physical catalog rows.
 
 ```console
-cargo check -p type-exercise-starter --lib --locked
+cargo check -p type-exercise-starter-expr --lib --locked
 ```
 
 ## Checkpoint 2: Make the catalog own the repeated relationships
@@ -126,7 +126,7 @@ coefficient and validity storage, but its builder still needs a runtime `Decimal
 accept any row.
 
 ```console
-cargo check -p type-exercise-starter --lib --locked
+cargo check -p type-exercise-starter-expr --lib --locked
 ```
 
 ## Checkpoint 3: Separate logical type from physical storage
@@ -152,7 +152,7 @@ logical variants and the two string variants, then map them explicitly:
 Implement `physical_type`, `is_string`, and `is_numeric`. `Boolean` is not numeric. The `width` in
 `Char { width }` remains logical metadata even though it does not change the physical array.
 
-Do not add a nullable logical variant or List. Keep one primitive array representation with its validity bitmap. Nullability is a physical property beside `PhysicalType`, expressed as `Nullability::{NonNull, Nullable}`. Day 10 will make `ColumnViewImpl` carry that property and make expressions derive their output property with `Expression::output_nullability`; `BoundExpression` only delegates it. An ordinary `ColumnViewImpl::array` remains conservatively `Nullable`. A checked `try_non_null_array` can establish `NonNull` once, after which the selected dense loop reads the same array's `values()` and leaves its bitmap structurally present but unused. This does not require a second Arrow array type or a cached null count. List arrives with its own scalar and array relationships on Day 11.
+Do not add a nullable logical variant or List. Keep one primitive array representation with its validity bitmap. Nullability is a physical property beside `PhysicalType`, expressed as `Nullability::{NonNull, Nullable}`. Day 7 will make `ColumnViewImpl` carry that property and make expressions derive their output property with `Expression::output_nullability`; `BoundExpression` only delegates it. An ordinary `ColumnViewImpl::array` remains conservatively `Nullable`. A checked `try_non_null_array` can establish `NonNull` once, after which the selected dense loop reads the same array's `values()` and leaves its bitmap structurally present but unused. This does not require a second Arrow array type or a cached null count. List arrives with its own scalar and array relationships on Day 12.
 
 Checkpoint 4 adds the Decimal variants and checked constructor to this same file. After that work,
 uncomment the `data_type` and `decimal` modules and exports in `src/lib.rs`; do not enable any
@@ -168,7 +168,7 @@ Adding a dependency is the one exception to this chapter's normal source-only ed
 From the repository root, add `anyhow` to the learner crate before continuing:
 
 ```console
-cargo add anyhow@1 --package type-exercise-starter
+cargo add anyhow@1 --package type-exercise-starter-expr
 ```
 
 This updates both `type-exercise-starter/Cargo.toml` and the workspace lockfile, so the documented
@@ -221,8 +221,8 @@ would have to preserve.
 Run the final contract and the starter library tests:
 
 ```console
-cargo test -p type-exercise-starter chapter_2 --locked
-cargo test -p type-exercise-starter --lib --locked
+cargo test -p type-exercise-starter-expr chapter_2 --locked
+cargo test -p type-exercise-starter-expr --lib --locked
 ```
 
 Before continuing, make sure you can explain three boundaries in your own words:

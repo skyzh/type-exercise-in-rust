@@ -262,7 +262,7 @@ macro_rules! define_scalar_family {
 
 for_each_physical_family!(define_scalar_erasure);
 
-// Day 11 extends both erased enums and conversions with List.
+// Day 12 extends both erased enums and conversions with List.
 
 #[cfg(test)]
 mod tests {

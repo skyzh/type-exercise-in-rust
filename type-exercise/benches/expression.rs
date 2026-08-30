@@ -2,7 +2,7 @@ use std::hint::black_box;
 use std::time::Duration;
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use type_exercise::{
+use type_exercise_expr::{
     Array, ArrayBuilder, ArrayImpl, BinaryExpression, ColumnView, ColumnViewImpl, Expression,
     I32Add, I32Array, PhysicalType, PrimitiveBinaryExpression, ScalarRefImpl,
 };

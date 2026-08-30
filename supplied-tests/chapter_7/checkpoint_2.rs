@@ -1,0 +1,158 @@
+use crate::{
+    Array, ArrayImpl, ColumnViewImpl, Expression, I32Add, I32Array, Nullability, PhysicalType,
+    PrimitiveBinaryExpression, PrimitiveLoop, ScalarRefImpl, StringArray,
+};
+
+fn i32_values(array: &ArrayImpl) -> Vec<Option<i32>> {
+    <&I32Array>::try_from(array).unwrap().iter().collect()
+}
+#[test]
+fn proves_physical_nullability_at_the_column_boundary() {
+    let nullable: ArrayImpl = I32Array::from_slice(&[Some(1), None, Some(3)]).into();
+    assert_eq!(
+        ColumnViewImpl::array(&nullable).nullability(),
+        Nullability::Nullable
+    );
+    assert!(ColumnViewImpl::try_non_null_array(&nullable).is_none());
+
+    let dense: ArrayImpl = I32Array::from_values(vec![1, 2, 3]).into();
+    assert_eq!(
+        ColumnViewImpl::array(&dense).nullability(),
+        Nullability::Nullable
+    );
+    assert_eq!(
+        ColumnViewImpl::try_non_null_array(&dense)
+            .unwrap()
+            .nullability(),
+        Nullability::NonNull
+    );
+
+    let built_dense: ArrayImpl = I32Array::from_slice(&[Some(4), Some(5)]).into();
+    assert!(ColumnViewImpl::try_non_null_array(&built_dense).is_some());
+    let empty: ArrayImpl = I32Array::from_values(Vec::new()).into();
+    assert!(ColumnViewImpl::try_non_null_array(&empty).is_some());
+
+    assert_eq!(
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(7), 2).nullability(),
+        Nullability::NonNull
+    );
+    assert_eq!(
+        ColumnViewImpl::null(PhysicalType::Int32, 2).nullability(),
+        Nullability::Nullable
+    );
+    let indices = [0];
+    assert_eq!(
+        ColumnViewImpl::indexed(&indices, &dense)
+            .unwrap()
+            .nullability(),
+        Nullability::Nullable
+    );
+}
+
+#[test]
+fn selects_the_dense_array_array_loop() {
+    let expression = PrimitiveBinaryExpression::new("i32_add", I32Add);
+    let left: ArrayImpl = I32Array::from_values(vec![i32::MAX, 20, 30]).into();
+    let right: ArrayImpl = I32Array::from_values(vec![1, 2, 3]).into();
+    let (output, selected) = expression
+        .evaluate_with_loop(&[
+            ColumnViewImpl::try_non_null_array(&left).unwrap(),
+            ColumnViewImpl::try_non_null_array(&right).unwrap(),
+        ])
+        .unwrap();
+
+    assert_eq!(selected, PrimitiveLoop::ArrayArray);
+    assert_eq!(
+        i32_values(&output),
+        vec![Some(i32::MIN), Some(22), Some(33)]
+    );
+}
+
+#[test]
+fn selects_all_three_dense_constant_loops() {
+    let expression = PrimitiveBinaryExpression::new("i32_add", I32Add);
+    let values: ArrayImpl = I32Array::from_values(vec![1, 2, 3]).into();
+    let cases = [
+        (
+            [
+                ColumnViewImpl::try_non_null_array(&values).unwrap(),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(10), 3),
+            ],
+            PrimitiveLoop::ArrayConstant,
+            vec![Some(11), Some(12), Some(13)],
+        ),
+        (
+            [
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(10), 3),
+                ColumnViewImpl::try_non_null_array(&values).unwrap(),
+            ],
+            PrimitiveLoop::ConstantArray,
+            vec![Some(11), Some(12), Some(13)],
+        ),
+        (
+            [
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(10), 3),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 3),
+            ],
+            PrimitiveLoop::ConstantConstant,
+            vec![Some(12), Some(12), Some(12)],
+        ),
+    ];
+
+    for (inputs, expected_loop, expected_values) in cases {
+        let (output, selected) = expression.evaluate_with_loop(&inputs).unwrap();
+        assert_eq!(selected, expected_loop);
+        assert_eq!(i32_values(&output), expected_values);
+    }
+}
+
+#[test]
+fn delegates_nullable_arrays_and_null_constants_to_the_general_loop() {
+    let expression = PrimitiveBinaryExpression::new("i32_add", I32Add);
+    let nullable: ArrayImpl = I32Array::from_slice(&[Some(1), None, Some(3)]).into();
+    let dense: ArrayImpl = I32Array::from_values(vec![10, 20, 30]).into();
+
+    let (output, selected) = expression
+        .evaluate_with_loop(&[
+            ColumnViewImpl::array(&nullable),
+            ColumnViewImpl::array(&dense),
+        ])
+        .unwrap();
+    assert_eq!(selected, PrimitiveLoop::General);
+    assert_eq!(i32_values(&output), vec![Some(11), None, Some(33)]);
+
+    let (output, selected) = expression
+        .evaluate_with_loop(&[
+            ColumnViewImpl::array(&dense),
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 3),
+        ])
+        .unwrap();
+    assert_eq!(selected, PrimitiveLoop::General);
+    assert_eq!(i32_values(&output), vec![Some(11), Some(21), Some(31)]);
+
+    let (output, selected) = expression
+        .evaluate_with_loop(&[
+            ColumnViewImpl::array(&dense),
+            ColumnViewImpl::null(PhysicalType::Int32, 3),
+        ])
+        .unwrap();
+    assert_eq!(selected, PrimitiveLoop::General);
+    assert_eq!(i32_values(&output), vec![None, None, None]);
+}
+
+#[test]
+fn delegates_dictionaries_to_the_general_loop() {
+    let expression = PrimitiveBinaryExpression::new("i32_add", I32Add);
+    let dictionary_values: ArrayImpl = I32Array::from_slice(&[Some(4), Some(8), None]).into();
+    let keys = [1, 2, 0];
+    let right: ArrayImpl = I32Array::from_values(vec![1, 2, 3]).into();
+    let dictionary = ColumnViewImpl::indexed(&keys, &dictionary_values).unwrap();
+    let inputs = [
+        dictionary,
+        ColumnViewImpl::try_non_null_array(&right).unwrap(),
+    ];
+
+    let (output, selected) = expression.evaluate_with_loop(&inputs).unwrap();
+    assert_eq!(selected, PrimitiveLoop::General);
+    assert_eq!(i32_values(&output), vec![Some(9), None, Some(7)]);
+}

@@ -6,18 +6,14 @@ use crate::{
     NumericPromotion, PhysicalType, ScalarRefImpl, StringArray, promote_numeric,
 };
 
-use crate::operators::{build_numeric_binary_expression, build_numeric_comparison_expression};
+use crate::arithmetic::{build_numeric_binary_expression, build_numeric_comparison_expression};
 
 #[test]
 fn arithmetic_selects_one_infallible_or_fallible_batch_kernel() {
-    let source = include_str!("../operators.rs");
-    let expression = source
-        .split("pub(crate) struct NumericBinaryExpression")
-        .nth(1)
-        .unwrap()
-        .split("pub(crate) struct NumericComparisonExpression")
-        .next()
-        .unwrap();
+    let source = include_str!("../arithmetic.rs");
+    let expression = include_str!("../expression.rs");
+    assert!(expression.contains("pub struct BinaryExpression"));
+    assert!(expression.contains("kernel: BinaryBatchKernel"));
     assert!(!expression.contains("operator: ArithmeticOperator"));
 
     let selector = source
@@ -46,7 +42,12 @@ fn arithmetic_selects_one_infallible_or_fallible_batch_kernel() {
         .split("fn numeric_binary_kernel")
         .next()
         .unwrap();
-    assert!(divide.contains("checked_divide"));
+    let scalar_divide = if source.contains("fn divide_number") {
+        "divide_number"
+    } else {
+        "checked_divide"
+    };
+    assert!(divide.contains(scalar_divide));
 }
 
 const EXPECTED_NUMERIC_PROMOTION_MATRIX: &[(DataType, DataType, Option<DataType>)] = &[

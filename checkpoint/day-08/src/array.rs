@@ -178,5 +178,5 @@ macro_rules! define_array_family {
 
 for_each_physical_family!(define_array_erasure);
 
-// Day 10 adds a checked non-null primitive view. Day 11 adds List erasure and slicing. Day 12
+// Day 7 adds a checked non-null primitive view. Day 12 adds List erasure and slicing. Day 13
 // replaces the iterator adapter with a private concrete iterator.

@@ -2,14 +2,21 @@ use anyhow::{Result, anyhow};
 
 use crate::{Array, ArrayImpl, PhysicalType, Scalar, ScalarRefImpl, TypeMismatch};
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Nullability {
+    NonNull,
+    Nullable,
+}
+
 /// A borrowed column whose scalar and array types are known only at runtime.
 ///
 /// The public wrapper keeps its representation enum private, so callers must use the checked
-/// constructors instead of creating an unvalidated indexed view. Later chapters can also attach
-/// batch-wide metadata here without repeating it in every representation variant.
+/// constructors instead of creating an unvalidated indexed view. It also carries nullability once
+/// for the whole batch instead of repeating that metadata in every representation variant.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ColumnViewImpl<'a> {
     kind: ColumnViewImplKind<'a>,
+    nullability: Nullability,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -26,11 +33,36 @@ enum ColumnViewImplKind<'a> {
     },
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum DenseI32Column<'a> {
+    Array(&'a crate::I32Array),
+    Constant { value: i32, len: usize },
+}
+
+impl DenseI32Column<'_> {
+    pub(crate) fn len(self) -> usize {
+        match self {
+            Self::Array(array) => array.values().len(),
+            Self::Constant { len, .. } => len,
+        }
+    }
+}
+
 impl<'a> ColumnViewImpl<'a> {
     pub fn array(array: &'a ArrayImpl) -> Self {
         Self {
             kind: ColumnViewImplKind::Array(array),
+            nullability: Nullability::Nullable,
         }
+    }
+
+    pub fn try_non_null_array(array: &'a ArrayImpl) -> Option<Self> {
+        (0..array.len())
+            .all(|row| array.get(row).is_some())
+            .then_some(Self {
+                kind: ColumnViewImplKind::Array(array),
+                nullability: Nullability::NonNull,
+            })
     }
 
     pub fn constant(value: ScalarRefImpl<'a>, len: usize) -> Self {
@@ -40,6 +72,7 @@ impl<'a> ColumnViewImpl<'a> {
                 physical_type: value.physical_type(),
                 len,
             },
+            nullability: Nullability::NonNull,
         }
     }
 
@@ -50,6 +83,7 @@ impl<'a> ColumnViewImpl<'a> {
                 physical_type,
                 len,
             },
+            nullability: Nullability::Nullable,
         }
     }
 
@@ -68,6 +102,7 @@ impl<'a> ColumnViewImpl<'a> {
 
         Ok(Self {
             kind: ColumnViewImplKind::Indexed { indices, values },
+            nullability: Nullability::Nullable,
         })
     }
 
@@ -91,6 +126,10 @@ impl<'a> ColumnViewImpl<'a> {
         }
     }
 
+    pub fn nullability(&self) -> Nullability {
+        self.nullability
+    }
+
     /// Return one erased scalar after the caller has checked the row bound.
     pub fn get(&self, row: usize) -> Option<ScalarRefImpl<'a>> {
         assert!(row < self.len(), "column view row out of bounds");
@@ -98,6 +137,26 @@ impl<'a> ColumnViewImpl<'a> {
             ColumnViewImplKind::Array(array) => array.get(row),
             ColumnViewImplKind::Constant { value, .. } => *value,
             ColumnViewImplKind::Indexed { indices, values } => values.get(indices[row] as usize),
+        }
+    }
+
+    pub(crate) fn as_dense_i32(&self) -> Option<DenseI32Column<'a>> {
+        if self.nullability != Nullability::NonNull {
+            return None;
+        }
+        match &self.kind {
+            ColumnViewImplKind::Array(ArrayImpl::Int32(array)) => {
+                Some(DenseI32Column::Array(array))
+            }
+            ColumnViewImplKind::Constant {
+                value: Some(ScalarRefImpl::Int32(value)),
+                len,
+                ..
+            } => Some(DenseI32Column::Constant {
+                value: *value,
+                len: *len,
+            }),
+            _ => None,
         }
     }
 }

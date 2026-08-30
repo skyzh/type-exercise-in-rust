@@ -14,7 +14,7 @@ pub enum PhysicalType {
     Float64,
     String,
     Decimal(DecimalType),
-    // Day 11 adds `List(Box<PhysicalType>)`.
+    // Day 12 adds `List(Box<PhysicalType>)`.
 }
 
 /// A descriptor-free family tag used only for catalog completeness.

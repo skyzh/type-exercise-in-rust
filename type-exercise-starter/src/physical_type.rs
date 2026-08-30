@@ -2,13 +2,13 @@ use crate::variant_catalog::for_each_physical_family;
 
 /// The two physical types visible at the start of Day 1.
 ///
-/// Day 2 adds Int16, Int64, Bool, Float32, Float64, and Decimal. Day 11 adds List.
+/// Day 2 adds Int16, Int64, Bool, Float32, Float64, and Decimal. Day 12 adds List.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum PhysicalType {
     Int32,
     String,
     // Day 2: add the remaining primitive variants and `Decimal(DecimalType)`.
-    // Day 11: add `List(Box<PhysicalType>)`.
+    // Day 12: add `List(Box<PhysicalType>)`.
 }
 
 /// The two descriptor-free families visible at the start of Day 1.
@@ -21,7 +21,7 @@ pub enum PhysicalFamily {
     // Day 2: add Int16, Int64, Bool, Float32, Float64, and Decimal.
 }
 
-// Day 10: add `Nullability::{NonNull, Nullable}` beside `PhysicalType` as physical planning
+// Day 7: add `Nullability::{NonNull, Nullable}` beside `PhysicalType` as physical planning
 // metadata. Do not add a nullable logical or physical type variant.
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

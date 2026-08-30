@@ -14,7 +14,7 @@ pub enum DataType {
     Varchar,
     Char { width: u16 },
     Decimal(DecimalType),
-    // Day 11 adds `List(Box<DataType>)`.
+    // Day 12 adds `List(Box<DataType>)`.
 }
 
 impl DataType {

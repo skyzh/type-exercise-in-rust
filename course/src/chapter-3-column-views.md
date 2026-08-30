@@ -23,14 +23,14 @@ You own two additions in this chapter:
 1. a representation-erased borrowed view with checked constructors; and
 2. a typed borrowed view that checks one physical family before row access.
 
-Later relationships in the starter remain comments. Do not implement Day 10 nullability proofs or
-Day 11 List views here.
+Later relationships in the starter remain comments. Do not implement Day 7 nullability proofs or
+Day 12 List views here.
 
 Copy the cumulative supplied test before editing:
 
 ```console
 cargo x copy-test --chapter 3
-cargo test -p type-exercise-starter chapter_3 --locked
+cargo test -p type-exercise-starter-expr chapter_3 --locked
 ```
 
 The first run should fail because `ColumnViewImpl` and `ColumnView` are not exported yet. Do not
@@ -91,7 +91,7 @@ pub use column::ColumnViewImpl;
 Then compile the learner library:
 
 ```console
-cargo check -p type-exercise-starter --lib --locked
+cargo check -p type-exercise-starter-expr --lib --locked
 ```
 
 Passing means the real `column.rs` implementation compiles. The focused Chapter 3 test is still
@@ -124,8 +124,8 @@ pub use column::{ColumnView, ColumnViewImpl};
 Run the focused contract, then all learner-library tests copied so far:
 
 ```console
-cargo test -p type-exercise-starter chapter_3 --locked
-cargo test -p type-exercise-starter --lib --locked
+cargo test -p type-exercise-starter-expr chapter_3 --locked
+cargo test -p type-exercise-starter-expr --lib --locked
 ```
 
 The focused test proves five boundaries:
@@ -139,7 +139,7 @@ The focused test proves five boundaries:
 Keep this chapter focused on borrowed execution views. The indexed form borrows compact `u32` keys
 and an existing nullable `ArrayImpl`; it is not a persisted dictionary-array format and adds no
 key-array family, builder, or storage encoding. Leave run-length encoding as an extension. Chapter
-10 adds primitive-loop specialization, and Chapter 11 reuses this representation boundary for
+7 adds primitive-loop specialization, and Chapter 12 reuses this representation boundary for
 List.
 
 Before continuing, make sure you can explain three boundaries in your own words:

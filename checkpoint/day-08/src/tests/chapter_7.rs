@@ -1,406 +1,217 @@
 use crate::{
-    Array, ArrayImpl, BoolArray, BooleanExpression, BooleanOperator, ColumnViewImpl,
-    NullEvaluationPolicy, PhysicalType, ScalarRefImpl, build_boolean_expression,
+    Array, ArrayImpl, ColumnViewImpl, Expression, I32Add, I32Array, Nullability, PhysicalType,
+    PrimitiveBinaryExpression, PrimitiveLoop, ScalarRefImpl, StringArray,
 };
 
-#[derive(Clone, Copy)]
-struct BooleanTruthRow {
-    operator: BooleanOperator,
-    left: Option<bool>,
-    right: Option<bool>,
-    result: Option<bool>,
-}
-
-const EXPECTED_TRUTH_TABLE: &[BooleanTruthRow] = &[
-    // AND
-    BooleanTruthRow {
-        operator: BooleanOperator::And,
-        left: Some(true),
-        right: Some(true),
-        result: Some(true),
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::And,
-        left: Some(true),
-        right: Some(false),
-        result: Some(false),
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::And,
-        left: Some(true),
-        right: None,
-        result: None,
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::And,
-        left: Some(false),
-        right: Some(true),
-        result: Some(false),
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::And,
-        left: Some(false),
-        right: Some(false),
-        result: Some(false),
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::And,
-        left: Some(false),
-        right: None,
-        result: Some(false),
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::And,
-        left: None,
-        right: Some(true),
-        result: None,
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::And,
-        left: None,
-        right: Some(false),
-        result: Some(false),
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::And,
-        left: None,
-        right: None,
-        result: None,
-    },
-    // OR
-    BooleanTruthRow {
-        operator: BooleanOperator::Or,
-        left: Some(true),
-        right: Some(true),
-        result: Some(true),
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::Or,
-        left: Some(true),
-        right: Some(false),
-        result: Some(true),
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::Or,
-        left: Some(true),
-        right: None,
-        result: Some(true),
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::Or,
-        left: Some(false),
-        right: Some(true),
-        result: Some(true),
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::Or,
-        left: Some(false),
-        right: Some(false),
-        result: Some(false),
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::Or,
-        left: Some(false),
-        right: None,
-        result: None,
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::Or,
-        left: None,
-        right: Some(true),
-        result: Some(true),
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::Or,
-        left: None,
-        right: Some(false),
-        result: None,
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::Or,
-        left: None,
-        right: None,
-        result: None,
-    },
-    // NOT
-    BooleanTruthRow {
-        operator: BooleanOperator::Not,
-        left: Some(true),
-        right: None,
-        result: Some(false),
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::Not,
-        left: Some(false),
-        right: None,
-        result: Some(true),
-    },
-    BooleanTruthRow {
-        operator: BooleanOperator::Not,
-        left: None,
-        right: None,
-        result: None,
-    },
-];
-
-fn bool_array(values: &[Option<bool>]) -> ArrayImpl {
-    BoolArray::from_slice(values).into()
+fn i32_values(array: &ArrayImpl) -> Vec<Option<i32>> {
+    <&I32Array>::try_from(array).unwrap().iter().collect()
 }
 
 #[test]
-fn truth_table_matches_sql_three_valued_semantics() {
-    assert_eq!(EXPECTED_TRUTH_TABLE.len(), 21);
-    for row in EXPECTED_TRUTH_TABLE {
-        assert_eq!(
-            crate::boolean_logic::apply_boolean(row.operator, row.left, row.right),
-            row.result
-        );
+fn proves_physical_nullability_at_the_column_boundary() {
+    let nullable: ArrayImpl = I32Array::from_slice(&[Some(1), None, Some(3)]).into();
+    assert_eq!(
+        ColumnViewImpl::array(&nullable).nullability(),
+        Nullability::Nullable
+    );
+    assert!(ColumnViewImpl::try_non_null_array(&nullable).is_none());
+
+    let dense: ArrayImpl = I32Array::from_values(vec![1, 2, 3]).into();
+    assert_eq!(
+        ColumnViewImpl::array(&dense).nullability(),
+        Nullability::Nullable
+    );
+    assert_eq!(
+        ColumnViewImpl::try_non_null_array(&dense)
+            .unwrap()
+            .nullability(),
+        Nullability::NonNull
+    );
+
+    let built_dense: ArrayImpl = I32Array::from_slice(&[Some(4), Some(5)]).into();
+    assert!(ColumnViewImpl::try_non_null_array(&built_dense).is_some());
+    let empty: ArrayImpl = I32Array::from_values(Vec::new()).into();
+    assert!(ColumnViewImpl::try_non_null_array(&empty).is_some());
+
+    assert_eq!(
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(7), 2).nullability(),
+        Nullability::NonNull
+    );
+    assert_eq!(
+        ColumnViewImpl::null(PhysicalType::Int32, 2).nullability(),
+        Nullability::Nullable
+    );
+    let indices = [0];
+    assert_eq!(
+        ColumnViewImpl::indexed(&indices, &dense)
+            .unwrap()
+            .nullability(),
+        Nullability::Nullable
+    );
+}
+
+#[test]
+fn selects_the_dense_array_array_loop() {
+    let expression = PrimitiveBinaryExpression::new("i32_add", I32Add);
+    let left: ArrayImpl = I32Array::from_values(vec![i32::MAX, 20, 30]).into();
+    let right: ArrayImpl = I32Array::from_values(vec![1, 2, 3]).into();
+    let (output, selected) = expression
+        .evaluate_with_loop(&[
+            ColumnViewImpl::try_non_null_array(&left).unwrap(),
+            ColumnViewImpl::try_non_null_array(&right).unwrap(),
+        ])
+        .unwrap();
+
+    assert_eq!(selected, PrimitiveLoop::ArrayArray);
+    assert_eq!(
+        i32_values(&output),
+        vec![Some(i32::MIN), Some(22), Some(33)]
+    );
+}
+
+#[test]
+fn selects_all_three_dense_constant_loops() {
+    let expression = PrimitiveBinaryExpression::new("i32_add", I32Add);
+    let values: ArrayImpl = I32Array::from_values(vec![1, 2, 3]).into();
+    let cases = [
+        (
+            [
+                ColumnViewImpl::try_non_null_array(&values).unwrap(),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(10), 3),
+            ],
+            PrimitiveLoop::ArrayConstant,
+            vec![Some(11), Some(12), Some(13)],
+        ),
+        (
+            [
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(10), 3),
+                ColumnViewImpl::try_non_null_array(&values).unwrap(),
+            ],
+            PrimitiveLoop::ConstantArray,
+            vec![Some(11), Some(12), Some(13)],
+        ),
+        (
+            [
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(10), 3),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 3),
+            ],
+            PrimitiveLoop::ConstantConstant,
+            vec![Some(12), Some(12), Some(12)],
+        ),
+    ];
+
+    for (inputs, expected_loop, expected_values) in cases {
+        let (output, selected) = expression.evaluate_with_loop(&inputs).unwrap();
+        assert_eq!(selected, expected_loop);
+        assert_eq!(i32_values(&output), expected_values);
     }
 }
 
 #[test]
-fn evaluation_matches_the_full_truth_table() {
-    let and = build_boolean_expression(BooleanOperator::And);
-    let left = bool_array(&[
-        Some(true),
-        Some(true),
-        Some(true),
-        Some(false),
-        Some(false),
-        Some(false),
-        None,
-        None,
-        None,
-    ]);
-    let right = bool_array(&[
-        Some(true),
-        Some(false),
-        None,
-        Some(true),
-        Some(false),
-        None,
-        Some(true),
-        Some(false),
-        None,
-    ]);
-    let output = and
-        .evaluate(&[ColumnViewImpl::array(&left), ColumnViewImpl::array(&right)])
-        .unwrap();
-    assert_eq!(
-        <&BoolArray>::try_from(&output)
-            .unwrap()
-            .iter()
-            .collect::<Vec<_>>(),
-        vec![
-            Some(true),
-            Some(false),
-            None,
-            Some(false),
-            Some(false),
-            Some(false),
-            None,
-            Some(false),
-            None,
-        ]
-    );
+fn delegates_nullable_arrays_and_null_constants_to_the_general_loop() {
+    let expression = PrimitiveBinaryExpression::new("i32_add", I32Add);
+    let nullable: ArrayImpl = I32Array::from_slice(&[Some(1), None, Some(3)]).into();
+    let dense: ArrayImpl = I32Array::from_values(vec![10, 20, 30]).into();
 
-    let or = build_boolean_expression(BooleanOperator::Or);
-    let or_left = bool_array(&[
-        Some(true),
-        Some(true),
-        Some(true),
-        Some(false),
-        Some(false),
-        Some(false),
-        None,
-        None,
-        None,
-    ]);
-    let or_right = bool_array(&[
-        Some(true),
-        Some(false),
-        None,
-        Some(true),
-        Some(false),
-        None,
-        Some(true),
-        Some(false),
-        None,
-    ]);
-    let output = or
-        .evaluate(&[
-            ColumnViewImpl::array(&or_left),
-            ColumnViewImpl::array(&or_right),
+    let (output, selected) = expression
+        .evaluate_with_loop(&[
+            ColumnViewImpl::array(&nullable),
+            ColumnViewImpl::array(&dense),
         ])
         .unwrap();
-    assert_eq!(
-        <&BoolArray>::try_from(&output)
-            .unwrap()
-            .iter()
-            .collect::<Vec<_>>(),
-        vec![
-            Some(true),
-            Some(true),
-            Some(true),
-            Some(true),
-            Some(false),
-            None,
-            Some(true),
-            None,
-            None,
-        ]
-    );
+    assert_eq!(selected, PrimitiveLoop::General);
+    assert_eq!(i32_values(&output), vec![Some(11), None, Some(33)]);
 
-    let not = build_boolean_expression(BooleanOperator::Not);
-    let not_input = bool_array(&[Some(true), Some(false), None]);
-    let output = not.evaluate(&[ColumnViewImpl::array(&not_input)]).unwrap();
-    assert_eq!(
-        <&BoolArray>::try_from(&output)
-            .unwrap()
-            .iter()
-            .collect::<Vec<_>>(),
-        vec![Some(false), Some(true), None]
-    );
-}
-
-#[test]
-fn strict_policy_short_circuits_before_the_truth_table() {
-    let strict_and = BooleanExpression::new(BooleanOperator::And, NullEvaluationPolicy::Strict);
-    let output = strict_and
-        .evaluate(&[
-            ColumnViewImpl::null(PhysicalType::Bool, 1),
-            ColumnViewImpl::constant(ScalarRefImpl::Bool(false), 1),
-        ])
-        .unwrap();
-    assert_eq!(<&BoolArray>::try_from(&output).unwrap().get(0), None);
-
-    let sql_and = BooleanExpression::new(BooleanOperator::And, NullEvaluationPolicy::NonStrict);
-    let output = sql_and
-        .evaluate(&[
-            ColumnViewImpl::null(PhysicalType::Bool, 1),
-            ColumnViewImpl::constant(ScalarRefImpl::Bool(false), 1),
-        ])
-        .unwrap();
-    assert_eq!(<&BoolArray>::try_from(&output).unwrap().get(0), Some(false));
-
-    // Strict OR must also short-circuit: a null operand yields a null row even
-    // though SQL OR would absorb it with TRUE.
-    let strict_or = BooleanExpression::new(BooleanOperator::Or, NullEvaluationPolicy::Strict);
-    let output = strict_or
-        .evaluate(&[
-            ColumnViewImpl::null(PhysicalType::Bool, 1),
-            ColumnViewImpl::constant(ScalarRefImpl::Bool(true), 1),
-        ])
-        .unwrap();
-    assert_eq!(<&BoolArray>::try_from(&output).unwrap().get(0), None);
-
-    let sql_or = BooleanExpression::new(BooleanOperator::Or, NullEvaluationPolicy::NonStrict);
-    let output = sql_or
-        .evaluate(&[
-            ColumnViewImpl::null(PhysicalType::Bool, 1),
-            ColumnViewImpl::constant(ScalarRefImpl::Bool(true), 1),
-        ])
-        .unwrap();
-    assert_eq!(<&BoolArray>::try_from(&output).unwrap().get(0), Some(true));
-}
-
-#[test]
-fn strict_not_negates_non_null_rows_and_keeps_null_rows_null() {
-    let strict_not = BooleanExpression::new(BooleanOperator::Not, NullEvaluationPolicy::Strict);
-    let input: ArrayImpl = BoolArray::from_slice(&[Some(true), Some(false), None]).into();
-    let output = strict_not
-        .evaluate(&[ColumnViewImpl::array(&input)])
-        .unwrap();
-    assert_eq!(
-        <&BoolArray>::try_from(&output)
-            .unwrap()
-            .iter()
-            .collect::<Vec<_>>(),
-        vec![Some(false), Some(true), None]
-    );
-}
-
-#[test]
-fn not_has_arity_one_and_and_or_have_arity_two() {
-    assert_eq!(build_boolean_expression(BooleanOperator::Not).arity(), 1);
-    assert_eq!(build_boolean_expression(BooleanOperator::And).arity(), 2);
-    assert_eq!(build_boolean_expression(BooleanOperator::Or).arity(), 2);
-}
-
-#[test]
-fn metadata_and_getters_pin_the_public_contract() {
-    let not = build_boolean_expression(BooleanOperator::Not);
-    assert_eq!(not.operator(), BooleanOperator::Not);
-    assert_eq!(not.policy(), NullEvaluationPolicy::NonStrict);
-    assert_eq!(not.input_types(), &[PhysicalType::Bool]);
-    assert_eq!(not.output_type(), PhysicalType::Bool);
-
-    let and = build_boolean_expression(BooleanOperator::And);
-    assert_eq!(and.operator(), BooleanOperator::And);
-    assert_eq!(and.input_types(), &[PhysicalType::Bool, PhysicalType::Bool]);
-    assert_eq!(and.output_type(), PhysicalType::Bool);
-
-    let strict_or = BooleanExpression::new(BooleanOperator::Or, NullEvaluationPolicy::Strict);
-    assert_eq!(strict_or.operator(), BooleanOperator::Or);
-    assert_eq!(strict_or.policy(), NullEvaluationPolicy::Strict);
-}
-
-#[test]
-fn boolean_expressions_reject_wrong_arity_types_and_lengths() {
-    let and = build_boolean_expression(BooleanOperator::And);
-    let not = build_boolean_expression(BooleanOperator::Not);
-
-    assert!(
-        and.evaluate(&[
-            ColumnViewImpl::constant(ScalarRefImpl::Bool(true), 1),
-            ColumnViewImpl::constant(ScalarRefImpl::Bool(false), 1),
-            ColumnViewImpl::constant(ScalarRefImpl::Bool(true), 1),
-        ])
-        .is_err()
-    );
-    assert!(
-        and.evaluate(&[ColumnViewImpl::constant(ScalarRefImpl::Bool(true), 1)])
-            .is_err()
-    );
-    assert!(not.evaluate(&[]).is_err());
-    assert!(
-        not.evaluate(&[
-            ColumnViewImpl::constant(ScalarRefImpl::Bool(true), 1),
-            ColumnViewImpl::constant(ScalarRefImpl::Bool(false), 1),
-        ])
-        .is_err()
-    );
-
-    assert!(
-        and.evaluate(&[
-            ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
-            ColumnViewImpl::constant(ScalarRefImpl::Bool(true), 1),
-        ])
-        .is_err()
-    );
-    // The second input's physical type must be checked too, not only the first.
-    assert!(
-        and.evaluate(&[
-            ColumnViewImpl::constant(ScalarRefImpl::Bool(true), 1),
-            ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
-        ])
-        .is_err()
-    );
-    // Type validation precedes length validation: a wrong second type with a
-    // mismatched length still fails closed.
-    assert!(
-        and.evaluate(&[
-            ColumnViewImpl::constant(ScalarRefImpl::Bool(true), 1),
+    let (output, selected) = expression
+        .evaluate_with_loop(&[
+            ColumnViewImpl::array(&dense),
             ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 3),
         ])
-        .is_err()
-    );
+        .unwrap();
+    assert_eq!(selected, PrimitiveLoop::General);
+    assert_eq!(i32_values(&output), vec![Some(11), Some(21), Some(31)]);
 
-    assert!(
-        and.evaluate(&[
-            ColumnViewImpl::constant(ScalarRefImpl::Bool(true), 2),
-            ColumnViewImpl::constant(ScalarRefImpl::Bool(false), 3),
+    let (output, selected) = expression
+        .evaluate_with_loop(&[
+            ColumnViewImpl::array(&dense),
+            ColumnViewImpl::null(PhysicalType::Int32, 3),
         ])
-        .is_err()
+        .unwrap();
+    assert_eq!(selected, PrimitiveLoop::General);
+    assert_eq!(i32_values(&output), vec![None, None, None]);
+}
+
+#[test]
+fn delegates_dictionaries_to_the_general_loop() {
+    let expression = PrimitiveBinaryExpression::new("i32_add", I32Add);
+    let dictionary_values: ArrayImpl = I32Array::from_slice(&[Some(4), Some(8), None]).into();
+    let keys = [1, 2, 0];
+    let right: ArrayImpl = I32Array::from_values(vec![1, 2, 3]).into();
+    let dictionary = ColumnViewImpl::indexed(&keys, &dictionary_values).unwrap();
+    let inputs = [
+        dictionary,
+        ColumnViewImpl::try_non_null_array(&right).unwrap(),
+    ];
+
+    let (output, selected) = expression.evaluate_with_loop(&inputs).unwrap();
+    assert_eq!(selected, PrimitiveLoop::General);
+    assert_eq!(i32_values(&output), vec![Some(9), None, Some(7)]);
+}
+
+#[test]
+fn preserves_runtime_type_arity_and_length_errors() {
+    let expression = PrimitiveBinaryExpression::new("i32_add", I32Add);
+    let integers: ArrayImpl = I32Array::from_values(vec![1, 2]).into();
+    let strings: ArrayImpl = StringArray::from_slice(&[Some("wrong")]).into();
+
+    assert_eq!(
+        expression
+            .evaluate(&[ColumnViewImpl::array(&integers)])
+            .unwrap_err()
+            .to_string(),
+        "input arity mismatch: expected 2, got 1"
+    );
+    assert_eq!(
+        expression
+            .evaluate(&[
+                ColumnViewImpl::array(&strings),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 2),
+            ])
+            .unwrap_err()
+            .to_string(),
+        "input 0 type mismatch: expected Int32, got String"
+    );
+    assert_eq!(
+        expression
+            .evaluate(&[
+                ColumnViewImpl::array(&integers),
+                ColumnViewImpl::array(&strings),
+            ])
+            .unwrap_err()
+            .to_string(),
+        "input 1 type mismatch: expected Int32, got String"
+    );
+    assert_eq!(
+        expression
+            .evaluate(&[
+                ColumnViewImpl::try_non_null_array(&integers).unwrap(),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
+            ])
+            .unwrap_err()
+            .to_string(),
+        "input 1 length mismatch: expected 2, got 1"
+    );
+}
+
+#[test]
+fn propagates_nullability_through_the_selected_physical_expression() {
+    let expression = PrimitiveBinaryExpression::new("i32_add", I32Add);
+    assert_eq!(
+        expression.output_nullability(&[Nullability::NonNull, Nullability::NonNull]),
+        Nullability::NonNull
+    );
+    assert_eq!(
+        expression.output_nullability(&[Nullability::NonNull, Nullability::Nullable]),
+        Nullability::Nullable
     );
 }

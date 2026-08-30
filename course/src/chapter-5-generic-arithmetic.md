@@ -15,7 +15,7 @@ a small runtime match chooses one generic typed batch kernel before its row loop
 
 ## What is in the starter
 
-Begin from your completed Chapter 4 workspace. The fixed-arity batch shell in `src/operators.rs`
+Begin from your completed Chapter 4 workspace. The fixed-arity batch shell in `src/arithmetic.rs`
 is working code; preserve its validation order and its whole-batch kernel boundary. The Day 5
 surface is still deliberately small:
 
@@ -23,7 +23,8 @@ surface is still deliberately small:
   lookup function;
 - `src/expression.rs` contains the general binary batch-kernel and expression shells first owned by
   this chapter;
-- `src/operators.rs` ends with comments for the arithmetic and comparison selectors;
+- `src/arithmetic.rs` ends with comments for the arithmetic selector;
+- `src/comparison.rs` contains the matching comparison selector;
 - `src/array/primitive_array.rs` has the Arrow-style value and validity buffers but not the
   all-valid constructor used by this chapter's batch fixture; and
 - `src/lib.rs` leaves the promotion module and the two operator enums unwired.
@@ -31,14 +32,14 @@ surface is still deliberately small:
 You own three connected additions: the logical promotion policy, generic arithmetic selection,
 and generic numeric comparison. You will also add the small `PrimitiveArray::from_values` helper
 needed to construct a non-null batch directly. Leave shared arity validation and ternary
-evaluation for Chapter 6, runtime expression erasure for Chapter 8, and logical name binding for
-Chapter 9.
+evaluation for Chapter 6, runtime expression erasure for Chapter 9, and logical name binding for
+Chapter 11.
 
 Copy the cumulative supplied test before editing:
 
 ```console
 cargo x copy-test --chapter 5
-cargo test -p type-exercise-starter chapter_5 --locked
+cargo test -p type-exercise-starter-expr chapter_5 --locked
 ```
 
 The focused run should fail on the missing promotion items, operator selectors, and
@@ -92,7 +93,7 @@ Enable `promotion` in `src/lib.rs` and export `NumericPromotion`, `NUMERIC_PROMO
 be green at this checkpoint. Use the library boundary instead:
 
 ```console
-cargo check -p type-exercise-starter --lib --locked
+cargo check -p type-exercise-starter-expr --lib --locked
 ```
 
 Passing means the logical policy and its public lookup compile independently from physical
@@ -122,7 +123,7 @@ rejects an output whose physical type disagrees with the stored metadata. Keep a
 row-error-context construction crate-private; the public constructor stays the four-argument API
 shown by the starter.
 
-Now extend `src/operators.rs` with the public `ArithmeticOperator` variants `Add`, `Subtract`,
+Now extend `src/arithmetic.rs` with the public `ArithmeticOperator` variants `Add`, `Subtract`,
 `Multiply`, and `Divide`. Describe the five concrete numeric types with standard operator bounds,
 not another trait whose methods re-name arithmetic:
 
@@ -172,12 +173,12 @@ pair never reaches the physical builder.
 
 Keep `build_numeric_binary_expression` and its returned shell crate-private. Export
 `ArithmeticOperator` from the crate root, but do not turn the physical constructor into a public
-user API: Chapter 9 will place logical name binding in front of it.
+user API: Chapter 11 will place logical name binding in front of it.
 
 The copied test still imports numeric comparison, so use the library compile boundary again:
 
 ```console
-cargo check -p type-exercise-starter --lib --locked
+cargo check -p type-exercise-starter-expr --lib --locked
 ```
 
 Passing means all four arithmetic choices use a preselected monomorphized batch evaluator without
@@ -201,11 +202,11 @@ batch kernel appends null and performs no comparison.
 Export `ComparisonOperator` beside `ArithmeticOperator`, then run the completed contract:
 
 ```console
-cargo test -p type-exercise-starter chapter_5 --locked
-cargo test -p type-exercise-starter --lib --locked
+cargo test -p type-exercise-starter-expr chapter_5 --locked
+cargo test -p type-exercise-starter-expr --lib --locked
 ```
 
-The 10 focused cases and 43 cumulative learner tests prove the whole Day 5 boundary:
+The 10 focused cases and 39 cumulative learner tests prove the whole Day 5 boundary:
 
 - the catalog contains exactly the approved ordered promotions and rejects every lossy pair;
 - arithmetic works in both mixed operand orders and builds the promoted physical family;

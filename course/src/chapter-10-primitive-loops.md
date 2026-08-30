@@ -1,87 +1,86 @@
-# Chapter 10: Specialize One Primitive Loop
-
 {{#include wip-banner.md}}
 
-Correct generic evaluation comes first. Now you can optimize one common case and prove that every
-other representation still follows the established path.
+# Chapter 10: Build Variable-Width Strings Transactionally
 
-**Prerequisites:** Chapter 9 and basic benchmarking discipline.
+Fixed-width evaluators can compute a scalar and then push its copied value. A string result has no
+fixed-size scalar to return: its UTF-8 bytes and ending offset must be appended together, and the
+validity buffer must gain exactly one row. Publishing only part of that state would corrupt the
+array.
 
-**By the end of this chapter, you will:**
+This chapter introduces variable-width output only after the fixed-width evaluator model is
+settled. A consumed writer typestate makes one successful callback correspond to one complete row.
 
-- select an all-valid `i32` loop once per batch;
-- preserve the general path for nulls, dictionaries, and other operators; and
-- compare loop shapes without moving validation into the measured row loop.
-
-```console
-cargo x copy-test --chapter 10
-cargo test -p type-exercise-starter chapter_10 --locked
-```
-
-The first run should fail on fast-path selection while the earlier general evaluator stays green.
-
-## Prove the fast-path preconditions
-
-A checked `ColumnViewImpl::try_non_null_array` proves once that an array has no null rows and
-records `Nullability::NonNull` beside its `PhysicalType`. A constant value is already one non-null
-scalar repeated for the batch. These facts permit four dense binary loop shapes over the same
-primitive array representation:
-
-- array / array;
-- array / constant;
-- constant / array; and
-- constant / constant.
-
-A dictionary, typed null, nullable array, type mismatch, arity mismatch, or length mismatch must
-return to the general contract or the same structured error.
-
-## Checkpoint 1: select once per batch
-
-- **Target:** `type-exercise-starter/src/physical_type.rs::Nullability`,
-  `type-exercise-starter/src/column.rs::{ColumnViewImpl::nullability,
-  ColumnViewImpl::try_non_null_array}`, and
-  `type-exercise-starter/src/expression.rs::{Expression::output_nullability, PrimitiveLoop,
-  PrimitiveBinaryExpression::evaluate_with_loop, BinaryExpression::new_with_loop}`.
-- **Change:** keep one primitive array representation, establish physical nullability at the
-  column boundary, and choose the dense `i32` path only after ordinary validation succeeds. The
-  builtin catalog stores that selection as another whole-batch kernel; it does not reintroduce a
-  scalar callback.
-- **Preserve:** output values, nulls, and errors are identical to `evaluate`.
-- **Run:** the Chapter 10 focused test.
-- **Passing means:** all four dense shapes report their selected loop and every fallback reports
-  `PrimitiveLoop::General`.
-
-## Checkpoint 2: forward through binding
-
-- **Target:** `type-exercise-starter/src/binder.rs::{BoundExpression::output_nullability,
-  BoundExpression::evaluate_with_loop}`.
-- **Change:** delegate nullability propagation and evaluation to the already-selected physical
-  expression.
-- **Preserve:** logical selection does not choose a fast path; batch representation does.
-- **Run:** focused and cumulative tests.
-- **Passing means:** binding and non-primitive catalog entries remain unchanged.
-
-## Required and extension work
-
-Representative `i32` specialization and semantic fallbacks are required. Fast paths for every
-numeric family and operator are extensions. Do not duplicate the full evaluator to chase a
-benchmark.
+## Checkpoint 1: pin the physical representation
 
 ```console
-cargo test -p type-exercise-starter chapter_10 --locked
-cargo test -p type-exercise-starter --lib --locked
+cargo x copy-test --chapter 10 --checkpoint 1
+cargo test -p type-exercise-starter-expr chapter_10 --locked
 ```
 
-After the tests pass, you may run the maintained reference benchmark without reading its source:
+Review the Chapter 1 `StringArray` representation:
+
+- `data` is one contiguous UTF-8 byte buffer;
+- `offsets` has one more entry than the row count, and row `i` uses
+  `data[offsets[i]..offsets[i + 1]]`;
+- `validity` has one bit per logical row; and
+- a null row repeats the previous offset because it contributes no bytes.
+
+The first test pins those buffers directly. It distinguishes an empty string—a valid row whose
+two offsets are equal—from a null row with the same byte span but a false validity bit.
+
+## Checkpoint 2: consume the writer exactly once
 
 ```console
-cargo bench -p type-exercise --bench expression
+cargo x copy-test --chapter 10 --checkpoint 2
+cargo test -p type-exercise-starter-expr chapter_10 --locked
 ```
 
-It reports the four dense shapes and three fallbacks separately. Setup and dictionary validation
-stay outside the timed row loop. The measurements are machine-specific observations, not a
-completion gate.
+Add `Writer<'a>` and `WriterUsed<'a>` around a borrowed `StringArrayBuilder`. The public operation
+is shaped like this:
 
-Next: [Chapter 11 builds a one-level List column](./chapter-11-list.md).
+```rust,ignore
+impl<'a> Writer<'a> {
+    pub fn write(self, value: &str) -> WriterUsed<'a>;
+}
+```
+
+`write` consumes the unused writer, appends the bytes, ending offset, and valid bit, then returns
+proof that this row has been published. Only the core evaluator may recover the builder from
+`WriterUsed` to begin the next row.
+
+The type transition prevents a callback from returning without publishing or calling `write`
+twice through the same value. It does not make partial mutation magically reversible; instead, the
+facade operation must prepare any fallible work before it consumes the writer. This is why the
+public callback has no path that returns an arbitrary builder.
+
+## Checkpoint 3: lift borrowed string work without allocation
+
+```console
+cargo x copy-test --chapter 10 --checkpoint 3
+cargo test -p type-exercise-starter-expr chapter_10 --locked
+cargo check -p type-exercise-starter-core --locked
+```
+
+Enable `src/string.rs` and implement the borrowed concatenation scalar operation. It receives two
+`&str` values plus a `Writer`, writes each input directly into the builder's bytes, publishes one
+offset and validity bit, and returns `WriterUsed`. Do not allocate a temporary `String` with
+`format!`, and do not write an operation-specific batch loop.
+
+The core variable-width evaluator validates and recovers both typed string views once, propagates
+strict nulls itself, and constructs a fresh writer only for a non-null row. Array, constant, and
+Indexed inputs therefore share the same borrowed scalar operation.
+
+The three focused tests pin the physical bytes/offsets/validity layout, the consumed public writer
+surface, and concatenation across borrowed representations. Core still compiles independently of
+the concrete concatenation function.
+
+## The ownership proof
+
+`Writer<'a> -> WriterUsed<'a>` is a small typestate machine. The lifetime keeps both values tied to
+the evaluator's builder; the move prevents reuse; and the distinct return type proves a row was
+published before the evaluator continues. The compiler checks the transaction boundary that a
+runtime `wrote: bool` flag would only check after the fact.
+
+Next: [Chapter 11 binds logical calls to physical expressions](./chapter-11-list.md).
 
 {{#include copyright.md}}

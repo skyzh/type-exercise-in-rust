@@ -14,19 +14,6 @@ pub trait BinaryScalarFunction {
     ) -> Self::Output;
 }
 
-#[derive(Clone, Copy, Debug, Default)]
-pub struct I32Add;
-
-impl BinaryScalarFunction for I32Add {
-    type Left = i32;
-    type Right = i32;
-    type Output = i32;
-
-    fn evaluate(&self, left: i32, right: i32) -> i32 {
-        left.wrapping_add(right)
-    }
-}
-
 pub fn evaluate_binary<'a, F>(
     function: &F,
     left: ColumnViewImpl<'a>,
@@ -78,6 +65,37 @@ where
 /// One statically selected binary kernel over a complete borrowed batch.
 pub type BinaryBatchKernel = for<'a> fn(&[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
 
+fn validate_expression_inputs(
+    inputs: &[ColumnViewImpl<'_>],
+    expected_types: &[crate::PhysicalType],
+) -> anyhow::Result<usize> {
+    if inputs.len() != expected_types.len() {
+        anyhow::bail!(
+            "input arity mismatch: expected {}, got {}",
+            expected_types.len(),
+            inputs.len()
+        );
+    }
+    for (input_index, (input, expected)) in inputs.iter().zip(expected_types).enumerate() {
+        if input.physical_type() != *expected {
+            anyhow::bail!(
+                "input {input_index} type mismatch: expected {expected:?}, got {:?}",
+                input.physical_type()
+            );
+        }
+    }
+    let len = inputs.first().map_or(0, ColumnViewImpl::len);
+    for (input_index, input) in inputs.iter().enumerate().skip(1) {
+        if input.len() != len {
+            anyhow::bail!(
+                "input {input_index} length mismatch: expected {len}, got {}",
+                input.len()
+            );
+        }
+    }
+    Ok(len)
+}
+
 /// Runtime metadata plus one monomorphized binary batch kernel.
 pub struct BinaryExpression {
     name: &'static str,
@@ -103,7 +121,8 @@ impl BinaryExpression {
         }
     }
 
-    pub(crate) fn new_with_scalar_rows(
+    #[doc(hidden)]
+    pub fn new_with_scalar_rows(
         name: &'static str,
         input_types: [crate::PhysicalType; 2],
         output_type: crate::PhysicalType,
@@ -119,7 +138,7 @@ impl BinaryExpression {
     }
 
     pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-        crate::operators::validate_expression_inputs(inputs, &self.input_types)?;
+        validate_expression_inputs(inputs, &self.input_types)?;
         let output = (self.kernel)(inputs).map_err(|error| {
             if self.reports_scalar_rows {
                 anyhow::anyhow!("function `{}` failed at {error}", self.name)

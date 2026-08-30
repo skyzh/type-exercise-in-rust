@@ -1,10 +1,10 @@
-# Chapter 10 benchmark method
+# Chapter 7 benchmark method
 
-This benchmark measures the maintained `type-exercise` reference solution, not learner code in
-`type-exercise-starter`. Run it with:
+This benchmark measures the maintained `type-exercise-expr` reference solution, not learner code in
+`type-exercise-starter-expr`. Run it with:
 
 ```console
-cargo bench -p type-exercise --bench expression
+cargo bench -p type-exercise-expr --bench expression
 ```
 
 Every case uses 65,536 deterministic rows and materializes an `I32Array`. The general and

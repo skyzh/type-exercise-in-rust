@@ -14,7 +14,7 @@ adapter then supplies only an ordinary scalar function such as `neg_number(value
 
 ## What is in the starter
 
-Begin from your completed Chapter 5 workspace. In `src/operators.rs`, selected arithmetic adapters
+Begin from your completed Chapter 5 workspace. In `src/arithmetic.rs`, selected arithmetic adapters
 still contain repeated batch mechanics. `validate_expression_inputs` is private. The file ends with
 comment shells for the Day 6 additions:
 
@@ -26,13 +26,13 @@ comment shells for the Day 6 additions:
 
 You own those additions and the contextual invalid-bound error used by `clamp`. Remove repeated
 operation loops as you route them through the shared helpers. Logical function registration waits
-until Chapter 9, and a fourth arity is not part of this chapter.
+until Chapter 11, and a fourth arity is not part of this chapter.
 
 Chapter 6 has three cumulative supplied checkpoints. Copy the first one before editing:
 
 ```console
 cargo x copy-test --chapter 6 --checkpoint 1
-cargo test -p type-exercise-starter chapter_6 --locked
+cargo test -p type-exercise-starter-expr chapter_6 --locked
 ```
 
 The focused run should fail because the Day 5 validator is still private. Do not edit the copied
@@ -41,7 +41,7 @@ completed Chapter 6 test.
 
 ## Checkpoint 1: share validation across arities
 
-Open `src/operators.rs`. `validate_expression_inputs` already checks a batch before either the
+Open `src/expression.rs`. `validate_expression_inputs` already checks a batch before either the
 unary or binary row loop allocates an output or calls a scalar function. Make that helper public
 without changing its order:
 
@@ -63,14 +63,14 @@ validation itself is not binary-specific.
 Publish only the validator from `src/lib.rs`:
 
 ```rust,ignore
-pub use operators::validate_expression_inputs;
+pub use type_exercise_starter_core::validate_expression_inputs;
 ```
 
 Run the same checkpoint again:
 
 ```console
 cargo x copy-test --chapter 6 --checkpoint 1
-cargo test -p type-exercise-starter chapter_6 --locked
+cargo test -p type-exercise-starter-expr chapter_6 --locked
 ```
 
 Passing this checkpoint means the shared boundary works for an arbitrary expected-type slice.
@@ -101,7 +101,7 @@ Copy and run the cumulative second checkpoint:
 
 ```console
 cargo x copy-test --chapter 6 --checkpoint 2
-cargo test -p type-exercise-starter chapter_6 --locked
+cargo test -p type-exercise-starter-expr chapter_6 --locked
 ```
 
 Passing now means the reusable ternary auto-vectorizer works. The full generated `clamp` selector
@@ -109,9 +109,9 @@ is still missing.
 
 ## Checkpoint 3: author scalar work and generate adapters
 
-Finish `src/operators.rs` with the crate-private physical builders named by the starter:
+Finish `src/arithmetic.rs` with the crate-private physical builders named by the starter:
 `build_numeric_neg_expression` and `build_numeric_clamp_expression`. They receive already-selected
-physical families, just as Chapter 5's binary builder does. Chapter 9 will place logical name
+physical families, just as Chapter 5's binary builder does. Chapter 11 will place logical name
 binding in front of them.
 
 `neg_number` owns only one scalar value. For signed integers, apply the standard `Neg`
@@ -139,8 +139,8 @@ Copy the final checkpoint and run the completed contract:
 
 ```console
 cargo x copy-test --chapter 6 --checkpoint 3
-cargo test -p type-exercise-starter chapter_6 --locked
-cargo test -p type-exercise-starter --lib --locked
+cargo test -p type-exercise-starter-expr chapter_6 --locked
+cargo test -p type-exercise-starter-expr --lib --locked
 ```
 
 The focused cases now cover generic validation beyond ternary arity, the direct mixed-family
@@ -148,6 +148,18 @@ ternary witness, strict null propagation, row-carrying invalid-bound errors, wra
 negation, every legal two-step clamp promotion tuple, and rejection of greater or unordered
 bounds. The cumulative library run keeps the Chapter 1–5 type, array, column-view, and expression
 contracts in the same learner workspace.
+
+Inspect the facade after macro expansion:
+
+```console
+cargo expand -p type-exercise-starter-expr --lib arithmetic
+```
+
+Locate a concrete numeric adapter such as negation or addition. It should convert or select its
+typed scalar function, then delegate to `evaluate_unary`, `auto_vectorize_binary`, or
+`try_evaluate_ternary` in the core package. It must not contain an operation-specific `for row`
+loop. `cargo expand` is an inspection step rather than a build dependency; the ordinary tests
+remain the completion gate.
 
 ## Read the shared boundary
 
@@ -165,9 +177,8 @@ Before continuing, make sure you can explain these boundaries in your own words:
 4. Why is an unordered `NaN` bound an error while a null input skips the clamp scalar call?
 
 You now have a real ternary expression without scalar-operation erasure or duplicated batch checks.
-Chapter 7 will apply the same separation to three-valued Boolean logic, where nulls are part of the
-operator's truth table rather than always strict.
+Chapter 7 will add fixed-width dense paths while preserving the same nullable-aware fallback.
 
-Next: [Chapter 7 adds three-valued Boolean logic with SQL null semantics](./chapter-7-boolean-logic.md).
+Next: [Chapter 7 selects dense fixed-width loops](./chapter-7-boolean-logic.md).
 
 {{#include copyright.md}}

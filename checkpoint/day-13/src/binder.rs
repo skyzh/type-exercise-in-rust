@@ -4,12 +4,23 @@ use std::fmt::{Display, Formatter};
 
 use crate::{
     ArithmeticOperator, ArrayImpl, AsyncExpression, BatchFuture, BooleanOperator, ColumnViewImpl,
-    ComparisonOperator, DataType, Expression, Nullability, PhysicalType, PrimitiveLoop,
-    build_bool_comparison_expression, build_boolean_expression, build_builtin_expression,
-    build_numeric_binary_expression, build_numeric_clamp_expression,
+    ComparisonOperator, DataType, Expression, I32Add, Nullability, PhysicalType,
+    PrimitiveBinaryExpression, PrimitiveLoop, build_bool_comparison_expression,
+    build_boolean_expression, build_numeric_binary_expression, build_numeric_clamp_expression,
     build_numeric_comparison_expression, build_numeric_neg_expression,
     build_string_comparison_expression, build_string_contains_expression, promote_numeric,
 };
+
+/// The two physical expressions available before logical binding is introduced.
+pub const BUILTIN_EXPRESSION_NAMES: &[&str] = &["i32_add", "string_concat"];
+
+pub fn build_builtin_expression(name: &str) -> Option<Box<dyn Expression>> {
+    match name {
+        "i32_add" => Some(Box::new(PrimitiveBinaryExpression::new("i32_add", I32Add))),
+        "string_concat" => Some(Box::new(crate::string::build_string_concat_expression())),
+        _ => None,
+    }
+}
 
 /// A checked failure while selecting one physical expression.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -458,41 +469,4 @@ fn bind_concat(left: DataType, right: DataType) -> Result<BoundExpression, BindE
         [left, right],
         DataType::Varchar,
     )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{BindError, FunctionRegistry};
-    use crate::DataType;
-
-    #[test]
-    fn decimal_storage_does_not_enable_operators_or_cast_like_coercion() {
-        let decimal = DataType::decimal(8, 2).unwrap();
-        let registry = FunctionRegistry::with_builtins();
-
-        for (name, inputs) in [
-            ("+", vec![decimal.clone(), decimal.clone()]),
-            ("-", vec![decimal.clone(), DataType::Integer]),
-            ("*", vec![DataType::Integer, decimal.clone()]),
-            ("/", vec![decimal.clone(), decimal.clone()]),
-            ("neg", vec![decimal.clone()]),
-            (
-                "clamp",
-                vec![decimal.clone(), decimal.clone(), decimal.clone()],
-            ),
-            ("<", vec![decimal.clone(), decimal.clone()]),
-            ("<=", vec![decimal.clone(), decimal.clone()]),
-            (">", vec![decimal.clone(), decimal.clone()]),
-            (">=", vec![decimal.clone(), decimal.clone()]),
-            ("=", vec![decimal.clone(), decimal.clone()]),
-            ("!=", vec![decimal.clone(), decimal.clone()]),
-            ("contains", vec![decimal.clone(), DataType::Varchar]),
-            ("concat", vec![DataType::Varchar, decimal.clone()]),
-        ] {
-            assert!(matches!(
-                registry.bind(name, &inputs),
-                Err(BindError::UnsupportedArguments { .. })
-            ));
-        }
-    }
 }

@@ -1,0 +1,13 @@
+[package]
+name = "type-exercise-checkpoint-01-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow = "1"
+bitvec = "1"
+
+[lib]
+path = "../src/core.rs"

@@ -700,23 +700,262 @@ dependencies = [
 ]
 
 [[package]]
-name = "type-exercise"
+name = "type-exercise-checkpoint-01-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-01-expr"
+version = "0.1.0"
+dependencies = [
+ "bitvec",
+ "type-exercise-checkpoint-01-core",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-02-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-02-expr"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-checkpoint-02-core",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-03-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-03-expr"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-checkpoint-03-core",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-04-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-04-expr"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-checkpoint-04-core",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-05-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-05-expr"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-checkpoint-05-core",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-06-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-06-expr"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-checkpoint-06-core",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-07-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-07-expr"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-checkpoint-07-core",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-08-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-08-expr"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-checkpoint-08-core",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-09-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-09-expr"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-checkpoint-09-core",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-10-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-10-expr"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-checkpoint-10-core",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-11-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-11-expr"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-checkpoint-11-core",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-12-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-12-expr"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-checkpoint-12-core",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-13-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-13-expr"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-checkpoint-13-core",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-14-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-14-expr"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-checkpoint-14-core",
+]
+
+[[package]]
+name = "type-exercise-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+]
+
+[[package]]
+name = "type-exercise-expr"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "bitvec",
  "criterion",
+ "type-exercise-core",
 ]
 
 [[package]]
-name = "type-exercise-checkpoint-01"
-version = "0.1.0"
-dependencies = [
- "bitvec",
-]
-
-[[package]]
-name = "type-exercise-checkpoint-02"
+name = "type-exercise-starter-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -724,99 +963,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "type-exercise-checkpoint-03"
+name = "type-exercise-starter-expr"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "bitvec",
-]
-
-[[package]]
-name = "type-exercise-checkpoint-04"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bitvec",
-]
-
-[[package]]
-name = "type-exercise-checkpoint-05"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bitvec",
-]
-
-[[package]]
-name = "type-exercise-checkpoint-06"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bitvec",
-]
-
-[[package]]
-name = "type-exercise-checkpoint-07"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bitvec",
-]
-
-[[package]]
-name = "type-exercise-checkpoint-08"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bitvec",
-]
-
-[[package]]
-name = "type-exercise-checkpoint-09"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bitvec",
-]
-
-[[package]]
-name = "type-exercise-checkpoint-10"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bitvec",
-]
-
-[[package]]
-name = "type-exercise-checkpoint-11"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bitvec",
-]
-
-[[package]]
-name = "type-exercise-checkpoint-12"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bitvec",
-]
-
-[[package]]
-name = "type-exercise-checkpoint-13"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bitvec",
-]
-
-[[package]]
-name = "type-exercise-starter"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bitvec",
+ "type-exercise-starter-core",
 ]
 
 [[package]]
