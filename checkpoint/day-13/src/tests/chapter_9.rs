@@ -101,8 +101,8 @@ fn preserves_distinct_logical_string_types() {
         .bind_binary("concat", char, DataType::Varchar)
         .unwrap();
 
-    let values: ArrayImpl = StringArray::from_slice(&[Some("data"), Some("rust")]).into();
-    let keys = [Some(0), None, Some(1)];
+    let values: ArrayImpl = StringArray::from_slice(&[Some("data"), None, Some("rust")]).into();
+    let keys = [0, 1, 2];
     let inputs = [
         ColumnViewImpl::indexed(&keys, &values).unwrap(),
         ColumnViewImpl::constant(ScalarRefImpl::String("base"), 3),

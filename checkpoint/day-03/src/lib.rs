@@ -18,7 +18,7 @@ mod variant_catalog;
 mod tests;
 
 pub use array::*;
-pub use column::{ColumnView, ColumnViewImpl, InvalidIndex};
+pub use column::{ColumnView, ColumnViewImpl};
 pub use data_type::*;
 pub use decimal::*;
 pub use physical_type::*;

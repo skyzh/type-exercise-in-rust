@@ -1,5 +1,4 @@
-use std::error::Error;
-use std::fmt::{Display, Formatter};
+use anyhow::{Result, anyhow};
 
 use crate::{
     Array, ArrayImpl, ListArray, ListError, ListScalarRef, Nullability, PhysicalType, Scalar,
@@ -7,6 +6,9 @@ use crate::{
 };
 
 /// A borrowed column whose scalar and array types are known only at runtime.
+///
+/// The public wrapper keeps construction checked while the private kind prevents
+/// callers from bypassing those checks, and it stores batch nullability once.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ColumnViewImpl<'a> {
     kind: ColumnViewImplKind<'a>,
@@ -22,7 +24,7 @@ enum ColumnViewImplKind<'a> {
         len: usize,
     },
     Indexed {
-        indices: &'a [Option<usize>],
+        indices: &'a [u32],
         values: &'a ArrayImpl,
     },
 }
@@ -41,26 +43,6 @@ impl DenseI32Column<'_> {
         }
     }
 }
-
-/// An indexed row selected a value outside the values array.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct InvalidIndex {
-    pub row: usize,
-    pub index: usize,
-    pub values_len: usize,
-}
-
-impl Display for InvalidIndex {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            formatter,
-            "index {} at row {} is out of bounds for a values array of length {}",
-            self.index, self.row, self.values_len
-        )
-    }
-}
-
-impl Error for InvalidIndex {}
 
 impl<'a> ColumnViewImpl<'a> {
     pub fn array(array: &'a ArrayImpl) -> Self {
@@ -101,22 +83,17 @@ impl<'a> ColumnViewImpl<'a> {
         }
     }
 
-    pub fn indexed(
-        indices: &'a [Option<usize>],
-        values: &'a ArrayImpl,
-    ) -> Result<Self, InvalidIndex> {
+    pub fn indexed(indices: &'a [u32], values: &'a ArrayImpl) -> Result<Self> {
         if let Some((row, index)) = indices
             .iter()
             .copied()
             .enumerate()
-            .filter_map(|(row, index)| index.map(|index| (row, index)))
-            .find(|(_, index)| *index >= values.len())
+            .find(|(_, index)| *index as usize >= values.len())
         {
-            return Err(InvalidIndex {
-                row,
-                index,
-                values_len: values.len(),
-            });
+            return Err(anyhow!(
+                "index {index} at row {row} is out of bounds for a values array of length {}",
+                values.len()
+            ));
         }
 
         Ok(Self {
@@ -155,9 +132,7 @@ impl<'a> ColumnViewImpl<'a> {
         match &self.kind {
             ColumnViewImplKind::Array(array) => array.get(row),
             ColumnViewImplKind::Constant { value, .. } => *value,
-            ColumnViewImplKind::Indexed { indices, values } => {
-                indices[row].and_then(|index| values.get(index))
-            }
+            ColumnViewImplKind::Indexed { indices, values } => values.get(indices[row] as usize),
         }
     }
 
@@ -230,12 +205,6 @@ impl<'a> ColumnViewImpl<'a> {
     }
 }
 
-impl<'a> From<&'a ArrayImpl> for ColumnViewImpl<'a> {
-    fn from(array: &'a ArrayImpl) -> Self {
-        Self::array(array)
-    }
-}
-
 /// A borrowed List column whose element physical type was checked once.
 #[derive(Debug)]
 pub struct ListColumnView<'a> {
@@ -250,7 +219,7 @@ enum ListColumnViewKind<'a> {
         len: usize,
     },
     Indexed {
-        indices: &'a [Option<usize>],
+        indices: &'a [u32],
         values: &'a ListArray,
     },
 }
@@ -278,9 +247,7 @@ impl<'a> ListColumnView<'a> {
         match &self.kind {
             ListColumnViewKind::Array(array) => array.get(row),
             ListColumnViewKind::Constant { value, .. } => Ok(*value),
-            ListColumnViewKind::Indexed { indices, values } => {
-                indices[row].map_or(Ok(None), |index| values.get(index))
-            }
+            ListColumnViewKind::Indexed { indices, values } => values.get(indices[row] as usize),
         }
     }
 }
@@ -299,22 +266,20 @@ enum ColumnViewKind<'a, S: Scalar> {
         len: usize,
     },
     Indexed {
-        indices: &'a [Option<usize>],
+        indices: &'a [u32],
         values: &'a S::ArrayType,
     },
 }
 
 impl<'a, S: Scalar> ColumnView<'a, S> {
+    // The typed surface stays limited to operations used by the course.
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         match &self.kind {
             ColumnViewKind::Array(array) => array.len(),
             ColumnViewKind::Constant { len, .. } => *len,
             ColumnViewKind::Indexed { indices, .. } => indices.len(),
         }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
     }
 
     pub fn get(&self, row: usize) -> Option<S::RefType<'a>> {
@@ -327,7 +292,7 @@ impl<'a, S: Scalar> ColumnView<'a, S> {
             ColumnViewKind::Constant { value, .. } => *value,
             ColumnViewKind::Indexed { indices, values } => {
                 let values: &'a S::ArrayType = values;
-                indices[row].and_then(|index| values.get(index))
+                values.get(indices[row] as usize)
             }
         }
     }
@@ -398,7 +363,7 @@ mod tests {
         assert_eq!(null.physical_type(), exact);
         assert_eq!(null.get(0), None);
 
-        let indices = [Some(1), Some(0), None];
+        let indices = [1, 0, 1];
         let indexed = ColumnViewImpl::indexed(&indices, &array).unwrap();
         assert_eq!(indexed.physical_type(), exact);
         assert_eq!(indexed.get(0), None);

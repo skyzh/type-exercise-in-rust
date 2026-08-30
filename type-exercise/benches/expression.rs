@@ -199,11 +199,11 @@ fn benchmark_expressions(criterion: &mut Criterion) {
         [HandwrittenColumn::General, HandwrittenColumn::General],
     );
 
-    let indexed_values: ArrayImpl =
-        I32Array::from_values((0..256).map(|value| value * 5).collect()).into();
-    let indexed_indices = (0..ROWS)
-        .map(|row| (row % 29 != 0).then_some(row % 256))
+    let indexed_values = (0..256)
+        .map(|value| (value % 29 != 0).then_some(value * 5))
         .collect::<Vec<_>>();
+    let indexed_values: ArrayImpl = I32Array::from_slice(&indexed_values).into();
+    let indexed_indices = (0..ROWS).map(|row| (row % 256) as u32).collect::<Vec<_>>();
     let indexed = ColumnViewImpl::indexed(&indexed_indices, &indexed_values).unwrap();
     benchmark_case(
         criterion,

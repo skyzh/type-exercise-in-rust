@@ -40,7 +40,7 @@ fn borrowed_erased_future<'a>(
 #[test]
 fn static_future_preserves_the_synchronous_batch_result() {
     let values: ArrayImpl = I32Array::from_slice(&[Some(10), None, Some(30)]).into();
-    let keys = [Some(2), Some(0), None];
+    let keys = [2, 0, 1];
     let inputs = [
         ColumnViewImpl::indexed(&keys, &values).unwrap(),
         ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 3),

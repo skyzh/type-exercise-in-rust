@@ -23,7 +23,7 @@ mod tests;
 
 pub use array::*;
 pub use boolean_logic::*;
-pub use column::{ColumnView, ColumnViewImpl, InvalidIndex};
+pub use column::{ColumnView, ColumnViewImpl};
 pub use data_type::*;
 pub use decimal::*;
 pub use expression::*;
