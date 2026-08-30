@@ -54,7 +54,7 @@ That signature keeps one row operation independent from the column representatio
 pub trait BinaryScalarFunction {
     type Left: Scalar;
     type Right: Scalar;
-    type Output: Scalar;
+    type Output: Scalar + Copy;
 
     fn evaluate<'a>(
         &self,
@@ -80,16 +80,15 @@ function. The adapter, not the function, owns the batch work:
 
 The typed conversions perform the physical-family checks. They also recover the borrowed scalar
 shape established in Chapter 1: a mixed-family function can receive `&str` from a string column and
-`i32` from a primitive column without allocating either input value. The output family is
-independent of both inputs; an `i32, i32 -> String` function must build a `StringArray`.
+`i32` from a primitive column without allocating either input value. This first adapter deliberately
+requires a copyable fixed-width output. A variable-width result cannot be built safely as one
+temporary scalar value here; Chapter 8 introduces a transactional string builder at the
+whole-batch boundary.
 
-Use the public `ExpressionError` enum for batch failures. Its completed Chapter 4 contract has four
-variants: `TypeMismatch(TypeMismatch)`, `InputArityMismatch { expected, actual }`,
-`InputLengthMismatch { expected, actual, input_index }`, and
-`ScalarEvaluation { function, row, error }`. Checkpoint 1 needs the type and length cases;
-Checkpoint 2 completes the arity and checked-scalar cases. The exact `Display` sentences remain
-your choice. Enable `expression` in `src/lib.rs` and export `ExpressionError` with the checkpoint's
-public function, trait, and `I32Add`.
+Use `anyhow::Result<ArrayImpl>` for batch failures. Add ordinary context that identifies the input
+position for type or length failures and preserves the underlying cause. Enable `expression` in
+`src/lib.rs` and export the checkpoint's public function, trait, and `I32Add`; there is no course
+specific runtime error enum to maintain.
 
 The copied Chapter 4 test also imports the Checkpoint 2 shells, so it cannot be green yet. Use an
 honest library boundary here:
@@ -108,7 +107,7 @@ length rejection.
 Now open `src/operators.rs`. Define `BatchExpression<const N: usize>` with a static function name,
 an `[PhysicalType; N]` input contract, one output type, and a function pointer for a complete
 batch. Name that pointer type `BatchKernel<N>`. Its signature receives the expression metadata and
-the borrowed `&[ColumnViewImpl<'_>]`, and returns an owned `ArrayImpl` or `ExpressionError`.
+the borrowed `&[ColumnViewImpl<'_>]`, and returns `anyhow::Result<ArrayImpl>`.
 
 This is the important erasure boundary. A caller may select one monomorphized batch kernel at
 runtime, but that kernel converts each erased column to a typed `ColumnView` once and owns the
@@ -135,20 +134,17 @@ all required inputs are set -> perform the typed operation once
 typed operation returns Err -> stop; return a batch error and no output array
 ```
 
-Report the three validation failures as `ExpressionError::InputArityMismatch { expected, actual }`,
-`ExpressionError::TypeMismatch(TypeMismatch { expected, actual })`, and
-`ExpressionError::InputLengthMismatch { expected, actual, input_index }`. Null and error are
-different results: a strict null is a valid row in the output, while a scalar error ends evaluation
-and later rows must not run. Return that failure as
-`ExpressionError::ScalarEvaluation { function, row, error }`; the public variant and fields are
-part of the supplied contract, while their `Display` wording remains flexible.
+Report the three validation failures with contextual messages that preserve expected and actual
+values; type and length failures must also identify the input index. Null and error are different
+results: a strict null is a valid row in the output, while an operation error ends evaluation and
+later rows must not run. Add the function name and first failing row to that underlying cause. Do
+not return a partially built array.
 
 The kernel borrows every input view and returns a new owned array. Do not materialize an input
 representation just to simplify the loop.
 
-Enable `operators` in `src/lib.rs`. Export `BatchExpression` and `BatchKernel`; also export
-`ScalarError` from `expression`. Keep the later `Expression` trait and runtime catalog commented
-out.
+Enable `operators` in `src/lib.rs` and export `BatchExpression` and `BatchKernel`. Keep the later
+`Expression` trait and runtime catalog commented out.
 
 Run the focused contract, then the cumulative learner-library suite:
 
@@ -160,7 +156,7 @@ cargo test -p type-exercise-starter --lib --locked
 The 14 focused cases prove the complete boundary:
 
 - one typed binary evaluator works over array, constant, typed-null, and indexed representations;
-- borrowed mixed-family inputs and an independent associated output family work without
+- borrowed mixed-family inputs and a copyable fixed-width associated output family work without
   per-representation loops;
 - `i32` addition has explicit wrapping behavior;
 - fixed-arity batch expressions reject arity, physical-family, and length errors before kernel

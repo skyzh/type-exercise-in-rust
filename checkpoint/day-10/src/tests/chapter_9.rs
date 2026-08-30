@@ -1,7 +1,6 @@
 use crate::{
     Array, ArrayImpl, BindError, BoolArray, BoundExpression, ColumnViewImpl, DataType, Expression,
-    ExpressionError, FunctionRegistry, I32Array, PhysicalType, ScalarRefImpl, StringArray,
-    build_builtin_expression,
+    FunctionRegistry, I32Array, PhysicalType, ScalarRefImpl, StringArray, build_builtin_expression,
 };
 
 struct MetadataExpression {
@@ -21,7 +20,7 @@ impl Expression for MetadataExpression {
         PhysicalType::Int32
     }
 
-    fn evaluate(&self, _inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+    fn evaluate(&self, _inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         unreachable!("the metadata-only expression is never evaluated")
     }
 }

@@ -4,11 +4,10 @@ use std::fmt::{Display, Formatter};
 
 use crate::{
     ArithmeticOperator, ArrayImpl, BooleanOperator, ColumnViewImpl, ComparisonOperator, DataType,
-    Expression, ExpressionError, PhysicalType, build_bool_comparison_expression,
-    build_boolean_expression, build_builtin_expression, build_numeric_binary_expression,
-    build_numeric_clamp_expression, build_numeric_comparison_expression,
-    build_numeric_neg_expression, build_string_comparison_expression,
-    build_string_contains_expression, promote_numeric,
+    Expression, PhysicalType, build_bool_comparison_expression, build_boolean_expression,
+    build_builtin_expression, build_numeric_binary_expression, build_numeric_clamp_expression,
+    build_numeric_comparison_expression, build_numeric_neg_expression,
+    build_string_comparison_expression, build_string_contains_expression, promote_numeric,
 };
 
 /// A checked failure while selecting one physical expression.
@@ -122,7 +121,7 @@ impl BoundExpression {
         self.expression.name()
     }
 
-    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         self.expression.evaluate(inputs)
     }
 }

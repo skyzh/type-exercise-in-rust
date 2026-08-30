@@ -2,8 +2,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::{
     Array, ArrayBuilder, ArrayImpl, BatchExpression, BinaryScalarFunction, ColumnView,
-    ColumnViewImpl, ExpressionError, I32Add, I32Array, PhysicalType, ScalarError, ScalarRefImpl,
-    StringArray, evaluate_binary,
+    ColumnViewImpl, I32Add, I32Array, PhysicalType, ScalarRefImpl, StringArray, evaluate_binary,
 };
 
 struct StringLengthAdd;
@@ -18,16 +17,15 @@ impl BinaryScalarFunction for StringLengthAdd {
     }
 }
 
-struct I32PairLabel;
+fn assert_copyable_output<F: BinaryScalarFunction>()
+where
+    F::Output: Copy,
+{
+}
 
-impl BinaryScalarFunction for I32PairLabel {
-    type Left = i32;
-    type Right = i32;
-    type Output = String;
-
-    fn evaluate(&self, left: i32, right: i32) -> String {
-        format!("{left}:{right}")
-    }
+#[test]
+fn scalar_adapter_output_is_copyable_and_fixed_width() {
+    assert_copyable_output::<I32Add>();
 }
 
 #[test]
@@ -86,19 +84,6 @@ fn vectorizes_a_borrowed_mixed_family_function() {
 }
 
 #[test]
-fn builds_the_associated_output_array_family() {
-    let left: ArrayImpl = I32Array::from_slice(&[Some(4), None]).into();
-    let result = evaluate_binary(
-        &I32PairLabel,
-        ColumnViewImpl::array(&left),
-        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 2),
-    )
-    .unwrap();
-    let result = <&StringArray>::try_from(&result).unwrap();
-    assert_eq!(result.iter().collect::<Vec<_>>(), vec![Some("4:2"), None]);
-}
-
-#[test]
 fn addition_uses_explicit_wrapping_overflow() {
     let result = evaluate_binary(
         &I32Add,
@@ -125,20 +110,33 @@ fn rejects_input_lengths_before_evaluating_rows() {
 #[test]
 fn rejects_physical_types_before_evaluating_rows() {
     let strings: ArrayImpl = StringArray::from_slice(&[Some("wrong")]).into();
-    assert!(
-        evaluate_binary(
-            &I32Add,
-            ColumnViewImpl::array(&strings),
-            ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
-        )
-        .is_err()
+    let left_error = evaluate_binary(
+        &I32Add,
+        ColumnViewImpl::array(&strings),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
+    )
+    .unwrap_err();
+    assert_eq!(
+        left_error.to_string(),
+        "input 0 type mismatch: expected Int32, got String"
+    );
+
+    let right_error = evaluate_binary(
+        &I32Add,
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
+        ColumnViewImpl::array(&strings),
+    )
+    .unwrap_err();
+    assert_eq!(
+        right_error.to_string(),
+        "input 1 type mismatch: expected Int32, got String"
     );
 }
 
 fn checked_neg_batch(
     _expression: &BatchExpression<1>,
     inputs: &[ColumnViewImpl<'_>],
-) -> Result<ArrayImpl, ExpressionError> {
+) -> anyhow::Result<ArrayImpl> {
     let input = ColumnView::<i32>::try_from(inputs[0].clone())?;
     let mut output = <I32Array as Array>::Builder::with_capacity(input.len());
     for row in 0..input.len() {
@@ -150,7 +148,7 @@ fn checked_neg_batch(
 fn checked_add_batch(
     _expression: &BatchExpression<2>,
     inputs: &[ColumnViewImpl<'_>],
-) -> Result<ArrayImpl, ExpressionError> {
+) -> anyhow::Result<ArrayImpl> {
     let left = ColumnView::<i32>::try_from(inputs[0].clone())?;
     let right = ColumnView::<i32>::try_from(inputs[1].clone())?;
     let mut output = <I32Array as Array>::Builder::with_capacity(left.len());
@@ -167,17 +165,13 @@ fn checked_add_batch(
 fn checked_fail_on_seven_batch(
     _expression: &BatchExpression<1>,
     inputs: &[ColumnViewImpl<'_>],
-) -> Result<ArrayImpl, ExpressionError> {
+) -> anyhow::Result<ArrayImpl> {
     let input = ColumnView::<i32>::try_from(inputs[0].clone())?;
     let mut output = <I32Array as Array>::Builder::with_capacity(input.len());
     for row in 0..input.len() {
         let value = input.get(row);
         if value == Some(7) {
-            return Err(ExpressionError::ScalarEvaluation {
-                function: "checked_fail_on_seven",
-                row,
-                error: ScalarError::DivisionByZero,
-            });
+            anyhow::bail!("function `checked_fail_on_seven` failed at row {row}: division by zero");
         }
         output.push(value);
     }
@@ -189,7 +183,7 @@ static BATCH_CALLS: AtomicUsize = AtomicUsize::new(0);
 fn checked_add_fail_on_second_call_batch(
     _expression: &BatchExpression<2>,
     inputs: &[ColumnViewImpl<'_>],
-) -> Result<ArrayImpl, ExpressionError> {
+) -> anyhow::Result<ArrayImpl> {
     let left = ColumnView::<i32>::try_from(inputs[0].clone())?;
     let right = ColumnView::<i32>::try_from(inputs[1].clone())?;
     let mut output = <I32Array as Array>::Builder::with_capacity(left.len());
@@ -197,11 +191,9 @@ fn checked_add_fail_on_second_call_batch(
         let value = match (left.get(row), right.get(row)) {
             (Some(left), Some(right)) => {
                 if BATCH_CALLS.fetch_add(1, Ordering::SeqCst) == 1 {
-                    return Err(ExpressionError::ScalarEvaluation {
-                        function: "checked_add_fail_on_second_call",
-                        row,
-                        error: ScalarError::DivisionByZero,
-                    });
+                    anyhow::bail!(
+                        "function `checked_add_fail_on_second_call` failed at row {row}: division by zero"
+                    );
                 }
                 Some(left.wrapping_add(right))
             }
@@ -215,7 +207,7 @@ fn checked_add_fail_on_second_call_batch(
 fn checked_string_length_add_batch(
     _expression: &BatchExpression<2>,
     inputs: &[ColumnViewImpl<'_>],
-) -> Result<ArrayImpl, ExpressionError> {
+) -> anyhow::Result<ArrayImpl> {
     let left = ColumnView::<String>::try_from(inputs[0].clone())?;
     let right = ColumnView::<i32>::try_from(inputs[1].clone())?;
     let mut output = <I32Array as Array>::Builder::with_capacity(left.len());
@@ -417,12 +409,8 @@ fn binary_scalar_errors_propagate_and_stop_later_rows() {
         ])
         .unwrap_err();
     assert_eq!(
-        error,
-        ExpressionError::ScalarEvaluation {
-            function: "checked_add_fail_on_second_call",
-            row: 1,
-            error: ScalarError::DivisionByZero,
-        }
+        error.to_string(),
+        "function `checked_add_fail_on_second_call` failed at row 1: division by zero"
     );
     // The error stops the row loop: the third row is never evaluated.
     assert_eq!(BATCH_CALLS.load(Ordering::SeqCst), 2);

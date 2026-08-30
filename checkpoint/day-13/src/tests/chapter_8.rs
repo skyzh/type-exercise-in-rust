@@ -2,14 +2,13 @@ use std::any::Any;
 
 use crate::{
     Array, ArrayBuilder, ArrayImpl, BUILTIN_EXPRESSION_NAMES, BatchExpression, BinaryExpression,
-    BoolArray, BooleanOperator, ColumnView, ColumnViewImpl, Expression, ExpressionError, I32Array,
-    PhysicalType, ScalarRefImpl, StringArray, TypeMismatch, build_boolean_expression,
-    build_builtin_expression,
+    BoolArray, BooleanOperator, ColumnView, ColumnViewImpl, Expression, I32Array, PhysicalType,
+    ScalarRefImpl, StringArray, build_boolean_expression, build_builtin_expression,
 };
 
 fn assert_expression_bounds<T: Any + Send + Sync + ?Sized>() {}
 
-fn panic_on_non_null_batch(inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+fn panic_on_non_null_batch(inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
     let left = ColumnView::<i32>::try_from(inputs[0].clone())?;
     let right = ColumnView::<i32>::try_from(inputs[1].clone())?;
     let mut output = <StringArray as Array>::Builder::with_capacity(left.len());
@@ -23,7 +22,7 @@ fn panic_on_non_null_batch(inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, E
     Ok(output.finish().into())
 }
 
-fn string_length_add_batch(inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+fn string_length_add_batch(inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
     let left = ColumnView::<String>::try_from(inputs[0].clone())?;
     let right = ColumnView::<i32>::try_from(inputs[1].clone())?;
     let mut output = <I32Array as Array>::Builder::with_capacity(left.len());
@@ -113,12 +112,28 @@ fn rejects_a_kernel_result_that_disagrees_with_declared_metadata() {
         ])
         .unwrap_err();
     assert_eq!(
-        error,
-        ExpressionError::TypeMismatch(TypeMismatch {
-            expected: PhysicalType::String,
-            actual: PhysicalType::Int32,
-        })
+        error.to_string(),
+        "output type mismatch: expected String, got Int32"
     );
+}
+
+#[test]
+fn string_concat_writes_fragments_directly_into_the_transactional_builder() {
+    let source = include_str!("../expression.rs");
+    let body = source
+        .split("fn evaluate_string_concat_batch")
+        .nth(1)
+        .unwrap()
+        .split("#[derive(Clone)]")
+        .next()
+        .unwrap();
+
+    assert!(body.contains("output.try_push_with"));
+    assert!(body.contains("writer.push_str(left)"));
+    assert!(body.contains("writer.push_str(right)"));
+    assert!(body.contains("output.push_null()"));
+    assert!(!body.contains("format!"));
+    assert!(!body.contains("String::with_capacity"));
 }
 
 #[test]
@@ -283,7 +298,7 @@ fn boolean_expressions_delegate_through_the_erased_boundary() {
 fn checked_neg_batch(
     _expression: &BatchExpression<1>,
     inputs: &[ColumnViewImpl<'_>],
-) -> Result<ArrayImpl, ExpressionError> {
+) -> anyhow::Result<ArrayImpl> {
     let input = ColumnView::<i32>::try_from(inputs[0].clone())?;
     let mut output = <I32Array as Array>::Builder::with_capacity(input.len());
     for row in 0..input.len() {
@@ -295,7 +310,7 @@ fn checked_neg_batch(
 fn checked_add_batch(
     _expression: &BatchExpression<2>,
     inputs: &[ColumnViewImpl<'_>],
-) -> Result<ArrayImpl, ExpressionError> {
+) -> anyhow::Result<ArrayImpl> {
     let left = ColumnView::<i32>::try_from(inputs[0].clone())?;
     let right = ColumnView::<i32>::try_from(inputs[1].clone())?;
     let mut output = <I32Array as Array>::Builder::with_capacity(left.len());
@@ -312,7 +327,7 @@ fn checked_add_batch(
 fn checked_clamp_batch(
     _expression: &BatchExpression<3>,
     inputs: &[ColumnViewImpl<'_>],
-) -> Result<ArrayImpl, ExpressionError> {
+) -> anyhow::Result<ArrayImpl> {
     let value = ColumnView::<i32>::try_from(inputs[0].clone())?;
     let lower = ColumnView::<i32>::try_from(inputs[1].clone())?;
     let upper = ColumnView::<i32>::try_from(inputs[2].clone())?;

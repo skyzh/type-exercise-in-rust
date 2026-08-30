@@ -26,9 +26,9 @@ Day 6 additions:
 - the physical numeric `neg` and `clamp` builders; and
 - the exact re-export to add in `src/lib.rs`.
 
-You own those additions and the `ScalarError::InvalidClampBounds` variant used by `clamp`. Keep the
-existing binary row loops intact. Logical function registration waits until Chapter 9, and
-concrete four- or five-input builtins are not part of this chapter.
+You own those additions and the contextual invalid-bound error used by `clamp`. Keep the existing
+binary row loops intact. Logical function registration waits until Chapter 9, and concrete four-
+or five-input builtins are not part of this chapter.
 
 Chapter 6 has three cumulative supplied checkpoints. Copy the first one before editing:
 
@@ -58,10 +58,11 @@ length. The helper returns the batch length only after every check passes.
 
 Its expected types are a slice rather than a two-element array. The supplied test uses that fact
 directly: four valid two-row inputs return `Ok(2)`, while wrong arity, a later wrong type, and a
-later wrong length produce their existing `ExpressionError` categories. This does not require a
-four-input expression. It proves that validation itself is not binary-specific.
+later wrong length return contextual `anyhow` messages with expected and actual values plus the
+input index where applicable. This does not require a four-input expression. It proves that
+validation itself is not binary-specific.
 
-Publish only the validator from `src/lib.rs`; `ExpressionError` is already public:
+Publish only the validator from `src/lib.rs`:
 
 ```rust,ignore
 pub use operators::validate_expression_inputs;
@@ -92,12 +93,12 @@ built:
    once;
 3. read all three positions for each row;
 4. use `TryFrom` to promote the three present values inside that row; and
-5. append the typed result, a strict null, or the existing row-carrying scalar error.
+5. append the typed result, a strict null, or return an error with the function, row, and cause.
 
-Add `ScalarError::InvalidClampBounds` in `src/expression.rs`. The supplied witness uses it in a
-small mixed-family clamp with `i16`, `i32`, and `i64` inputs and an `i64` output. It also verifies
-that a null in any input skips the operation and that invalid bounds preserve the function name and
-failing row.
+Return the ordinary cause `invalid clamp bounds` when the lower and upper values are reversed or
+unordered. The supplied witness uses it in a small mixed-family clamp with `i16`, `i32`, and `i64`
+inputs and an `i64` output. It also verifies that a null in any input skips the operation and that
+invalid bounds preserve the function name and failing row.
 
 Copy and run the cumulative second checkpoint:
 
@@ -126,7 +127,7 @@ Clamp is the observable three-input path. Generalize the private
 TryFrom<B> + TryFrom<C>` with `Infallible` errors, then promote the value, lower bound, and upper
 bound to `O` inside each present row. Bounds are valid only when `lower.partial_cmp(&upper)` is
 `Less` or `Equal`. A lower bound greater than the upper bound, or an unordered floating-point
-comparison involving `NaN`, returns `InvalidClampBounds`.
+comparison involving `NaN`, returns the same contextual invalid-bound error.
 
 Choose the whole-batch kernel from the exact `(value, lower, upper, output)` physical tuple once,
 before evaluation begins. It validates the batch, converts the three columns once, and runs its

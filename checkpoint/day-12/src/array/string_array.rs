@@ -17,6 +17,48 @@ pub struct StringArrayBuilder {
     validity: BitVec,
 }
 
+/// A transactional view of the byte range for one pending string value.
+pub struct StringValueWriter<'a> {
+    data: &'a mut Vec<u8>,
+}
+
+impl StringValueWriter<'_> {
+    /// Append one UTF-8 fragment directly to the pending value.
+    pub fn push_str(&mut self, value: &str) {
+        self.data.extend_from_slice(value.as_bytes());
+    }
+}
+
+impl StringArrayBuilder {
+    /// Append a null row without changing the shared byte buffer.
+    pub fn push_null(&mut self) {
+        self.validity.push(false);
+        self.offsets.push(self.data.len());
+    }
+
+    /// Build one non-null value in place, publishing its row metadata only on success.
+    pub fn try_push_with<E>(
+        &mut self,
+        write: impl FnOnce(&mut StringValueWriter<'_>) -> Result<(), E>,
+    ) -> Result<(), E> {
+        let start = self.data.len();
+        let result = write(&mut StringValueWriter {
+            data: &mut self.data,
+        });
+        match result {
+            Ok(()) => {
+                self.validity.push(true);
+                self.offsets.push(self.data.len());
+                Ok(())
+            }
+            Err(error) => {
+                self.data.truncate(start);
+                Err(error)
+            }
+        }
+    }
+}
+
 impl StringArray {
     /// The contiguous UTF-8 byte buffer.
     pub fn data(&self) -> &[u8] {
@@ -68,13 +110,14 @@ impl ArrayBuilder for StringArrayBuilder {
 
     fn push(&mut self, value: Option<&str>) {
         match value {
-            Some(value) => {
-                self.data.extend_from_slice(value.as_bytes());
-                self.validity.push(true);
-            }
-            None => self.validity.push(false),
+            Some(value) => self
+                .try_push_with(|writer| {
+                    writer.push_str(value);
+                    Ok::<_, std::convert::Infallible>(())
+                })
+                .unwrap_or_else(|never| match never {}),
+            None => self.push_null(),
         }
-        self.offsets.push(self.data.len());
     }
 
     fn finish(self) -> Self::Array {
@@ -127,6 +170,36 @@ mod tests {
         assert_eq!(
             all_null.validity().iter().by_vals().collect::<Vec<_>>(),
             [false, false, false]
+        );
+    }
+
+    #[test]
+    fn transactional_writes_publish_once_or_roll_back_completely() {
+        use crate::{ArrayBuilder, StringArrayBuilder};
+
+        let mut builder = StringArrayBuilder::with_capacity(3);
+        builder
+            .try_push_with(|writer| {
+                writer.push_str("left");
+                writer.push_str("right");
+                Ok::<_, &'static str>(())
+            })
+            .unwrap();
+        let error = builder
+            .try_push_with(|writer| {
+                writer.push_str("partial");
+                Err("stop")
+            })
+            .unwrap_err();
+        assert_eq!(error, "stop");
+        builder.push_null();
+
+        let array = builder.finish();
+        assert_eq!(array.data(), b"leftright");
+        assert_eq!(array.offsets(), &[0, 9, 9]);
+        assert_eq!(
+            array.validity().iter().by_vals().collect::<Vec<_>>(),
+            [true, false]
         );
     }
 }

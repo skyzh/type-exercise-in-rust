@@ -23,7 +23,7 @@ The first run should fail on the missing static or erased batch future boundary.
 ## Checkpoint 1: return one static future
 
 - **Target:** `type-exercise-starter/src/expression.rs::evaluate_static`.
-- **Change:** return `impl Future<Output = Result<ArrayImpl, ExpressionError>> + Send + 'a` that
+- **Change:** return `impl Future<Output = anyhow::Result<ArrayImpl>> + Send + 'a` that
   borrows the expression and input slice.
 - **Preserve:** the body delegates to the existing synchronous batch evaluation exactly once.
 - **Run:** the Chapter 13 focused test.
@@ -44,7 +44,8 @@ The first run should fail on the missing static or erased batch future boundary.
 
 - **Target:** `type-exercise-starter/src/binder.rs::BoundExpression::evaluate_async`.
 - **Change:** delegate to the already-selected expression without repeating logical binding.
-- **Preserve:** arity, type, length, null, and scalar errors keep the same variants and precedence.
+- **Preserve:** arity, type, length, null, and operation errors keep the same contextual messages
+  and precedence.
 - **Run:** focused and cumulative tests.
 - **Passing means:** the planning boundary remains one-time and the batch kernel remains synchronous.
 

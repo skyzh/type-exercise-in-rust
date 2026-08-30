@@ -1,34 +1,33 @@
 #![allow(dead_code)]
 
-use crate::{ArrayImpl, ColumnViewImpl, ExpressionError, PhysicalType, TypeMismatch};
+use crate::{ArrayImpl, ColumnViewImpl, PhysicalType};
 
 fn validate_expression_inputs(
     inputs: &[ColumnViewImpl<'_>],
     expected_types: &[PhysicalType],
-) -> Result<usize, ExpressionError> {
+) -> anyhow::Result<usize> {
     if inputs.len() != expected_types.len() {
-        return Err(ExpressionError::InputArityMismatch {
-            expected: expected_types.len(),
-            actual: inputs.len(),
-        });
+        anyhow::bail!(
+            "input arity mismatch: expected {}, got {}",
+            expected_types.len(),
+            inputs.len()
+        );
     }
-    for (input, expected) in inputs.iter().zip(expected_types) {
+    for (input_index, (input, expected)) in inputs.iter().zip(expected_types).enumerate() {
         if input.physical_type() != *expected {
-            return Err(TypeMismatch {
-                expected: expected.clone(),
-                actual: input.physical_type(),
-            }
-            .into());
+            anyhow::bail!(
+                "input {input_index} type mismatch: expected {expected:?}, got {:?}",
+                input.physical_type()
+            );
         }
     }
     let len = inputs.first().map_or(0, ColumnViewImpl::len);
     for (input_index, input) in inputs.iter().enumerate().skip(1) {
         if input.len() != len {
-            return Err(ExpressionError::InputLengthMismatch {
-                expected: len,
-                actual: input.len(),
-                input_index,
-            });
+            anyhow::bail!(
+                "input {input_index} length mismatch: expected {len}, got {}",
+                input.len()
+            );
         }
     }
     Ok(len)
@@ -36,7 +35,7 @@ fn validate_expression_inputs(
 
 /// One monomorphized evaluator for a complete input batch.
 pub type BatchKernel<const N: usize> =
-    for<'a> fn(&BatchExpression<N>, &[ColumnViewImpl<'a>]) -> Result<ArrayImpl, ExpressionError>;
+    for<'a> fn(&BatchExpression<N>, &[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
 
 /// A fixed-arity expression whose only callable operation is vectorized.
 pub struct BatchExpression<const N: usize> {
@@ -61,7 +60,7 @@ impl<const N: usize> BatchExpression<N> {
         }
     }
 
-    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         validate_expression_inputs(inputs, &self.input_types)?;
         (self.kernel)(self, inputs)
     }
