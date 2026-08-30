@@ -195,7 +195,7 @@ cargo test -p type-exercise-starter chapter_5 --locked
 cargo test -p type-exercise-starter --lib --locked
 ```
 
-The 9 focused cases and 42 cumulative learner tests prove the whole Day 5 boundary:
+The 10 focused cases and 43 cumulative learner tests prove the whole Day 5 boundary:
 
 - the catalog contains exactly the approved ordered promotions and rejects every lossy pair;
 - arithmetic works in both mixed operand orders and builds the promoted physical family;
