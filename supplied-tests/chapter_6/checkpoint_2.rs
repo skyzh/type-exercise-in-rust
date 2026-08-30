@@ -1,6 +1,6 @@
 use crate::{
-    Array, ArrayImpl, ColumnViewImpl, ExpressionError, I16Array, I64Array, PhysicalType, ScalarError,
-    ScalarRefImpl, TypeMismatch, validate_expression_inputs,
+    Array, ArrayImpl, ColumnViewImpl, I16Array, I64Array, PhysicalType, ScalarRefImpl,
+    validate_expression_inputs,
 };
 use crate::operators::build_numeric_clamp_expression;
 
@@ -13,11 +13,10 @@ fn checkpoint_1_validates_arity_then_type_then_length_for_any_arity() {
         validate_expression_inputs(
             &wrong_arity,
             &[PhysicalType::Int32, PhysicalType::Int32],
-        ),
-        Err(ExpressionError::InputArityMismatch {
-            expected: 2,
-            actual: 1,
-        })
+        )
+        .unwrap_err()
+        .to_string(),
+        "input arity mismatch: expected 2, got 1"
     );
 
     let wrong_type_and_earlier_length = [
@@ -32,11 +31,10 @@ fn checkpoint_1_validates_arity_then_type_then_length_for_any_arity() {
         validate_expression_inputs(
             &wrong_type_and_earlier_length,
             &[const { PhysicalType::Int32 }; 6],
-        ),
-        Err(ExpressionError::TypeMismatch(TypeMismatch {
-            expected: PhysicalType::Int32,
-            actual: PhysicalType::String,
-        }))
+        )
+        .unwrap_err()
+        .to_string(),
+        "input 4 type mismatch: expected Int32, got String"
     );
 
     let columns = [
@@ -47,16 +45,14 @@ fn checkpoint_1_validates_arity_then_type_then_length_for_any_arity() {
         ColumnViewImpl::constant(ScalarRefImpl::Int32(5), 1),
     ];
     assert_eq!(
-        validate_expression_inputs(&columns[..4], &[const { PhysicalType::Int32 }; 4]),
-        Ok(2)
+        validate_expression_inputs(&columns[..4], &[const { PhysicalType::Int32 }; 4]).unwrap(),
+        2
     );
     assert_eq!(
-        validate_expression_inputs(&columns, &[const { PhysicalType::Int32 }; 5]),
-        Err(ExpressionError::InputLengthMismatch {
-            expected: 2,
-            actual: 1,
-            input_index: 4,
-        })
+        validate_expression_inputs(&columns, &[const { PhysicalType::Int32 }; 5])
+            .unwrap_err()
+            .to_string(),
+        "input 4 length mismatch: expected 2, got 1"
     );
 }
 
@@ -92,15 +88,14 @@ fn checkpoint_2_runs_one_mixed_typed_ternary_loop() {
 
     let invalid_uppers: ArrayImpl = I64Array::from_values(vec![20, 0]).into();
     assert_eq!(
-        expression.evaluate(&[
+        expression
+            .evaluate(&[
             ColumnViewImpl::constant(ScalarRefImpl::Int16(5), 2),
             ColumnViewImpl::constant(ScalarRefImpl::Int32(10), 2),
             ColumnViewImpl::array(&invalid_uppers),
-        ]),
-        Err(ExpressionError::ScalarEvaluation {
-            function: "mixed_clamp",
-            row: 1,
-            error: ScalarError::InvalidClampBounds,
-        })
+            ])
+            .unwrap_err()
+            .to_string(),
+        "function `mixed_clamp` failed at row 1: invalid clamp bounds"
     );
 }

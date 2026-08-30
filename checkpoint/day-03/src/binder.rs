@@ -8,7 +8,7 @@
 //     /* pub fn input_types(&self) -> &[DataType] */
 //     /* pub fn output_type(&self) -> DataType */
 //     /* pub fn physical_name(&self) -> &str */
-//     /* pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> */
+//     /* pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> */
 // }
 // pub struct FunctionRegistry { /* registered factories */ }
 // impl FunctionRegistry {
@@ -35,7 +35,7 @@
 //     pub fn evaluate_with_loop(
 //         &self,
 //         inputs: &[ColumnViewImpl<'_>],
-//     ) -> Result<(ArrayImpl, PrimitiveLoop), ExpressionError>;
+//     ) -> anyhow::Result<(ArrayImpl, PrimitiveLoop)>;
 // }
 //
 //! Day 12, checkpoint 3: require registered factories to be Send + Sync + 'static here.

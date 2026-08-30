@@ -1,6 +1,4 @@
 use std::any::Any;
-use std::error::Error;
-use std::fmt::{Display, Formatter};
 use std::future::Future;
 use std::pin::Pin;
 
@@ -9,94 +7,6 @@ use crate::{
     Array, ArrayBuilder, ArrayImpl, ColumnView, ColumnViewImpl, I32Array, Nullability,
     PhysicalType, Scalar, ScalarRefImpl, TypeMismatch,
 };
-
-/// A checked failure at an expression boundary.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ExpressionError {
-    TypeMismatch(TypeMismatch),
-    InputArityMismatch {
-        expected: usize,
-        actual: usize,
-    },
-    InputLengthMismatch {
-        expected: usize,
-        actual: usize,
-        input_index: usize,
-    },
-    ScalarEvaluation {
-        function: &'static str,
-        row: usize,
-        error: ScalarError,
-    },
-}
-
-/// A checked failure produced by one non-null scalar evaluation.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ScalarError {
-    DivisionByZero,
-    DivisionOverflow,
-    InvalidClampBounds,
-}
-
-impl Display for ScalarError {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::DivisionByZero => formatter.write_str("division by zero"),
-            Self::DivisionOverflow => formatter.write_str("signed integer division overflow"),
-            Self::InvalidClampBounds => formatter.write_str("invalid clamp bounds"),
-        }
-    }
-}
-
-impl Display for ExpressionError {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::TypeMismatch(error) => Display::fmt(error, formatter),
-            Self::InputArityMismatch { expected, actual } => {
-                write!(
-                    formatter,
-                    "input arity mismatch: expected {expected}, got {actual}"
-                )
-            }
-            Self::InputLengthMismatch {
-                expected,
-                actual,
-                input_index,
-            } => {
-                write!(
-                    formatter,
-                    "input {input_index} length mismatch: expected {expected}, got {actual}"
-                )
-            }
-            Self::ScalarEvaluation {
-                function,
-                row,
-                error,
-            } => write!(
-                formatter,
-                "function `{function}` failed at row {row}: {error}"
-            ),
-        }
-    }
-}
-
-impl Error for ExpressionError {}
-
-impl From<TypeMismatch> for ExpressionError {
-    fn from(error: TypeMismatch) -> Self {
-        Self::TypeMismatch(error)
-    }
-}
-
-/// The loop selected for one binary evaluation.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum PrimitiveLoop {
-    General,
-    ArrayArray,
-    ArrayConstant,
-    ConstantArray,
-    ConstantConstant,
-}
 
 /// A runtime-erased expression with discoverable physical metadata.
 pub trait Expression: Any + Send + Sync {
@@ -116,26 +26,25 @@ pub trait Expression: Any + Send + Sync {
             Nullability::Nullable
         }
     }
-    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError>;
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl>;
     fn evaluate_with_loop(
         &self,
         inputs: &[ColumnViewImpl<'_>],
-    ) -> Result<(ArrayImpl, PrimitiveLoop), ExpressionError> {
+    ) -> anyhow::Result<(ArrayImpl, PrimitiveLoop)> {
         self.evaluate(inputs)
             .map(|output| (output, PrimitiveLoop::General))
     }
 }
 
 /// One erased future for one complete batch evaluation.
-pub type BatchFuture<'a> =
-    Pin<Box<dyn Future<Output = Result<ArrayImpl, ExpressionError>> + Send + 'a>>;
+pub type BatchFuture<'a> = Pin<Box<dyn Future<Output = anyhow::Result<ArrayImpl>> + Send + 'a>>;
 
 /// Evaluate one borrowed batch while keeping the future type compiler-known.
 #[allow(clippy::manual_async_fn)]
 pub fn evaluate_static<'a, E>(
     expression: &'a E,
     inputs: &'a [ColumnViewImpl<'a>],
-) -> impl Future<Output = Result<ArrayImpl, ExpressionError>> + Send + 'a
+) -> impl Future<Output = anyhow::Result<ArrayImpl>> + Send + 'a
 where
     E: Expression + ?Sized,
 {
@@ -164,11 +73,21 @@ impl AsyncExpression for AsyncExpressionAdapter {
     }
 }
 
+/// The loop selected for one binary evaluation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PrimitiveLoop {
+    General,
+    ArrayArray,
+    ArrayConstant,
+    ConstantArray,
+    ConstantConstant,
+}
+
 /// One typed binary scalar function that can be lifted over nullable columns.
 pub trait BinaryScalarFunction: Send + Sync + 'static {
     type Left: Scalar;
     type Right: Scalar;
-    type Output: Scalar;
+    type Output: Scalar + Copy;
 
     fn evaluate<'a>(
         &self,
@@ -191,29 +110,12 @@ impl BinaryScalarFunction for I32Add {
     }
 }
 
-/// Concatenate two borrowed strings into one owned output value.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct StringConcat;
-
-impl BinaryScalarFunction for StringConcat {
-    type Left = String;
-    type Right = String;
-    type Output = String;
-
-    fn evaluate<'a>(&self, left: &'a str, right: &'a str) -> String {
-        let mut output = String::with_capacity(left.len() + right.len());
-        output.push_str(left);
-        output.push_str(right);
-        output
-    }
-}
-
 /// Convert erased inputs once, then apply a typed scalar function row by row.
 pub fn evaluate_binary<'a, F>(
     function: &F,
     left: ColumnViewImpl<'a>,
     right: ColumnViewImpl<'a>,
-) -> Result<ArrayImpl, ExpressionError>
+) -> anyhow::Result<ArrayImpl>
 where
     F: BinaryScalarFunction,
     <F::Left as Scalar>::ArrayType: 'a,
@@ -223,8 +125,20 @@ where
     <F::Left as Scalar>::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     <F::Right as Scalar>::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
 {
-    let left = ColumnView::<F::Left>::try_from(left)?;
-    let right = ColumnView::<F::Right>::try_from(right)?;
+    let left = ColumnView::<F::Left>::try_from(left).map_err(|error| {
+        anyhow::anyhow!(
+            "input 0 type mismatch: expected {:?}, got {:?}",
+            error.expected,
+            error.actual
+        )
+    })?;
+    let right = ColumnView::<F::Right>::try_from(right).map_err(|error| {
+        anyhow::anyhow!(
+            "input 1 type mismatch: expected {:?}, got {:?}",
+            error.expected,
+            error.actual
+        )
+    })?;
     evaluate_typed_binary(function, left, right)
 }
 
@@ -232,16 +146,16 @@ fn evaluate_typed_binary<'a, F>(
     function: &F,
     left: ColumnView<'a, F::Left>,
     right: ColumnView<'a, F::Right>,
-) -> Result<ArrayImpl, ExpressionError>
+) -> anyhow::Result<ArrayImpl>
 where
     F: BinaryScalarFunction,
 {
     if left.len() != right.len() {
-        return Err(ExpressionError::InputLengthMismatch {
-            expected: left.len(),
-            actual: right.len(),
-            input_index: 1,
-        });
+        anyhow::bail!(
+            "input 1 length mismatch: expected {}, got {}",
+            left.len(),
+            right.len()
+        );
     }
 
     let mut output =
@@ -278,30 +192,28 @@ where
     pub fn evaluate_with_loop(
         &self,
         inputs: &[ColumnViewImpl<'_>],
-    ) -> Result<(ArrayImpl, PrimitiveLoop), ExpressionError> {
+    ) -> anyhow::Result<(ArrayImpl, PrimitiveLoop)> {
         if inputs.len() != self.input_types.len() {
-            return Err(ExpressionError::InputArityMismatch {
-                expected: self.input_types.len(),
-                actual: inputs.len(),
-            });
+            anyhow::bail!(
+                "input arity mismatch: expected {}, got {}",
+                self.input_types.len(),
+                inputs.len()
+            );
         }
-
-        for (input, expected) in inputs.iter().zip(&self.input_types) {
+        for (input_index, (input, expected)) in inputs.iter().zip(&self.input_types).enumerate() {
             if input.physical_type() != *expected {
-                return Err(TypeMismatch {
-                    expected: expected.clone(),
-                    actual: input.physical_type(),
-                }
-                .into());
+                anyhow::bail!(
+                    "input {input_index} type mismatch: expected {expected:?}, got {:?}",
+                    input.physical_type()
+                );
             }
         }
-
         if inputs[0].len() != inputs[1].len() {
-            return Err(ExpressionError::InputLengthMismatch {
-                expected: inputs[0].len(),
-                actual: inputs[1].len(),
-                input_index: 1,
-            });
+            anyhow::bail!(
+                "input 1 length mismatch: expected {}, got {}",
+                inputs[0].len(),
+                inputs[1].len()
+            );
         }
 
         let Some(left) = inputs[0].as_dense_i32() else {
@@ -376,23 +288,22 @@ where
         PhysicalType::Int32
     }
 
-    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         self.evaluate_with_loop(inputs).map(|(output, _)| output)
     }
 
     fn evaluate_with_loop(
         &self,
         inputs: &[ColumnViewImpl<'_>],
-    ) -> Result<(ArrayImpl, PrimitiveLoop), ExpressionError> {
+    ) -> anyhow::Result<(ArrayImpl, PrimitiveLoop)> {
         PrimitiveBinaryExpression::evaluate_with_loop(self, inputs)
     }
 }
 
 /// Adapt one typed binary scalar function to the runtime expression interface.
-pub type BinaryBatchKernel =
-    for<'a> fn(&[ColumnViewImpl<'a>]) -> Result<ArrayImpl, ExpressionError>;
+pub type BinaryBatchKernel = for<'a> fn(&[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
 pub type BinaryLoopKernel =
-    for<'a> fn(&[ColumnViewImpl<'a>]) -> Result<(ArrayImpl, PrimitiveLoop), ExpressionError>;
+    for<'a> fn(&[ColumnViewImpl<'a>]) -> anyhow::Result<(ArrayImpl, PrimitiveLoop)>;
 
 pub struct BinaryExpression {
     name: &'static str,
@@ -448,52 +359,52 @@ impl Expression for BinaryExpression {
         self.output_type.clone()
     }
 
-    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         self.evaluate_with_loop(inputs).map(|(output, _)| output)
     }
 
     fn evaluate_with_loop(
         &self,
         inputs: &[ColumnViewImpl<'_>],
-    ) -> Result<(ArrayImpl, PrimitiveLoop), ExpressionError> {
+    ) -> anyhow::Result<(ArrayImpl, PrimitiveLoop)> {
         if inputs.len() != self.arity() {
-            return Err(ExpressionError::InputArityMismatch {
-                expected: self.arity(),
-                actual: inputs.len(),
-            });
+            anyhow::bail!(
+                "input arity mismatch: expected {}, got {}",
+                self.arity(),
+                inputs.len()
+            );
         }
-        for (input, expected) in inputs.iter().zip(&self.input_types) {
+        for (input_index, (input, expected)) in inputs.iter().zip(&self.input_types).enumerate() {
             if input.physical_type() != *expected {
-                return Err(TypeMismatch {
-                    expected: expected.clone(),
-                    actual: input.physical_type(),
-                }
-                .into());
+                anyhow::bail!(
+                    "input {input_index} type mismatch: expected {expected:?}, got {:?}",
+                    input.physical_type()
+                );
             }
         }
         if inputs[0].len() != inputs[1].len() {
-            return Err(ExpressionError::InputLengthMismatch {
-                expected: inputs[0].len(),
-                actual: inputs[1].len(),
-                input_index: 1,
-            });
+            anyhow::bail!(
+                "input 1 length mismatch: expected {}, got {}",
+                inputs[0].len(),
+                inputs[1].len()
+            );
         }
         let (output, selected_loop) = match self.loop_kernel {
             Some(kernel) => kernel(inputs),
             None => (self.kernel)(inputs).map(|output| (output, PrimitiveLoop::General)),
         }?;
         if output.physical_type() != self.output_type {
-            return Err(TypeMismatch {
-                expected: self.output_type.clone(),
-                actual: output.physical_type(),
-            }
-            .into());
+            anyhow::bail!(
+                "output type mismatch: expected {:?}, got {:?}",
+                self.output_type,
+                output.physical_type()
+            );
         }
         Ok((output, selected_loop))
     }
 }
 
-fn evaluate_i32_add_batch(inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+fn evaluate_i32_add_batch(inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
     let left = ColumnView::<i32>::try_from(inputs[0].clone())?;
     let right = ColumnView::<i32>::try_from(inputs[1].clone())?;
     let mut output = <crate::I32Array as Array>::Builder::with_capacity(left.len());
@@ -509,7 +420,7 @@ fn evaluate_i32_add_batch(inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, Ex
 
 fn evaluate_i32_add_batch_with_loop(
     inputs: &[ColumnViewImpl<'_>],
-) -> Result<(ArrayImpl, PrimitiveLoop), ExpressionError> {
+) -> anyhow::Result<(ArrayImpl, PrimitiveLoop)> {
     let Some(left) = inputs[0].as_dense_i32() else {
         return evaluate_i32_add_batch(inputs).map(|output| (output, PrimitiveLoop::General));
     };
@@ -556,20 +467,19 @@ fn evaluate_i32_add_batch_with_loop(
     Ok((crate::I32Array::from_values(values).into(), selected_loop))
 }
 
-fn evaluate_string_concat_batch(
-    inputs: &[ColumnViewImpl<'_>],
-) -> Result<ArrayImpl, ExpressionError> {
+fn evaluate_string_concat_batch(inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
     let left = ColumnView::<String>::try_from(inputs[0].clone())?;
     let right = ColumnView::<String>::try_from(inputs[1].clone())?;
     let mut output = <crate::StringArray as Array>::Builder::with_capacity(left.len());
     for row in 0..left.len() {
-        let value = left.get(row).zip(right.get(row)).map(|(left, right)| {
-            let mut output = String::with_capacity(left.len() + right.len());
-            output.push_str(left);
-            output.push_str(right);
-            output
-        });
-        output.push(value.as_deref());
+        match (left.get(row), right.get(row)) {
+            (Some(left), Some(right)) => output.try_push_with(|writer| {
+                writer.push_str(left);
+                writer.push_str(right);
+                Ok::<_, std::convert::Infallible>(())
+            })?,
+            _ => output.push_null(),
+        }
     }
     Ok(output.finish().into())
 }

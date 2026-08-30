@@ -4,7 +4,7 @@ use std::time::Duration;
 use criterion::{Criterion, criterion_group, criterion_main};
 use type_exercise::{
     Array, ArrayBuilder, ArrayImpl, BinaryExpression, ColumnView, ColumnViewImpl, Expression,
-    ExpressionError, I32Add, I32Array, PhysicalType, PrimitiveBinaryExpression, ScalarRefImpl,
+    I32Add, I32Array, PhysicalType, PrimitiveBinaryExpression, ScalarRefImpl,
 };
 
 const ROWS: usize = 65_536;
@@ -32,7 +32,7 @@ fn handwritten_general_add(inputs: &[ColumnViewImpl<'_>]) -> ArrayImpl {
     output.finish().into()
 }
 
-fn general_add_batch(inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+fn general_add_batch(inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
     Ok(handwritten_general_add(inputs))
 }
 

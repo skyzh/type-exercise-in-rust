@@ -1,8 +1,7 @@
 //! Day 7, checkpoint 1: three-valued Boolean logic.
 
 use crate::{
-    ArrayBuilder, ArrayImpl, BoolArrayBuilder, ColumnView, ColumnViewImpl, ExpressionError,
-    PhysicalType, Scalar, TypeMismatch,
+    ArrayBuilder, ArrayImpl, BoolArrayBuilder, ColumnView, ColumnViewImpl, PhysicalType, Scalar,
 };
 
 /// How null inputs reach the scalar Boolean function.
@@ -231,24 +230,24 @@ impl BooleanExpression {
     }
 
     /// Strict concrete evaluation of one three-valued Boolean operator.
-    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         let arity = match self.operator {
             BooleanOperator::And | BooleanOperator::Or => 2,
             BooleanOperator::Not => 1,
         };
         if inputs.len() != arity {
-            return Err(ExpressionError::InputArityMismatch {
-                expected: arity,
-                actual: inputs.len(),
-            });
+            anyhow::bail!(
+                "input arity mismatch: expected {arity}, got {}",
+                inputs.len()
+            );
         }
-        for input in inputs {
+        for (input_index, input) in inputs.iter().enumerate() {
             if input.physical_type() != PhysicalType::Bool {
-                return Err(TypeMismatch {
-                    expected: PhysicalType::Bool,
-                    actual: input.physical_type(),
-                }
-                .into());
+                anyhow::bail!(
+                    "input {input_index} type mismatch: expected {:?}, got {:?}",
+                    PhysicalType::Bool,
+                    input.physical_type()
+                );
             }
         }
         // Typed view conversion happens before length validation, so a wrong
@@ -263,11 +262,10 @@ impl BooleanExpression {
         let len = inputs.first().map_or(0, ColumnViewImpl::len);
         for (input_index, input) in inputs.iter().enumerate().skip(1) {
             if input.len() != len {
-                return Err(ExpressionError::InputLengthMismatch {
-                    expected: len,
-                    actual: input.len(),
-                    input_index,
-                });
+                anyhow::bail!(
+                    "input {input_index} length mismatch: expected {len}, got {}",
+                    input.len()
+                );
             }
         }
 
@@ -318,7 +316,8 @@ mod tests {
             ])
             .unwrap_err();
         assert!(
-            matches!(err, ExpressionError::TypeMismatch(_)),
+            err.to_string()
+                .contains("input 1 type mismatch: expected Bool, got Int32"),
             "expected a type-category error before any length check, got {err:?}"
         );
     }

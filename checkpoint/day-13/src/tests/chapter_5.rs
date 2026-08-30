@@ -8,6 +8,47 @@ use crate::{
 
 use crate::operators::{build_numeric_binary_expression, build_numeric_comparison_expression};
 
+#[test]
+fn arithmetic_selects_one_infallible_or_fallible_batch_kernel() {
+    let source = include_str!("../operators.rs");
+    let expression = source
+        .split("pub(crate) struct NumericBinaryExpression")
+        .nth(1)
+        .unwrap()
+        .split("pub(crate) struct NumericComparisonExpression")
+        .next()
+        .unwrap();
+    assert!(!expression.contains("operator: ArithmeticOperator"));
+
+    let selector = source
+        .split("fn numeric_binary_kernel")
+        .nth(1)
+        .unwrap()
+        .split("fn evaluate_numeric_comparison")
+        .next()
+        .unwrap();
+    assert!(selector.contains("ArithmeticOperator::Add => evaluate_numeric_add"));
+    assert!(selector.contains("ArithmeticOperator::Divide => evaluate_numeric_divide"));
+
+    let infallible = source
+        .split("fn evaluate_numeric_infallible")
+        .nth(1)
+        .unwrap()
+        .split("fn evaluate_numeric_add")
+        .next()
+        .unwrap();
+    assert!(!infallible.contains("checked_divide"));
+
+    let divide = source
+        .split("fn evaluate_numeric_divide")
+        .nth(1)
+        .unwrap()
+        .split("fn numeric_binary_kernel")
+        .next()
+        .unwrap();
+    assert!(divide.contains("checked_divide"));
+}
+
 const EXPECTED_NUMERIC_PROMOTION_MATRIX: &[(DataType, DataType, Option<DataType>)] = &[
     (
         DataType::SmallInt,

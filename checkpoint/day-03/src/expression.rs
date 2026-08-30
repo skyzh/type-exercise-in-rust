@@ -1,22 +1,13 @@
 //! Learner-owned expression checkpoints.
 //!
-//! Day 4, checkpoint 1: define scalar work, the first binary evaluator, and the completed public
-//! error types required by the library compile gate here.
+//! Day 4, checkpoint 1: define scalar work and the first binary evaluator. Use contextual
+//! `anyhow::Result` errors at the public boundary.
 // pub trait BinaryScalarFunction { /* associated scalar families and one row call */ }
 // pub struct I32Add;
 // pub fn evaluate_binary<F: BinaryScalarFunction>(/* inputs */) -> /* output */;
-//
-// pub enum ScalarError { DivisionByZero, DivisionOverflow }
-// pub enum ExpressionError {
-//     TypeMismatch(TypeMismatch),
-//     InputArityMismatch { expected: usize, actual: usize },
-//     InputLengthMismatch { expected: usize, actual: usize, input_index: usize },
-//     ScalarEvaluation { function: &'static str, row: usize, error: ScalarError },
-// }
-//! The exact `Display` sentences remain your choice.
 //!
-//! Day 4, checkpoint 2: add the checked scalar hooks and shells. Their tests begin exercising the
-//! completed error contract's arity and scalar-evaluation cases.
+//! Day 4, checkpoint 2: add the fixed-width scalar adapter and whole-batch shells. Their tests
+//! exercise contextual arity, type, length, and scalar-evaluation errors.
 //
 //! Day 8, checkpoint 1: add the object-safe runtime expression boundary here.
 // pub trait Expression: Any + Send + Sync {
@@ -24,7 +15,7 @@
 //     /* fn arity(&self) -> usize */
 //     /* fn input_types(&self) -> &[PhysicalType] */
 //     /* fn output_type(&self) -> PhysicalType */
-//     /* fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> */
+//     /* fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> */
 // }
 // pub type BinaryBatchKernel = /* one function pointer over a complete borrowed input batch */;
 // pub struct BinaryExpression { /* physical metadata plus one whole-batch kernel */ }
@@ -45,7 +36,7 @@
 //     pub fn evaluate_with_loop(
 //         &self,
 //         inputs: &[ColumnViewImpl<'_>],
-//     ) -> Result<(ArrayImpl, PrimitiveLoop), ExpressionError>;
+//     ) -> anyhow::Result<(ArrayImpl, PrimitiveLoop)>;
 // }
 //
 //! Day 12, checkpoint 2: add checked Any recovery and downcast helpers to the erased boundary here.
@@ -53,10 +44,10 @@
 //
 //! Day 13, checkpoint 1: add one static batch future here.
 // pub fn evaluate_static<'a, E>(expression: &'a E, inputs: &'a [ColumnViewImpl<'a>])
-//     -> impl Future<Output = Result<ArrayImpl, ExpressionError>> + Send + 'a;
+//     -> impl Future<Output = anyhow::Result<ArrayImpl>> + Send + 'a;
 //
 //! Day 13, checkpoint 2: add the object-safe async adapter here.
-// pub type BatchFuture<'a> = Pin<Box<dyn Future<Output = Result<ArrayImpl, ExpressionError>> + Send + 'a>>;
+// pub type BatchFuture<'a> = Pin<Box<dyn Future<Output = anyhow::Result<ArrayImpl>> + Send + 'a>>;
 // pub trait AsyncExpression: Send + Sync {
 //     fn evaluate_async<'a>(&'a self, inputs: &'a [ColumnViewImpl<'a>]) -> BatchFuture<'a>;
 // }

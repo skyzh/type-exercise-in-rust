@@ -1,86 +1,11 @@
-use std::error::Error;
-use std::fmt::{Display, Formatter};
-
 use crate::{
     Array, ArrayBuilder, ArrayImpl, ColumnView, ColumnViewImpl, Scalar, ScalarRefImpl, TypeMismatch,
 };
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ExpressionError {
-    TypeMismatch(TypeMismatch),
-    InputArityMismatch {
-        expected: usize,
-        actual: usize,
-    },
-    InputLengthMismatch {
-        expected: usize,
-        actual: usize,
-        input_index: usize,
-    },
-    ScalarEvaluation {
-        function: &'static str,
-        row: usize,
-        error: ScalarError,
-    },
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ScalarError {
-    DivisionByZero,
-    DivisionOverflow,
-}
-
-impl Display for ScalarError {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::DivisionByZero => formatter.write_str("division by zero"),
-            Self::DivisionOverflow => formatter.write_str("signed integer division overflow"),
-        }
-    }
-}
-
-impl Display for ExpressionError {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::TypeMismatch(error) => Display::fmt(error, formatter),
-            Self::InputArityMismatch { expected, actual } => {
-                write!(
-                    formatter,
-                    "input arity mismatch: expected {expected}, got {actual}"
-                )
-            }
-            Self::InputLengthMismatch {
-                expected,
-                actual,
-                input_index,
-            } => write!(
-                formatter,
-                "input {input_index} length mismatch: expected {expected}, got {actual}"
-            ),
-            Self::ScalarEvaluation {
-                function,
-                row,
-                error,
-            } => write!(
-                formatter,
-                "function `{function}` failed at row {row}: {error}"
-            ),
-        }
-    }
-}
-
-impl Error for ExpressionError {}
-
-impl From<TypeMismatch> for ExpressionError {
-    fn from(error: TypeMismatch) -> Self {
-        Self::TypeMismatch(error)
-    }
-}
-
 pub trait BinaryScalarFunction {
     type Left: Scalar;
     type Right: Scalar;
-    type Output: Scalar;
+    type Output: Scalar + Copy;
 
     fn evaluate<'a>(
         &self,
@@ -106,7 +31,7 @@ pub fn evaluate_binary<'a, F>(
     function: &F,
     left: ColumnViewImpl<'a>,
     right: ColumnViewImpl<'a>,
-) -> Result<ArrayImpl, ExpressionError>
+) -> anyhow::Result<ArrayImpl>
 where
     F: BinaryScalarFunction,
     <F::Left as Scalar>::ArrayType: 'a,
@@ -116,14 +41,26 @@ where
     <F::Left as Scalar>::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     <F::Right as Scalar>::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
 {
-    let left = ColumnView::<F::Left>::try_from(left)?;
-    let right = ColumnView::<F::Right>::try_from(right)?;
+    let left = ColumnView::<F::Left>::try_from(left).map_err(|error| {
+        anyhow::anyhow!(
+            "input 0 type mismatch: expected {:?}, got {:?}",
+            error.expected,
+            error.actual
+        )
+    })?;
+    let right = ColumnView::<F::Right>::try_from(right).map_err(|error| {
+        anyhow::anyhow!(
+            "input 1 type mismatch: expected {:?}, got {:?}",
+            error.expected,
+            error.actual
+        )
+    })?;
     if left.len() != right.len() {
-        return Err(ExpressionError::InputLengthMismatch {
-            expected: left.len(),
-            actual: right.len(),
-            input_index: 1,
-        });
+        anyhow::bail!(
+            "input 1 length mismatch: expected {}, got {}",
+            left.len(),
+            right.len()
+        );
     }
 
     let mut output =

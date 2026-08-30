@@ -6,7 +6,7 @@ use crate::Nullability;
 
 use crate::{
     ArithmeticOperator, ArrayImpl, BooleanOperator, ColumnViewImpl, ComparisonOperator, DataType,
-    Expression, ExpressionError, PhysicalType, PrimitiveLoop, build_bool_comparison_expression,
+    Expression, PhysicalType, PrimitiveLoop, build_bool_comparison_expression,
     build_boolean_expression, build_builtin_expression, build_numeric_binary_expression,
     build_numeric_clamp_expression, build_numeric_comparison_expression,
     build_numeric_neg_expression, build_string_comparison_expression,
@@ -128,14 +128,14 @@ impl BoundExpression {
         self.expression.output_nullability(inputs)
     }
 
-    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         self.expression.evaluate(inputs)
     }
 
     pub fn evaluate_with_loop(
         &self,
         inputs: &[ColumnViewImpl<'_>],
-    ) -> Result<(ArrayImpl, PrimitiveLoop), ExpressionError> {
+    ) -> anyhow::Result<(ArrayImpl, PrimitiveLoop)> {
         self.expression.evaluate_with_loop(inputs)
     }
 }

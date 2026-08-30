@@ -1,7 +1,7 @@
 use crate::{
-    Array, ArrayImpl, ColumnViewImpl, DataType, Expression, ExpressionError, FunctionRegistry,
-    I32Add, I32Array, Nullability, PhysicalType, PrimitiveBinaryExpression, PrimitiveLoop,
-    ScalarRefImpl, StringArray, TypeMismatch, build_builtin_expression,
+    Array, ArrayImpl, ColumnViewImpl, DataType, Expression, FunctionRegistry, I32Add, I32Array,
+    Nullability, PhysicalType, PrimitiveBinaryExpression, PrimitiveLoop, ScalarRefImpl,
+    StringArray, build_builtin_expression,
 };
 
 fn i32_values(array: &ArrayImpl) -> Vec<Option<i32>> {
@@ -166,42 +166,41 @@ fn preserves_runtime_type_arity_and_length_errors() {
     let strings: ArrayImpl = StringArray::from_slice(&[Some("wrong")]).into();
 
     assert_eq!(
-        expression.evaluate(&[ColumnViewImpl::array(&integers)]),
-        Err(ExpressionError::InputArityMismatch {
-            expected: 2,
-            actual: 1,
-        })
+        expression
+            .evaluate(&[ColumnViewImpl::array(&integers)])
+            .unwrap_err()
+            .to_string(),
+        "input arity mismatch: expected 2, got 1"
     );
     assert_eq!(
-        expression.evaluate(&[
-            ColumnViewImpl::array(&strings),
-            ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 2),
-        ]),
-        Err(ExpressionError::TypeMismatch(TypeMismatch {
-            expected: PhysicalType::Int32,
-            actual: PhysicalType::String,
-        }))
+        expression
+            .evaluate(&[
+                ColumnViewImpl::array(&strings),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 2),
+            ])
+            .unwrap_err()
+            .to_string(),
+        "input 0 type mismatch: expected Int32, got String"
     );
     assert_eq!(
-        expression.evaluate(&[
-            ColumnViewImpl::array(&integers),
-            ColumnViewImpl::array(&strings),
-        ]),
-        Err(ExpressionError::TypeMismatch(TypeMismatch {
-            expected: PhysicalType::Int32,
-            actual: PhysicalType::String,
-        }))
+        expression
+            .evaluate(&[
+                ColumnViewImpl::array(&integers),
+                ColumnViewImpl::array(&strings),
+            ])
+            .unwrap_err()
+            .to_string(),
+        "input 1 type mismatch: expected Int32, got String"
     );
     assert_eq!(
-        expression.evaluate(&[
-            ColumnViewImpl::try_non_null_array(&integers).unwrap(),
-            ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
-        ]),
-        Err(ExpressionError::InputLengthMismatch {
-            expected: 2,
-            actual: 1,
-            input_index: 1,
-        })
+        expression
+            .evaluate(&[
+                ColumnViewImpl::try_non_null_array(&integers).unwrap(),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
+            ])
+            .unwrap_err()
+            .to_string(),
+        "input 1 length mismatch: expected 2, got 1"
     );
 }
 

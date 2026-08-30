@@ -6,9 +6,9 @@ use std::task::{Context, Poll, Waker};
 
 use crate::{
     ArithmeticOperator, Array, ArrayImpl, AsyncExpression, AsyncExpressionAdapter, BatchFuture,
-    BoundExpression, ColumnViewImpl, DataType, Expression, ExpressionError, FunctionRegistry,
-    I32Array, PhysicalType, ScalarError, ScalarRefImpl, StringArray, TypeMismatch,
-    build_builtin_expression, build_numeric_binary_expression, evaluate_static,
+    BoundExpression, ColumnViewImpl, DataType, Expression, FunctionRegistry, I32Array,
+    PhysicalType, ScalarRefImpl, StringArray, build_builtin_expression,
+    build_numeric_binary_expression, evaluate_static,
 };
 
 fn poll_ready<F: Future + ?Sized>(mut future: Pin<&mut F>) -> F::Output {
@@ -26,7 +26,7 @@ fn assert_send_sync<T: Send + Sync>() {}
 fn borrowed_static_future<'a>(
     expression: &'a dyn Expression,
     inputs: &'a [ColumnViewImpl<'a>],
-) -> impl Future<Output = Result<ArrayImpl, ExpressionError>> + Send + 'a {
+) -> impl Future<Output = anyhow::Result<ArrayImpl>> + Send + 'a {
     evaluate_static(expression, inputs)
 }
 
@@ -112,7 +112,7 @@ impl Expression for CountingExpression {
         self.inner.output_type()
     }
 
-    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         self.inner.evaluate(inputs)
     }
@@ -214,21 +214,29 @@ fn every_async_path_preserves_the_exact_scalar_evaluation_error() {
         ColumnViewImpl::constant(ScalarRefImpl::Int32(4), 1),
         ColumnViewImpl::constant(ScalarRefImpl::Int32(0), 1),
     ];
-    let expected = Err(ExpressionError::ScalarEvaluation {
-        function: "scalar_failing",
-        row: 0,
-        error: ScalarError::DivisionByZero,
-    });
+    let expected = "function `scalar_failing` failed at row 0: division by zero";
 
-    assert_eq!(scalar_failing_expression().evaluate(&inputs), expected);
+    assert_eq!(
+        scalar_failing_expression()
+            .evaluate(&inputs)
+            .unwrap_err()
+            .to_string(),
+        expected
+    );
 
     let static_expression = scalar_failing_expression();
     let mut static_future = std::pin::pin!(evaluate_static(static_expression.as_ref(), &inputs));
-    assert_eq!(poll_ready(static_future.as_mut()), expected);
+    assert_eq!(
+        poll_ready(static_future.as_mut()).unwrap_err().to_string(),
+        expected
+    );
 
     let erased = AsyncExpressionAdapter::new(scalar_failing_expression());
     let mut erased_future = erased.evaluate_async(&inputs);
-    assert_eq!(poll_ready(erased_future.as_mut()), expected);
+    assert_eq!(
+        poll_ready(erased_future.as_mut()).unwrap_err().to_string(),
+        expected
+    );
 
     let mut registry = FunctionRegistry::default();
     registry.register_binary("scalar_failing", |left, right| {
@@ -242,7 +250,10 @@ fn every_async_path_preserves_the_exact_scalar_evaluation_error() {
         .bind_binary("scalar_failing", DataType::Integer, DataType::Integer)
         .unwrap();
     let mut bound_future = bound.evaluate_async(&inputs);
-    assert_eq!(poll_ready(bound_future.as_mut()), expected);
+    assert_eq!(
+        poll_ready(bound_future.as_mut()).unwrap_err().to_string(),
+        expected
+    );
 }
 
 #[test]
@@ -251,11 +262,8 @@ fn async_boundary_preserves_arity_type_and_length_errors() {
     let empty = [];
     let mut future = expression.evaluate_async(&empty);
     assert_eq!(
-        poll_ready(future.as_mut()),
-        Err(ExpressionError::InputArityMismatch {
-            expected: 2,
-            actual: 0,
-        })
+        poll_ready(future.as_mut()).unwrap_err().to_string(),
+        "input arity mismatch: expected 2, got 0"
     );
 
     let strings: ArrayImpl = StringArray::from_slice(&[Some("wrong"), Some("type")]).into();
@@ -265,11 +273,8 @@ fn async_boundary_preserves_arity_type_and_length_errors() {
     ];
     let mut future = expression.evaluate_async(&wrong_type);
     assert_eq!(
-        poll_ready(future.as_mut()),
-        Err(ExpressionError::TypeMismatch(TypeMismatch {
-            expected: PhysicalType::Int32,
-            actual: PhysicalType::String,
-        }))
+        poll_ready(future.as_mut()).unwrap_err().to_string(),
+        "input 0 type mismatch: expected Int32, got String"
     );
 
     let integers: ArrayImpl = I32Array::from_values(vec![1, 2]).into();
@@ -279,12 +284,8 @@ fn async_boundary_preserves_arity_type_and_length_errors() {
     ];
     let mut future = expression.evaluate_async(&wrong_length);
     assert_eq!(
-        poll_ready(future.as_mut()),
-        Err(ExpressionError::InputLengthMismatch {
-            expected: 2,
-            actual: 1,
-            input_index: 1,
-        })
+        poll_ready(future.as_mut()).unwrap_err().to_string(),
+        "input 1 length mismatch: expected 2, got 1"
     );
 }
 

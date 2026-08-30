@@ -3,8 +3,8 @@ use std::num::Wrapping;
 use std::ops::{Add, Mul, Neg, Sub};
 
 use crate::{
-    Array, ArrayBuilder, ArrayImpl, ColumnView, ColumnViewImpl, Expression, ExpressionError,
-    PhysicalType, Scalar, ScalarError, ScalarRefImpl, TypeMismatch,
+    Array, ArrayBuilder, ArrayImpl, ColumnView, ColumnViewImpl, Expression, PhysicalType, Scalar,
+    ScalarRefImpl, TypeMismatch,
 };
 
 /// Validate an expression boundary completely before row access or output allocation.
@@ -41,30 +41,29 @@ use crate::{
 pub fn validate_expression_inputs(
     inputs: &[ColumnViewImpl<'_>],
     expected_types: &[PhysicalType],
-) -> Result<usize, ExpressionError> {
+) -> anyhow::Result<usize> {
     if inputs.len() != expected_types.len() {
-        return Err(ExpressionError::InputArityMismatch {
-            expected: expected_types.len(),
-            actual: inputs.len(),
-        });
+        anyhow::bail!(
+            "input arity mismatch: expected {}, got {}",
+            expected_types.len(),
+            inputs.len()
+        );
     }
-    for (input, expected) in inputs.iter().zip(expected_types) {
+    for (input_index, (input, expected)) in inputs.iter().zip(expected_types).enumerate() {
         if input.physical_type() != *expected {
-            return Err(TypeMismatch {
-                expected: expected.clone(),
-                actual: input.physical_type(),
-            }
-            .into());
+            anyhow::bail!(
+                "input {input_index} type mismatch: expected {expected:?}, got {:?}",
+                input.physical_type()
+            );
         }
     }
     let len = inputs.first().map_or(0, ColumnViewImpl::len);
     for (input_index, input) in inputs.iter().enumerate().skip(1) {
         if input.len() != len {
-            return Err(ExpressionError::InputLengthMismatch {
-                expected: len,
-                actual: input.len(),
-                input_index,
-            });
+            anyhow::bail!(
+                "input {input_index} length mismatch: expected {len}, got {}",
+                input.len()
+            );
         }
     }
     Ok(len)
@@ -72,7 +71,7 @@ pub fn validate_expression_inputs(
 
 /// One monomorphized evaluator for a complete input batch.
 pub type BatchKernel<const N: usize> =
-    for<'a> fn(&BatchExpression<N>, &[ColumnViewImpl<'a>]) -> Result<ArrayImpl, ExpressionError>;
+    for<'a> fn(&BatchExpression<N>, &[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
 
 /// A fixed-arity expression whose only callable operation is vectorized.
 pub struct BatchExpression<const N: usize> {
@@ -97,7 +96,7 @@ impl<const N: usize> BatchExpression<N> {
         }
     }
 
-    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         validate_expression_inputs(inputs, &self.input_types)?;
         (self.kernel)(self, inputs)
     }
@@ -116,7 +115,7 @@ impl<const N: usize> Expression for BatchExpression<N> {
         self.output_type.clone()
     }
 
-    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         self.evaluate(inputs)
     }
 }
@@ -227,40 +226,43 @@ impl Numeric for f64 {
 }
 
 trait CheckedDivide: Sized {
-    fn checked_divide(self, rhs: Self) -> Result<Self, ScalarError>;
+    fn checked_divide(self, rhs: Self) -> anyhow::Result<Self>;
 }
 
 impl CheckedDivide for i16 {
-    fn checked_divide(self, rhs: Self) -> Result<Self, ScalarError> {
+    fn checked_divide(self, rhs: Self) -> anyhow::Result<Self> {
         if rhs == 0 {
-            return Err(ScalarError::DivisionByZero);
+            anyhow::bail!("division by zero");
         }
-        self.checked_div(rhs).ok_or(ScalarError::DivisionOverflow)
+        self.checked_div(rhs)
+            .ok_or_else(|| anyhow::anyhow!("signed integer division overflow"))
     }
 }
 
 impl CheckedDivide for i32 {
-    fn checked_divide(self, rhs: Self) -> Result<Self, ScalarError> {
+    fn checked_divide(self, rhs: Self) -> anyhow::Result<Self> {
         if rhs == 0 {
-            return Err(ScalarError::DivisionByZero);
+            anyhow::bail!("division by zero");
         }
-        self.checked_div(rhs).ok_or(ScalarError::DivisionOverflow)
+        self.checked_div(rhs)
+            .ok_or_else(|| anyhow::anyhow!("signed integer division overflow"))
     }
 }
 
 impl CheckedDivide for i64 {
-    fn checked_divide(self, rhs: Self) -> Result<Self, ScalarError> {
+    fn checked_divide(self, rhs: Self) -> anyhow::Result<Self> {
         if rhs == 0 {
-            return Err(ScalarError::DivisionByZero);
+            anyhow::bail!("division by zero");
         }
-        self.checked_div(rhs).ok_or(ScalarError::DivisionOverflow)
+        self.checked_div(rhs)
+            .ok_or_else(|| anyhow::anyhow!("signed integer division overflow"))
     }
 }
 
 impl CheckedDivide for f32 {
-    fn checked_divide(self, rhs: Self) -> Result<Self, ScalarError> {
+    fn checked_divide(self, rhs: Self) -> anyhow::Result<Self> {
         if rhs == 0.0 {
-            Err(ScalarError::DivisionByZero)
+            anyhow::bail!("division by zero")
         } else {
             Ok(self / rhs)
         }
@@ -268,9 +270,9 @@ impl CheckedDivide for f32 {
 }
 
 impl CheckedDivide for f64 {
-    fn checked_divide(self, rhs: Self) -> Result<Self, ScalarError> {
+    fn checked_divide(self, rhs: Self) -> anyhow::Result<Self> {
         if rhs == 0.0 {
-            Err(ScalarError::DivisionByZero)
+            anyhow::bail!("division by zero")
         } else {
             Ok(self / rhs)
         }
@@ -284,34 +286,23 @@ where
     T::try_from(value).unwrap_or_else(|never| match never {})
 }
 
-type NumericBinaryBatchKernel = for<'a> fn(
-    &NumericBinaryExpression,
-    &[ColumnViewImpl<'a>],
-) -> Result<ArrayImpl, ExpressionError>;
-type NumericComparisonBatchKernel = for<'a> fn(
-    &NumericComparisonExpression,
-    &[ColumnViewImpl<'a>],
-) -> Result<ArrayImpl, ExpressionError>;
+type NumericBinaryBatchKernel =
+    for<'a> fn(&NumericBinaryExpression, &[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
+type NumericComparisonBatchKernel =
+    for<'a> fn(&NumericComparisonExpression, &[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
 type NumericNegBatchKernel =
-    for<'a> fn(&NumericNegExpression, &[ColumnViewImpl<'a>]) -> Result<ArrayImpl, ExpressionError>;
-type NumericClampBatchKernel = for<'a> fn(
-    &NumericClampExpression,
-    &[ColumnViewImpl<'a>],
-) -> Result<ArrayImpl, ExpressionError>;
-
+    for<'a> fn(&NumericNegExpression, &[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
+type NumericClampBatchKernel =
+    for<'a> fn(&NumericClampExpression, &[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
 pub(crate) struct NumericBinaryExpression {
     name: &'static str,
     input_types: [PhysicalType; 2],
     output_type: PhysicalType,
-    operator: ArithmeticOperator,
     kernel: NumericBinaryBatchKernel,
 }
 
 impl NumericBinaryExpression {
-    pub(crate) fn evaluate(
-        &self,
-        inputs: &[ColumnViewImpl<'_>],
-    ) -> Result<ArrayImpl, ExpressionError> {
+    pub(crate) fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         (self.kernel)(self, inputs)
     }
 }
@@ -326,7 +317,7 @@ impl Expression for NumericBinaryExpression {
     fn output_type(&self) -> PhysicalType {
         self.output_type.clone()
     }
-    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         self.evaluate(inputs)
     }
 }
@@ -339,10 +330,7 @@ pub(crate) struct NumericComparisonExpression {
 }
 
 impl NumericComparisonExpression {
-    pub(crate) fn evaluate(
-        &self,
-        inputs: &[ColumnViewImpl<'_>],
-    ) -> Result<ArrayImpl, ExpressionError> {
+    pub(crate) fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         (self.kernel)(self, inputs)
     }
 }
@@ -357,7 +345,7 @@ impl Expression for NumericComparisonExpression {
     fn output_type(&self) -> PhysicalType {
         PhysicalType::Bool
     }
-    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         self.evaluate(inputs)
     }
 }
@@ -369,10 +357,7 @@ pub(crate) struct NumericNegExpression {
 }
 
 impl NumericNegExpression {
-    pub(crate) fn evaluate(
-        &self,
-        inputs: &[ColumnViewImpl<'_>],
-    ) -> Result<ArrayImpl, ExpressionError> {
+    pub(crate) fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         (self.kernel)(self, inputs)
     }
 }
@@ -387,7 +372,7 @@ impl Expression for NumericNegExpression {
     fn output_type(&self) -> PhysicalType {
         self.input_types[0].clone()
     }
-    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         self.evaluate(inputs)
     }
 }
@@ -400,10 +385,7 @@ pub(crate) struct NumericClampExpression {
 }
 
 impl NumericClampExpression {
-    pub(crate) fn evaluate(
-        &self,
-        inputs: &[ColumnViewImpl<'_>],
-    ) -> Result<ArrayImpl, ExpressionError> {
+    pub(crate) fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         (self.kernel)(self, inputs)
     }
 }
@@ -418,15 +400,115 @@ impl Expression for NumericClampExpression {
     fn output_type(&self) -> PhysicalType {
         self.output_type.clone()
     }
-    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         self.evaluate(inputs)
     }
 }
 
-fn evaluate_numeric_binary<L, R, O>(
+fn evaluate_numeric_infallible<L, R, O, Operation>(
     expression: &NumericBinaryExpression,
     inputs: &[ColumnViewImpl<'_>],
-) -> Result<ArrayImpl, ExpressionError>
+    operation: Operation,
+) -> anyhow::Result<ArrayImpl>
+where
+    L: Numeric,
+    R: Numeric,
+    O: Numeric
+        + TryFrom<L, Error = std::convert::Infallible>
+        + TryFrom<R, Error = std::convert::Infallible>,
+    Operation: Fn(O::Arithmetic, O::Arithmetic) -> O::Arithmetic,
+    for<'a> L: Scalar<RefType<'a> = L>,
+    for<'a> R: Scalar<RefType<'a> = R>,
+    for<'a> &'a L::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a R::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+{
+    let len = validate_expression_inputs(inputs, &expression.input_types)?;
+    let left = ColumnView::<L>::try_from(inputs[0].clone())?;
+    let right = ColumnView::<R>::try_from(inputs[1].clone())?;
+    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(len);
+    for row in 0..len {
+        let value = match (left.get(row), right.get(row)) {
+            (Some(left), Some(right)) => {
+                let left = lossless_try_from::<O, L>(left);
+                let right = lossless_try_from::<O, R>(right);
+                Some(O::from_arithmetic(operation(
+                    left.into_arithmetic(),
+                    right.into_arithmetic(),
+                )))
+            }
+            _ => None,
+        };
+        output.push(value.as_ref().map(Scalar::as_scalar_ref));
+    }
+    Ok(output.finish().into())
+}
+
+fn evaluate_numeric_add<L, R, O>(
+    expression: &NumericBinaryExpression,
+    inputs: &[ColumnViewImpl<'_>],
+) -> anyhow::Result<ArrayImpl>
+where
+    L: Numeric,
+    R: Numeric,
+    O: Numeric
+        + TryFrom<L, Error = std::convert::Infallible>
+        + TryFrom<R, Error = std::convert::Infallible>,
+    for<'a> L: Scalar<RefType<'a> = L>,
+    for<'a> R: Scalar<RefType<'a> = R>,
+    for<'a> &'a L::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a R::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+{
+    evaluate_numeric_infallible::<L, R, O, _>(expression, inputs, Add::add)
+}
+
+fn evaluate_numeric_subtract<L, R, O>(
+    expression: &NumericBinaryExpression,
+    inputs: &[ColumnViewImpl<'_>],
+) -> anyhow::Result<ArrayImpl>
+where
+    L: Numeric,
+    R: Numeric,
+    O: Numeric
+        + TryFrom<L, Error = std::convert::Infallible>
+        + TryFrom<R, Error = std::convert::Infallible>,
+    for<'a> L: Scalar<RefType<'a> = L>,
+    for<'a> R: Scalar<RefType<'a> = R>,
+    for<'a> &'a L::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a R::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+{
+    evaluate_numeric_infallible::<L, R, O, _>(expression, inputs, Sub::sub)
+}
+
+fn evaluate_numeric_multiply<L, R, O>(
+    expression: &NumericBinaryExpression,
+    inputs: &[ColumnViewImpl<'_>],
+) -> anyhow::Result<ArrayImpl>
+where
+    L: Numeric,
+    R: Numeric,
+    O: Numeric
+        + TryFrom<L, Error = std::convert::Infallible>
+        + TryFrom<R, Error = std::convert::Infallible>,
+    for<'a> L: Scalar<RefType<'a> = L>,
+    for<'a> R: Scalar<RefType<'a> = R>,
+    for<'a> &'a L::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a R::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+{
+    evaluate_numeric_infallible::<L, R, O, _>(expression, inputs, Mul::mul)
+}
+
+fn evaluate_numeric_divide<L, R, O>(
+    expression: &NumericBinaryExpression,
+    inputs: &[ColumnViewImpl<'_>],
+) -> anyhow::Result<ArrayImpl>
 where
     L: Numeric,
     R: Numeric,
@@ -450,27 +532,12 @@ where
             (Some(left), Some(right)) => {
                 let left = lossless_try_from::<O, L>(left);
                 let right = lossless_try_from::<O, R>(right);
-                let value = match expression.operator {
-                    ArithmeticOperator::Add => Ok(O::from_arithmetic(Add::add(
-                        left.into_arithmetic(),
-                        right.into_arithmetic(),
-                    ))),
-                    ArithmeticOperator::Subtract => Ok(O::from_arithmetic(Sub::sub(
-                        left.into_arithmetic(),
-                        right.into_arithmetic(),
-                    ))),
-                    ArithmeticOperator::Multiply => Ok(O::from_arithmetic(Mul::mul(
-                        left.into_arithmetic(),
-                        right.into_arithmetic(),
-                    ))),
-                    ArithmeticOperator::Divide => left.checked_divide(right),
-                }
-                .map_err(|error| ExpressionError::ScalarEvaluation {
-                    function: expression.name,
-                    row,
-                    error,
-                })?;
-                Some(value)
+                Some(left.checked_divide(right).map_err(|error| {
+                    anyhow::anyhow!(
+                        "function `{}` failed at row {row}: {error}",
+                        expression.name
+                    )
+                })?)
             }
             _ => None,
         };
@@ -479,10 +546,33 @@ where
     Ok(output.finish().into())
 }
 
+fn numeric_binary_kernel<L, R, O>(operator: ArithmeticOperator) -> NumericBinaryBatchKernel
+where
+    L: Numeric,
+    R: Numeric,
+    O: Numeric
+        + CheckedDivide
+        + TryFrom<L, Error = std::convert::Infallible>
+        + TryFrom<R, Error = std::convert::Infallible>,
+    for<'a> L: Scalar<RefType<'a> = L>,
+    for<'a> R: Scalar<RefType<'a> = R>,
+    for<'a> &'a L::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a R::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+{
+    match operator {
+        ArithmeticOperator::Add => evaluate_numeric_add::<L, R, O>,
+        ArithmeticOperator::Subtract => evaluate_numeric_subtract::<L, R, O>,
+        ArithmeticOperator::Multiply => evaluate_numeric_multiply::<L, R, O>,
+        ArithmeticOperator::Divide => evaluate_numeric_divide::<L, R, O>,
+    }
+}
+
 fn evaluate_numeric_comparison<L, R, O>(
     expression: &NumericComparisonExpression,
     inputs: &[ColumnViewImpl<'_>],
-) -> Result<ArrayImpl, ExpressionError>
+) -> anyhow::Result<ArrayImpl>
 where
     L: Numeric,
     R: Numeric,
@@ -527,93 +617,94 @@ struct NumericKernels {
 }
 
 fn numeric_kernels(
+    operator: ArithmeticOperator,
     left: &PhysicalType,
     right: &PhysicalType,
     output: &PhysicalType,
 ) -> NumericKernels {
     match (left, right, output) {
         (PhysicalType::Int16, PhysicalType::Int16, PhysicalType::Int16) => NumericKernels {
-            binary: evaluate_numeric_binary::<i16, i16, i16>,
+            binary: numeric_binary_kernel::<i16, i16, i16>(operator),
             comparison: evaluate_numeric_comparison::<i16, i16, i16>,
         },
         (PhysicalType::Int16, PhysicalType::Int32, PhysicalType::Int32) => NumericKernels {
-            binary: evaluate_numeric_binary::<i16, i32, i32>,
+            binary: numeric_binary_kernel::<i16, i32, i32>(operator),
             comparison: evaluate_numeric_comparison::<i16, i32, i32>,
         },
         (PhysicalType::Int32, PhysicalType::Int16, PhysicalType::Int32) => NumericKernels {
-            binary: evaluate_numeric_binary::<i32, i16, i32>,
+            binary: numeric_binary_kernel::<i32, i16, i32>(operator),
             comparison: evaluate_numeric_comparison::<i32, i16, i32>,
         },
         (PhysicalType::Int16, PhysicalType::Int64, PhysicalType::Int64) => NumericKernels {
-            binary: evaluate_numeric_binary::<i16, i64, i64>,
+            binary: numeric_binary_kernel::<i16, i64, i64>(operator),
             comparison: evaluate_numeric_comparison::<i16, i64, i64>,
         },
         (PhysicalType::Int64, PhysicalType::Int16, PhysicalType::Int64) => NumericKernels {
-            binary: evaluate_numeric_binary::<i64, i16, i64>,
+            binary: numeric_binary_kernel::<i64, i16, i64>(operator),
             comparison: evaluate_numeric_comparison::<i64, i16, i64>,
         },
         (PhysicalType::Int16, PhysicalType::Float32, PhysicalType::Float32) => NumericKernels {
-            binary: evaluate_numeric_binary::<i16, f32, f32>,
+            binary: numeric_binary_kernel::<i16, f32, f32>(operator),
             comparison: evaluate_numeric_comparison::<i16, f32, f32>,
         },
         (PhysicalType::Float32, PhysicalType::Int16, PhysicalType::Float32) => NumericKernels {
-            binary: evaluate_numeric_binary::<f32, i16, f32>,
+            binary: numeric_binary_kernel::<f32, i16, f32>(operator),
             comparison: evaluate_numeric_comparison::<f32, i16, f32>,
         },
         (PhysicalType::Int16, PhysicalType::Float64, PhysicalType::Float64) => NumericKernels {
-            binary: evaluate_numeric_binary::<i16, f64, f64>,
+            binary: numeric_binary_kernel::<i16, f64, f64>(operator),
             comparison: evaluate_numeric_comparison::<i16, f64, f64>,
         },
         (PhysicalType::Float64, PhysicalType::Int16, PhysicalType::Float64) => NumericKernels {
-            binary: evaluate_numeric_binary::<f64, i16, f64>,
+            binary: numeric_binary_kernel::<f64, i16, f64>(operator),
             comparison: evaluate_numeric_comparison::<f64, i16, f64>,
         },
         (PhysicalType::Int32, PhysicalType::Int32, PhysicalType::Int32) => NumericKernels {
-            binary: evaluate_numeric_binary::<i32, i32, i32>,
+            binary: numeric_binary_kernel::<i32, i32, i32>(operator),
             comparison: evaluate_numeric_comparison::<i32, i32, i32>,
         },
         (PhysicalType::Int32, PhysicalType::Int64, PhysicalType::Int64) => NumericKernels {
-            binary: evaluate_numeric_binary::<i32, i64, i64>,
+            binary: numeric_binary_kernel::<i32, i64, i64>(operator),
             comparison: evaluate_numeric_comparison::<i32, i64, i64>,
         },
         (PhysicalType::Int64, PhysicalType::Int32, PhysicalType::Int64) => NumericKernels {
-            binary: evaluate_numeric_binary::<i64, i32, i64>,
+            binary: numeric_binary_kernel::<i64, i32, i64>(operator),
             comparison: evaluate_numeric_comparison::<i64, i32, i64>,
         },
         (PhysicalType::Int32, PhysicalType::Float64, PhysicalType::Float64) => NumericKernels {
-            binary: evaluate_numeric_binary::<i32, f64, f64>,
+            binary: numeric_binary_kernel::<i32, f64, f64>(operator),
             comparison: evaluate_numeric_comparison::<i32, f64, f64>,
         },
         (PhysicalType::Int32, PhysicalType::Float32, PhysicalType::Float64) => NumericKernels {
-            binary: evaluate_numeric_binary::<i32, f32, f64>,
+            binary: numeric_binary_kernel::<i32, f32, f64>(operator),
             comparison: evaluate_numeric_comparison::<i32, f32, f64>,
         },
         (PhysicalType::Float32, PhysicalType::Int32, PhysicalType::Float64) => NumericKernels {
-            binary: evaluate_numeric_binary::<f32, i32, f64>,
+            binary: numeric_binary_kernel::<f32, i32, f64>(operator),
             comparison: evaluate_numeric_comparison::<f32, i32, f64>,
         },
         (PhysicalType::Float64, PhysicalType::Int32, PhysicalType::Float64) => NumericKernels {
-            binary: evaluate_numeric_binary::<f64, i32, f64>,
+            binary: numeric_binary_kernel::<f64, i32, f64>(operator),
             comparison: evaluate_numeric_comparison::<f64, i32, f64>,
         },
         (PhysicalType::Int64, PhysicalType::Int64, PhysicalType::Int64) => NumericKernels {
-            binary: evaluate_numeric_binary::<i64, i64, i64>,
+            binary: numeric_binary_kernel::<i64, i64, i64>(operator),
             comparison: evaluate_numeric_comparison::<i64, i64, i64>,
         },
         (PhysicalType::Float32, PhysicalType::Float32, PhysicalType::Float32) => NumericKernels {
-            binary: evaluate_numeric_binary::<f32, f32, f32>,
+            binary: numeric_binary_kernel::<f32, f32, f32>(operator),
             comparison: evaluate_numeric_comparison::<f32, f32, f32>,
         },
         (PhysicalType::Float32, PhysicalType::Float64, PhysicalType::Float64) => NumericKernels {
-            binary: evaluate_numeric_binary::<f32, f64, f64>,
+            binary: numeric_binary_kernel::<f32, f64, f64>(operator),
             comparison: evaluate_numeric_comparison::<f32, f64, f64>,
         },
         (PhysicalType::Float64, PhysicalType::Float32, PhysicalType::Float64) => NumericKernels {
-            binary: evaluate_numeric_binary::<f64, f32, f64>,
+            binary: numeric_binary_kernel::<f64, f32, f64>(operator),
             comparison: evaluate_numeric_comparison::<f64, f32, f64>,
         },
         (PhysicalType::Float64, PhysicalType::Float64, PhysicalType::Float64) => NumericKernels {
-            binary: evaluate_numeric_binary::<f64, f64, f64>,
+            binary: numeric_binary_kernel::<f64, f64, f64>(operator),
             comparison: evaluate_numeric_comparison::<f64, f64, f64>,
         },
         _ => unreachable!("validated numeric promotion tuple"),
@@ -623,7 +714,7 @@ fn numeric_kernels(
 fn evaluate_numeric_neg<O>(
     expression: &NumericNegExpression,
     inputs: &[ColumnViewImpl<'_>],
-) -> Result<ArrayImpl, ExpressionError>
+) -> anyhow::Result<ArrayImpl>
 where
     O: Numeric,
     for<'a> O: Scalar<RefType<'a> = O>,
@@ -656,7 +747,7 @@ fn numeric_neg_kernel(input: &PhysicalType) -> NumericNegBatchKernel {
 fn evaluate_numeric_clamp<A, B, C, O>(
     expression: &NumericClampExpression,
     inputs: &[ColumnViewImpl<'_>],
-) -> Result<ArrayImpl, ExpressionError>
+) -> anyhow::Result<ArrayImpl>
 where
     A: Numeric,
     B: Numeric,
@@ -690,19 +781,17 @@ where
                 let result = if lower.partial_cmp(&upper) != Some(Ordering::Less)
                     && lower.partial_cmp(&upper) != Some(Ordering::Equal)
                 {
-                    Err(ScalarError::InvalidClampBounds)
+                    anyhow::bail!(
+                        "function `{}` failed at row {row}: invalid clamp bounds",
+                        expression.name
+                    );
                 } else if value < lower {
-                    Ok(lower)
+                    lower
                 } else if value > upper {
-                    Ok(upper)
+                    upper
                 } else {
-                    Ok(value)
-                }
-                .map_err(|error| ExpressionError::ScalarEvaluation {
-                    function: expression.name,
-                    row,
-                    error,
-                })?;
+                    value
+                };
                 Some(result)
             }
             _ => None,
@@ -931,12 +1020,11 @@ pub(crate) fn build_numeric_binary_expression(
     right: PhysicalType,
     output: PhysicalType,
 ) -> NumericBinaryExpression {
-    let kernel = numeric_kernels(&left, &right, &output).binary;
+    let kernel = numeric_kernels(operator, &left, &right, &output).binary;
     NumericBinaryExpression {
         name,
         input_types: [left, right],
         output_type: output,
-        operator,
         kernel,
     }
 }
@@ -974,7 +1062,7 @@ pub(crate) fn build_numeric_comparison_expression(
     right: PhysicalType,
     common: PhysicalType,
 ) -> NumericComparisonExpression {
-    let kernel = numeric_kernels(&left, &right, &common).comparison;
+    let kernel = numeric_kernels(ArithmeticOperator::Add, &left, &right, &common).comparison;
     NumericComparisonExpression {
         name,
         input_types: [left, right],
@@ -990,10 +1078,7 @@ pub(crate) struct StringBinaryExpression {
 }
 
 impl StringBinaryExpression {
-    pub(crate) fn evaluate(
-        &self,
-        inputs: &[ColumnViewImpl<'_>],
-    ) -> Result<ArrayImpl, ExpressionError> {
+    pub(crate) fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         let len = validate_expression_inputs(inputs, &self.input_types)?;
         let left = ColumnView::<String>::try_from(inputs[0].clone())?;
         let right = ColumnView::<String>::try_from(inputs[1].clone())?;
@@ -1032,7 +1117,7 @@ impl Expression for StringBinaryExpression {
         PhysicalType::Bool
     }
 
-    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         self.evaluate(inputs)
     }
 }
@@ -1044,10 +1129,7 @@ pub(crate) struct BoolComparisonExpression {
 }
 
 impl BoolComparisonExpression {
-    pub(crate) fn evaluate(
-        &self,
-        inputs: &[ColumnViewImpl<'_>],
-    ) -> Result<ArrayImpl, ExpressionError> {
+    pub(crate) fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         let len = validate_expression_inputs(inputs, &self.input_types)?;
         let left = ColumnView::<bool>::try_from(inputs[0].clone())?;
         let right = ColumnView::<bool>::try_from(inputs[1].clone())?;
@@ -1080,7 +1162,7 @@ impl Expression for BoolComparisonExpression {
         PhysicalType::Bool
     }
 
-    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> Result<ArrayImpl, ExpressionError> {
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         self.evaluate(inputs)
     }
 }

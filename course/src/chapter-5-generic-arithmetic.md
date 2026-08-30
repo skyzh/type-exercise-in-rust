@@ -139,13 +139,16 @@ be a separate product-semantic decision rather than part of this generic refacto
 implementations use the standard traits directly and retain ordinary IEEE results.
 
 Division stays the one small custom fallible operation because stable `std` has no single checked
-division trait covering both the course's integers and floats. Integer division reports
-`DivisionByZero` for zero and `DivisionOverflow` for `MIN / -1`. Treat both `0.0` and `-0.0`
-floating-point divisors as division by zero; other results such as infinity or NaN remain values.
+division trait covering both the course's integers and floats. Integer division returns an
+ordinary error with the cause `division by zero` for zero or `signed integer division overflow`
+for `MIN / -1`. Treat both `0.0` and `-0.0` floating-point divisors as division by zero; other
+results such as infinity or NaN remain values.
 
 The important Rust boundary is where all three generic types become concrete. The physical
-builder matches the validated `(left, right, output)` tuple once and stores the selected
-monomorphized whole-batch function pointer in one concrete `NumericBinaryExpression`. Require
+builder matches the validated `(operator, left, right, output)` choice once and stores only the
+selected monomorphized whole-batch function pointer in `NumericBinaryExpression`; it does not keep
+an operator field for the row loop to inspect. Addition, subtraction, and multiplication select
+their infallible typed kernels, while division alone selects the fallible typed kernel. Require
 `O: TryFrom<L, Error = Infallible> + TryFrom<R, Error = Infallible>` for the lossless conversions
 admitted by the promotion table. This uses Rust's standard conversion vocabulary; do not add a
 parallel conversion trait.
@@ -167,8 +170,8 @@ The copied test still imports numeric comparison, so use the library compile bou
 cargo check -p type-exercise-starter --lib --locked
 ```
 
-Passing means all four arithmetic choices share one monomorphized batch evaluator without
-widening the public runtime boundary.
+Passing means all four arithmetic choices use a preselected monomorphized batch evaluator without
+widening the public runtime boundary or testing the operator inside each row.
 
 ## Checkpoint 3: return Boolean through the same common type
 
@@ -192,7 +195,7 @@ cargo test -p type-exercise-starter chapter_5 --locked
 cargo test -p type-exercise-starter --lib --locked
 ```
 
-The 9 focused cases and 42 cumulative learner tests prove the whole Day 5 boundary:
+The 10 focused cases and 43 cumulative learner tests prove the whole Day 5 boundary:
 
 - the catalog contains exactly the approved ordered promotions and rejects every lossy pair;
 - arithmetic works in both mixed operand orders and builds the promoted physical family;

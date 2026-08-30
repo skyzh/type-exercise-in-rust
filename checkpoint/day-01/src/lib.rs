@@ -19,7 +19,7 @@ mod variant_catalog;
 // Day 4, checkpoints 1–2: uncomment after implementing the expression/operator skeletons.
 // mod expression;
 // mod operators;
-// pub use expression::{BinaryScalarFunction, ExpressionError, I32Add, ScalarError, evaluate_binary};
+// pub use expression::{BinaryScalarFunction, I32Add, evaluate_binary};
 // pub use operators::{BatchExpression, BatchKernel};
 // Day 5, checkpoint 1: uncomment after implementing numeric promotion.
 // mod promotion;

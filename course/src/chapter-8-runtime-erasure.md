@@ -11,7 +11,7 @@ This chapter places the typed shells behind one object-safe `Expression` interfa
 
 - expose name, input types, output type, and evaluation through `dyn Expression`;
 - select builtin physical expressions from one catalog; and
-- preserve the typed evaluator's arity, type, length, null, and scalar errors.
+- preserve the typed evaluator's arity, type, length, null, and contextual operation errors.
 
 ```console
 cargo x copy-test --chapter 8
@@ -35,7 +35,7 @@ select an operator for every row.
 
 ## Checkpoint 1: make the batch contract safe to erase
 
-- **Target:** `type-exercise-starter/src/expression.rs::{Expression, BinaryExpression, BinaryBatchKernel, ExpressionError}`.
+- **Target:** `type-exercise-starter/src/expression.rs::{Expression, BinaryExpression, BinaryBatchKernel}`.
 - **Change:** keep `name`, `arity`, `input_types`, `output_type`, and `evaluate` free of associated
   types, and require `Any + Send + Sync` for checked recovery and sharing, so the trait is
   object-safe from this chapter on; `BinaryExpression::new` pairs runtime physical metadata with
@@ -59,14 +59,19 @@ pub use expression::{
 
 - **Target:** the `Expression` implementation for `BatchExpression<N>` in
   `type-exercise-starter/src/operators.rs`, plus the original
-  `BinaryExpression` implementation in `type-exercise-starter/src/expression.rs`.
+  `BinaryExpression` implementation in `type-exercise-starter/src/expression.rs` and the
+  transactional string builder in `type-exercise-starter/src/array/string_array.rs`.
 - **Change:** publish physical metadata and call the selected whole-batch kernel. One declarative
   catalog row owns each built-in's name, input and output physical types, kernel, and optional loop
   specialization; that same row list generates both the public name list and constructor lookup.
   The typed `i32_add` and `string_concat` kernels own their row loops; `BinaryExpression` never
-  stores or invokes a scalar callback. Its erased boundary also checks that the returned array's
-  physical type matches the declared output type.
-- **Preserve:** arity is checked before indexing; type and length errors keep their original shape.
+  stores or invokes a scalar callback. String concatenation writes both borrowed fragments directly
+  into the final byte buffer through `StringValueWriter` and
+  `StringArrayBuilder::try_push_with`; `push_null` publishes null rows. A failed closure truncates
+  any bytes it appended before the builder publishes an offset or validity bit. The erased boundary
+  also checks that the returned array's physical type matches the declared output type.
+- **Preserve:** arity is checked before indexing; type and length messages retain their context;
+  strict nulls skip the write closure; failed variable-width rows leave no partial bytes or metadata.
 - **Run:** focused and cumulative tests.
 - **Passing means:** erasure adds selection, not a second evaluator.
 
