@@ -1,7 +1,18 @@
+use crate::Nullability;
+use crate::column::DenseI32Column;
 use crate::{
-    Array, ArrayBuilder, ArrayImpl, ColumnView, ColumnViewImpl, Scalar, ScalarRefImpl, TypeMismatch,
+    Array, ArrayBuilder, ArrayImpl, ColumnView, ColumnViewImpl, I32Array, Scalar, ScalarRefImpl,
+    TypeMismatch,
 };
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PrimitiveLoop {
+    General,
+    ArrayArray,
+    ArrayConstant,
+    ConstantArray,
+    ConstantConstant,
+}
 pub trait BinaryScalarFunction {
     type Left: Scalar;
     type Right: Scalar;
@@ -62,8 +73,312 @@ where
     Ok(output.finish().into())
 }
 
-/// One statically selected binary kernel over a complete borrowed batch.
+pub struct PrimitiveBinaryExpression<F> {
+    name: &'static str,
+    input_types: [crate::PhysicalType; 2],
+    function: F,
+}
+
+fn dense_array_array<F>(function: &F, left: &I32Array, right: &I32Array) -> Vec<i32>
+where
+    F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32>,
+{
+    let mut output = Vec::with_capacity(left.values().len());
+    for row in 0..left.values().len() {
+        let left = left.values()[row];
+        let right = right.values()[row];
+        output.push(function.evaluate(left, right));
+    }
+    output
+}
+
+fn dense_array_constant<F>(function: &F, left: &I32Array, right: i32) -> Vec<i32>
+where
+    F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32>,
+{
+    let mut output = Vec::with_capacity(left.values().len());
+    for row in 0..left.values().len() {
+        let left = left.values()[row];
+        output.push(function.evaluate(left, right));
+    }
+    output
+}
+
+fn dense_constant_array<F>(function: &F, left: i32, right: &I32Array) -> Vec<i32>
+where
+    F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32>,
+{
+    let mut output = Vec::with_capacity(right.values().len());
+    for row in 0..right.values().len() {
+        let right = right.values()[row];
+        output.push(function.evaluate(left, right));
+    }
+    output
+}
+
+fn dense_constant_constant<F>(function: &F, left: i32, right: i32, len: usize) -> Vec<i32>
+where
+    F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32>,
+{
+    let mut output = Vec::with_capacity(len);
+    for _row in 0..len {
+        output.push(function.evaluate(left, right));
+    }
+    output
+}
+
+impl<F> PrimitiveBinaryExpression<F>
+where
+    F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32>,
+{
+    pub fn new(name: &'static str, function: F) -> Self {
+        Self {
+            name,
+            input_types: [crate::PhysicalType::Int32, crate::PhysicalType::Int32],
+            function,
+        }
+    }
+
+    pub fn name(&self) -> &'static str {
+        self.name
+    }
+
+    pub fn input_types(&self) -> &[crate::PhysicalType] {
+        &self.input_types
+    }
+
+    pub fn arity(&self) -> usize {
+        self.input_types.len()
+    }
+
+    pub fn output_type(&self) -> crate::PhysicalType {
+        crate::PhysicalType::Int32
+    }
+
+    pub fn output_nullability(&self, inputs: &[Nullability]) -> Nullability {
+        if inputs
+            .iter()
+            .all(|nullability| *nullability == Nullability::NonNull)
+        {
+            Nullability::NonNull
+        } else {
+            Nullability::Nullable
+        }
+    }
+
+    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        self.evaluate_with_loop(inputs).map(|(output, _)| output)
+    }
+
+    pub fn evaluate_with_loop(
+        &self,
+        inputs: &[ColumnViewImpl<'_>],
+    ) -> anyhow::Result<(ArrayImpl, PrimitiveLoop)> {
+        if inputs.len() != self.input_types.len() {
+            anyhow::bail!(
+                "input arity mismatch: expected {}, got {}",
+                self.input_types.len(),
+                inputs.len()
+            );
+        }
+        for (input_index, (input, expected)) in inputs.iter().zip(&self.input_types).enumerate() {
+            if input.physical_type() != *expected {
+                anyhow::bail!(
+                    "input {input_index} type mismatch: expected {expected:?}, got {:?}",
+                    input.physical_type()
+                );
+            }
+        }
+        if inputs[0].len() != inputs[1].len() {
+            anyhow::bail!(
+                "input 1 length mismatch: expected {}, got {}",
+                inputs[0].len(),
+                inputs[1].len()
+            );
+        }
+
+        let Some(left) = inputs[0].as_dense_i32() else {
+            return Ok((
+                evaluate_binary(&self.function, inputs[0].clone(), inputs[1].clone())?,
+                PrimitiveLoop::General,
+            ));
+        };
+        let Some(right) = inputs[1].as_dense_i32() else {
+            return Ok((
+                evaluate_binary(&self.function, inputs[0].clone(), inputs[1].clone())?,
+                PrimitiveLoop::General,
+            ));
+        };
+        debug_assert_eq!(left.len(), right.len());
+
+        let (values, selected_loop) = match (left, right) {
+            (DenseI32Column::Array(left), DenseI32Column::Array(right)) => (
+                dense_array_array(&self.function, left, right),
+                PrimitiveLoop::ArrayArray,
+            ),
+            (DenseI32Column::Array(left), DenseI32Column::Constant { value: right, .. }) => (
+                dense_array_constant(&self.function, left, right),
+                PrimitiveLoop::ArrayConstant,
+            ),
+            (DenseI32Column::Constant { value: left, .. }, DenseI32Column::Array(right)) => (
+                dense_constant_array(&self.function, left, right),
+                PrimitiveLoop::ConstantArray,
+            ),
+            (
+                DenseI32Column::Constant { value: left, len },
+                DenseI32Column::Constant { value: right, .. },
+            ) => (
+                dense_constant_constant(&self.function, left, right, len),
+                PrimitiveLoop::ConstantConstant,
+            ),
+        };
+
+        Ok((I32Array::from_values(values).into(), selected_loop))
+    }
+}
+
 pub type BinaryBatchKernel = for<'a> fn(&[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
+pub type BinaryLoopKernel =
+    for<'a> fn(&[ColumnViewImpl<'a>]) -> anyhow::Result<(ArrayImpl, PrimitiveLoop)>;
+
+pub struct BinaryExpression {
+    name: &'static str,
+    input_types: [crate::PhysicalType; 2],
+    output_type: crate::PhysicalType,
+    kernel: BinaryBatchKernel,
+    loop_kernel: Option<BinaryLoopKernel>,
+    reports_scalar_rows: bool,
+}
+
+impl BinaryExpression {
+    pub fn new(
+        name: &'static str,
+        input_types: [crate::PhysicalType; 2],
+        output_type: crate::PhysicalType,
+        kernel: BinaryBatchKernel,
+    ) -> Self {
+        Self {
+            name,
+            input_types,
+            output_type,
+            kernel,
+            loop_kernel: None,
+            reports_scalar_rows: false,
+        }
+    }
+
+    pub fn new_with_loop(
+        name: &'static str,
+        input_types: [crate::PhysicalType; 2],
+        output_type: crate::PhysicalType,
+        kernel: BinaryBatchKernel,
+        loop_kernel: BinaryLoopKernel,
+    ) -> Self {
+        Self {
+            name,
+            input_types,
+            output_type,
+            kernel,
+            loop_kernel: Some(loop_kernel),
+            reports_scalar_rows: false,
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn new_with_scalar_rows(
+        name: &'static str,
+        input_types: [crate::PhysicalType; 2],
+        output_type: crate::PhysicalType,
+        kernel: BinaryBatchKernel,
+    ) -> Self {
+        Self {
+            name,
+            input_types,
+            output_type,
+            kernel,
+            loop_kernel: None,
+            reports_scalar_rows: true,
+        }
+    }
+
+    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        self.evaluate_with_loop(inputs).map(|(output, _)| output)
+    }
+
+    pub fn evaluate_with_loop(
+        &self,
+        inputs: &[ColumnViewImpl<'_>],
+    ) -> anyhow::Result<(ArrayImpl, PrimitiveLoop)> {
+        if inputs.len() != self.arity() {
+            anyhow::bail!(
+                "input arity mismatch: expected {}, got {}",
+                self.arity(),
+                inputs.len()
+            );
+        }
+        for (input_index, (input, expected)) in inputs.iter().zip(&self.input_types).enumerate() {
+            if input.physical_type() != *expected {
+                anyhow::bail!(
+                    "input {input_index} type mismatch: expected {expected:?}, got {:?}",
+                    input.physical_type()
+                );
+            }
+        }
+        if inputs[0].len() != inputs[1].len() {
+            anyhow::bail!(
+                "input 1 length mismatch: expected {}, got {}",
+                inputs[0].len(),
+                inputs[1].len()
+            );
+        }
+        let (output, selected_loop) = match self.loop_kernel {
+            Some(kernel) => kernel(inputs),
+            None => (self.kernel)(inputs).map(|output| (output, PrimitiveLoop::General)),
+        }
+        .map_err(|error| {
+            if self.reports_scalar_rows {
+                anyhow::anyhow!("function `{}` failed at {error}", self.name)
+            } else {
+                error
+            }
+        })?;
+        if output.physical_type() != self.output_type {
+            anyhow::bail!(
+                "output type mismatch: expected {:?}, got {:?}",
+                self.output_type,
+                output.physical_type()
+            );
+        }
+        Ok((output, selected_loop))
+    }
+
+    pub fn name(&self) -> &'static str {
+        self.name
+    }
+
+    pub fn input_types(&self) -> &[crate::PhysicalType] {
+        &self.input_types
+    }
+
+    pub fn arity(&self) -> usize {
+        self.input_types.len()
+    }
+
+    pub fn output_type(&self) -> crate::PhysicalType {
+        self.output_type.clone()
+    }
+
+    pub fn output_nullability(&self, inputs: &[Nullability]) -> Nullability {
+        if inputs
+            .iter()
+            .all(|nullability| *nullability == Nullability::NonNull)
+        {
+            Nullability::NonNull
+        } else {
+            Nullability::Nullable
+        }
+    }
+}
 
 pub fn validate_expression_inputs(
     inputs: &[ColumnViewImpl<'_>],
@@ -94,67 +409,6 @@ pub fn validate_expression_inputs(
         }
     }
     Ok(len)
-}
-
-/// Runtime metadata plus one monomorphized binary batch kernel.
-pub struct BinaryExpression {
-    name: &'static str,
-    input_types: [crate::PhysicalType; 2],
-    output_type: crate::PhysicalType,
-    kernel: BinaryBatchKernel,
-    reports_scalar_rows: bool,
-}
-
-impl BinaryExpression {
-    pub fn new(
-        name: &'static str,
-        input_types: [crate::PhysicalType; 2],
-        output_type: crate::PhysicalType,
-        kernel: BinaryBatchKernel,
-    ) -> Self {
-        Self {
-            name,
-            input_types,
-            output_type,
-            kernel,
-            reports_scalar_rows: false,
-        }
-    }
-
-    #[doc(hidden)]
-    pub fn new_with_scalar_rows(
-        name: &'static str,
-        input_types: [crate::PhysicalType; 2],
-        output_type: crate::PhysicalType,
-        kernel: BinaryBatchKernel,
-    ) -> Self {
-        Self {
-            name,
-            input_types,
-            output_type,
-            kernel,
-            reports_scalar_rows: true,
-        }
-    }
-
-    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-        validate_expression_inputs(inputs, &self.input_types)?;
-        let output = (self.kernel)(inputs).map_err(|error| {
-            if self.reports_scalar_rows {
-                anyhow::anyhow!("function `{}` failed at {error}", self.name)
-            } else {
-                error
-            }
-        })?;
-        if output.physical_type() != self.output_type {
-            anyhow::bail!(
-                "output type mismatch: expected {:?}, got {:?}",
-                self.output_type,
-                output.physical_type()
-            );
-        }
-        Ok(output)
-    }
 }
 pub fn auto_vectorize_binary<L, R, O, F>(
     left: ColumnViewImpl<'_>,

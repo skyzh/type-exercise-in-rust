@@ -1,5 +1,5 @@
 [package]
-name = "type-exercise-checkpoint-06-core"
+name = "type-exercise-checkpoint-07-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

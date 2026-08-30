@@ -8,4 +8,4 @@ mod tests;
 
 pub use arithmetic::*;
 pub use comparison::*;
-pub use type_exercise_checkpoint_06_core::*;
+pub use type_exercise_checkpoint_07_core::*;
