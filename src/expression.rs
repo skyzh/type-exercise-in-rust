@@ -65,7 +65,7 @@ where
 /// One statically selected binary kernel over a complete borrowed batch.
 pub type BinaryBatchKernel = for<'a> fn(&[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
 
-fn validate_expression_inputs(
+pub fn validate_expression_inputs(
     inputs: &[ColumnViewImpl<'_>],
     expected_types: &[crate::PhysicalType],
 ) -> anyhow::Result<usize> {
@@ -155,4 +155,188 @@ impl BinaryExpression {
         }
         Ok(output)
     }
+}
+pub fn auto_vectorize_binary<L, R, O, F>(
+    left: ColumnViewImpl<'_>,
+    right: ColumnViewImpl<'_>,
+    function: F,
+) -> anyhow::Result<ArrayImpl>
+where
+    L: Scalar + Copy,
+    R: Scalar + Copy,
+    O: Scalar + Copy,
+    F: Fn(L, R) -> O,
+    for<'a> L: Scalar<RefType<'a> = L>,
+    for<'a> R: Scalar<RefType<'a> = R>,
+    for<'a> &'a L::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a R::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+{
+    validate_expression_inputs(
+        &[left.clone(), right.clone()],
+        &[L::PHYSICAL_TYPE, R::PHYSICAL_TYPE],
+    )?;
+    let left = ColumnView::<L>::try_from(left)?;
+    let right = ColumnView::<R>::try_from(right)?;
+    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(left.len());
+    for row in 0..left.len() {
+        let value = left
+            .get(row)
+            .zip(right.get(row))
+            .map(|(left, right)| function(left, right));
+        output.push(value.as_ref().map(Scalar::as_scalar_ref));
+    }
+    Ok(output.finish().into())
+}
+
+/// Lift one infallible scalar function over a nullable unary column.
+pub fn evaluate_unary<I, O, F>(input: ColumnViewImpl<'_>, function: F) -> anyhow::Result<ArrayImpl>
+where
+    I: Scalar + Copy,
+    O: Scalar + Copy,
+    F: Fn(I) -> O,
+    for<'a> I: Scalar<RefType<'a> = I>,
+    for<'a> &'a I::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> I::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+{
+    evaluate_nullable_unary::<I, O, _>(input, |value| Ok(value.map(&function)))
+}
+
+/// Lift one nullable-aware scalar function over a unary column.
+fn evaluate_nullable_unary<I, O, F>(
+    input: ColumnViewImpl<'_>,
+    function: F,
+) -> anyhow::Result<ArrayImpl>
+where
+    I: Scalar + Copy,
+    O: Scalar + Copy,
+    F: Fn(Option<I>) -> anyhow::Result<Option<O>>,
+    for<'a> I: Scalar<RefType<'a> = I>,
+    for<'a> &'a I::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> I::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+{
+    validate_expression_inputs(std::slice::from_ref(&input), &[I::PHYSICAL_TYPE])?;
+    let input = ColumnView::<I>::try_from(input)?;
+    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(input.len());
+    for row in 0..input.len() {
+        let value = function(input.get(row))?;
+        output.push(value.as_ref().map(Scalar::as_scalar_ref));
+    }
+    Ok(output.finish().into())
+}
+
+/// Lift one fallible scalar function over two nullable columns.
+pub fn try_evaluate_binary<L, R, O, F>(
+    left: ColumnViewImpl<'_>,
+    right: ColumnViewImpl<'_>,
+    function_name: &str,
+    function: F,
+) -> anyhow::Result<ArrayImpl>
+where
+    L: Scalar + Copy,
+    R: Scalar + Copy,
+    O: Scalar + Copy,
+    F: Fn(L, R) -> anyhow::Result<O>,
+    for<'a> L: Scalar<RefType<'a> = L>,
+    for<'a> R: Scalar<RefType<'a> = R>,
+    for<'a> &'a L::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a R::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+{
+    let mut row = 0;
+    evaluate_nullable_binary::<L, R, O, _>(left, right, |left, right| {
+        let result = left
+            .zip(right)
+            .map(|(left, right)| function(left, right))
+            .transpose()
+            .map_err(|error| {
+                if function_name.is_empty() {
+                    anyhow::anyhow!("row {row}: {error}")
+                } else {
+                    anyhow::anyhow!("function `{function_name}` failed at row {row}: {error}")
+                }
+            });
+        row += 1;
+        result
+    })
+}
+
+/// Lift one nullable-aware scalar function over two columns.
+fn evaluate_nullable_binary<L, R, O, F>(
+    left: ColumnViewImpl<'_>,
+    right: ColumnViewImpl<'_>,
+    mut function: F,
+) -> anyhow::Result<ArrayImpl>
+where
+    L: Scalar + Copy,
+    R: Scalar + Copy,
+    O: Scalar + Copy,
+    F: FnMut(Option<L>, Option<R>) -> anyhow::Result<Option<O>>,
+    for<'a> L: Scalar<RefType<'a> = L>,
+    for<'a> R: Scalar<RefType<'a> = R>,
+    for<'a> &'a L::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a R::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+{
+    validate_expression_inputs(
+        &[left.clone(), right.clone()],
+        &[L::PHYSICAL_TYPE, R::PHYSICAL_TYPE],
+    )?;
+    let left = ColumnView::<L>::try_from(left)?;
+    let right = ColumnView::<R>::try_from(right)?;
+    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(left.len());
+    for row in 0..left.len() {
+        let value = function(left.get(row), right.get(row))?;
+        output.push(value.as_ref().map(Scalar::as_scalar_ref));
+    }
+    Ok(output.finish().into())
+}
+
+/// Lift one fallible scalar function over three nullable columns.
+pub fn try_evaluate_ternary<A, B, C, O, F>(
+    first: ColumnViewImpl<'_>,
+    second: ColumnViewImpl<'_>,
+    third: ColumnViewImpl<'_>,
+    function_name: &str,
+    function: F,
+) -> anyhow::Result<ArrayImpl>
+where
+    A: Scalar + Copy,
+    B: Scalar + Copy,
+    C: Scalar + Copy,
+    O: Scalar + Copy,
+    F: Fn(A, B, C) -> anyhow::Result<O>,
+    for<'a> A: Scalar<RefType<'a> = A>,
+    for<'a> B: Scalar<RefType<'a> = B>,
+    for<'a> C: Scalar<RefType<'a> = C>,
+    for<'a> &'a A::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a B::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a C::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> A::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> B::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> C::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+{
+    validate_expression_inputs(
+        &[first.clone(), second.clone(), third.clone()],
+        &[A::PHYSICAL_TYPE, B::PHYSICAL_TYPE, C::PHYSICAL_TYPE],
+    )?;
+    let first = ColumnView::<A>::try_from(first)?;
+    let second = ColumnView::<B>::try_from(second)?;
+    let third = ColumnView::<C>::try_from(third)?;
+    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(first.len());
+    for row in 0..first.len() {
+        let value = match (first.get(row), second.get(row), third.get(row)) {
+            (Some(first), Some(second), Some(third)) => {
+                Some(function(first, second, third).map_err(|error| {
+                    anyhow::anyhow!("function `{function_name}` failed at row {row}: {error}")
+                })?)
+            }
+            _ => None,
+        };
+        output.push(value.as_ref().map(Scalar::as_scalar_ref));
+    }
+    Ok(output.finish().into())
 }
