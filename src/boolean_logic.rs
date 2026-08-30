@@ -1,7 +1,8 @@
 //! Day 7, checkpoint 1: three-valued Boolean logic.
 
 use crate::{
-    ArrayBuilder, ArrayImpl, BoolArrayBuilder, ColumnView, ColumnViewImpl, PhysicalType, Scalar,
+    ArrayBuilder, ArrayImpl, BoolArrayBuilder, ColumnView, ColumnViewImpl, Expression,
+    PhysicalType, Scalar,
 };
 
 /// How null inputs reach the scalar Boolean function.
@@ -296,6 +297,28 @@ impl BooleanExpression {
 /// Build the course's three-valued Boolean expression with SQL null semantics.
 pub fn build_boolean_expression(operator: BooleanOperator) -> BooleanExpression {
     BooleanExpression::new(operator, NullEvaluationPolicy::NonStrict)
+}
+
+impl Expression for BooleanExpression {
+    fn name(&self) -> &'static str {
+        match self.operator {
+            BooleanOperator::And => "boolean_and",
+            BooleanOperator::Or => "boolean_or",
+            BooleanOperator::Not => "boolean_not",
+        }
+    }
+
+    fn input_types(&self) -> &[PhysicalType] {
+        BooleanExpression::input_types(self)
+    }
+
+    fn output_type(&self) -> PhysicalType {
+        PhysicalType::Bool
+    }
+
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        self.evaluate(inputs)
+    }
 }
 
 #[cfg(test)]

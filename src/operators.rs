@@ -5,7 +5,7 @@ use std::num::Wrapping;
 use std::ops::{Add, Mul, Neg, Sub};
 
 use crate::{
-    Array, ArrayBuilder, ArrayImpl, ColumnView, ColumnViewImpl, PhysicalType, Scalar,
+    Array, ArrayBuilder, ArrayImpl, ColumnView, ColumnViewImpl, Expression, PhysicalType, Scalar,
     ScalarRefImpl, TypeMismatch,
 };
 
@@ -70,6 +70,24 @@ impl<const N: usize> BatchExpression<N> {
     pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         validate_expression_inputs(inputs, &self.input_types)?;
         (self.kernel)(self, inputs)
+    }
+}
+
+impl<const N: usize> Expression for BatchExpression<N> {
+    fn name(&self) -> &'static str {
+        self.name
+    }
+
+    fn input_types(&self) -> &[PhysicalType] {
+        &self.input_types
+    }
+
+    fn output_type(&self) -> PhysicalType {
+        self.output_type.clone()
+    }
+
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        self.evaluate(inputs)
     }
 }
 
@@ -252,6 +270,21 @@ impl NumericBinaryExpression {
     }
 }
 
+impl Expression for NumericBinaryExpression {
+    fn name(&self) -> &'static str {
+        self.name
+    }
+    fn input_types(&self) -> &[PhysicalType] {
+        &self.input_types
+    }
+    fn output_type(&self) -> PhysicalType {
+        self.output_type.clone()
+    }
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        self.evaluate(inputs)
+    }
+}
+
 pub(crate) struct NumericComparisonExpression {
     name: &'static str,
     input_types: [PhysicalType; 2],
@@ -262,6 +295,21 @@ pub(crate) struct NumericComparisonExpression {
 impl NumericComparisonExpression {
     pub(crate) fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         (self.kernel)(self, inputs)
+    }
+}
+
+impl Expression for NumericComparisonExpression {
+    fn name(&self) -> &'static str {
+        self.name
+    }
+    fn input_types(&self) -> &[PhysicalType] {
+        &self.input_types
+    }
+    fn output_type(&self) -> PhysicalType {
+        PhysicalType::Bool
+    }
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        self.evaluate(inputs)
     }
 }
 
@@ -277,6 +325,21 @@ impl NumericNegExpression {
     }
 }
 
+impl Expression for NumericNegExpression {
+    fn name(&self) -> &'static str {
+        self.name
+    }
+    fn input_types(&self) -> &[PhysicalType] {
+        &self.input_types
+    }
+    fn output_type(&self) -> PhysicalType {
+        self.input_types[0].clone()
+    }
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        self.evaluate(inputs)
+    }
+}
+
 pub(crate) struct NumericClampExpression {
     name: &'static str,
     input_types: [PhysicalType; 3],
@@ -287,6 +350,21 @@ pub(crate) struct NumericClampExpression {
 impl NumericClampExpression {
     pub(crate) fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         (self.kernel)(self, inputs)
+    }
+}
+
+impl Expression for NumericClampExpression {
+    fn name(&self) -> &'static str {
+        self.name
+    }
+    fn input_types(&self) -> &[PhysicalType] {
+        &self.input_types
+    }
+    fn output_type(&self) -> PhysicalType {
+        self.output_type.clone()
+    }
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        self.evaluate(inputs)
     }
 }
 
