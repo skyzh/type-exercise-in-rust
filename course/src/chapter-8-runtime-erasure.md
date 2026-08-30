@@ -19,12 +19,13 @@ cargo x copy-test --chapter 8 --checkpoint 1
 cargo test -p type-exercise-starter-expr chapter_8 --locked
 ```
 
-Enable `src/boolean.rs` and implement:
+Enable only the private `src/boolean.rs` module in `src/lib.rs`, then implement these
+crate-visible scalar functions:
 
 ```rust,ignore
-fn not(value: bool) -> bool;
-fn and(left: Option<bool>, right: Option<bool>) -> Option<bool>;
-fn or(left: Option<bool>, right: Option<bool>) -> Option<bool>;
+pub(crate) fn not(value: bool) -> bool;
+pub(crate) fn and(left: Option<bool>, right: Option<bool>) -> Option<bool>;
+pub(crate) fn or(left: Option<bool>, right: Option<bool>) -> Option<bool>;
 ```
 
 Keep the functions concise. `NOT` flips a present Boolean. `AND` returns false as soon as either
@@ -51,6 +52,9 @@ function before row evaluation:
 - `Not` delegates to the strict unary evaluator;
 - `And` delegates to the nullable-aware binary evaluator with the `and` scalar function; and
 - `Or` delegates to the same evaluator with `or`.
+
+Now uncomment the `pub use boolean::*` line in `src/lib.rs` so the completed expression surface is
+available to later chapters. The scalar helpers remain crate-visible implementation details.
 
 Keep operator selection outside the shared loops. A null-policy enum tested per row would make
 the core depend on Boolean semantics and would put dispatch back into the hot path. The selected

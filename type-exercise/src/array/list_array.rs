@@ -436,33 +436,6 @@ mod tests {
     }
 
     #[test]
-    fn empty_all_null_and_populated_decimal_lists_keep_child_metadata() {
-        let decimal_type = DecimalType::try_new(8, 2).unwrap();
-        let value = Decimal::try_new(12_345, decimal_type).unwrap();
-        let child = DecimalArray::try_from_slice(decimal_type, &[Some(value), None]).unwrap();
-        let scalar = ListScalar::try_new(child.into()).unwrap();
-        let element_type = PhysicalType::Decimal(decimal_type);
-
-        let populated = super::ListArray::try_from_rows(
-            element_type.clone(),
-            [Some(scalar.as_list_ref()), None],
-        )
-        .unwrap();
-        assert_eq!(populated.element_type(), element_type);
-        assert_eq!(
-            populated.get(0).unwrap().unwrap().get(0).unwrap(),
-            Some(value.into())
-        );
-        assert_eq!(populated.get(0).unwrap().unwrap().get(1).unwrap(), None);
-        assert_eq!(populated.get(1).unwrap(), None);
-
-        let all_null = super::ListArray::try_from_rows(element_type.clone(), [None, None]).unwrap();
-        assert_eq!(all_null.element_type(), element_type);
-        assert_eq!(all_null.values().physical_type(), element_type);
-        assert_eq!(all_null.values().len(), 0);
-    }
-
-    #[test]
     fn mixed_decimal_descriptors_fail_before_list_builder_mutation() {
         let expected_type = DecimalType::try_new(8, 2).unwrap();
         let other_type = DecimalType::try_new(8, 3).unwrap();

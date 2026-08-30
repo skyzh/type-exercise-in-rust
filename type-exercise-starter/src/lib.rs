@@ -13,8 +13,9 @@ pub use type_exercise_starter_core::*;
 // mod comparison;
 // pub use comparison::*;
 
-// Day 8: enable strict NOT and nullable-aware AND/OR scalar operations.
+// Day 8, checkpoint 1: enable the private module and implement scalar NOT/AND/OR.
 // mod boolean;
+// Checkpoint 2: expose the completed Boolean expression surface.
 // pub use boolean::*;
 
 // Day 10: enable variable-width scalar operations after the core writer evaluator exists.

@@ -1,6 +1,6 @@
 [book]
 authors = ["Alex Chi"]
-description = "A twelve-chapter Rust course that builds a typed vectorized database expression engine"
+description = "A fourteen-chapter Rust course that builds a typed vectorized database expression engine"
 language = "en"
 src = "src"
 title = "Build a Typed Database Expression Engine in Rust"

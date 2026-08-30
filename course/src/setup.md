@@ -3,15 +3,20 @@
 # Environment Setup
 
 Install [rustup](https://rustup.rs/), update stable Rust, and install
-[mdBook](https://rust-lang.github.io/mdBook/):
+[mdBook](https://rust-lang.github.io/mdBook/) plus `cargo-expand`:
 
 ```console
 rustup update stable
 rustc --version
+cargo install cargo-expand --locked
+cargo expand --version
 ```
 
 The repository selects rolling `stable` and Rust Edition 2024. It does not claim an older minimum
 supported Rust version.
+
+Chapter 6 uses `cargo expand` to inspect the generated generic adapters. Install and verify it now
+so that chapter's first inspection command works without an unannounced tool prerequisite.
 
 ## Check out the starting state
 

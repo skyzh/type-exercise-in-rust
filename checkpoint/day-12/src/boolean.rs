@@ -10,7 +10,11 @@ pub enum BooleanOperator {
     Not,
 }
 
-fn boolean_and(left: Option<bool>, right: Option<bool>) -> Option<bool> {
+pub(crate) fn not(value: bool) -> bool {
+    !value
+}
+
+pub(crate) fn and(left: Option<bool>, right: Option<bool>) -> Option<bool> {
     match (left, right) {
         (Some(false), _) | (_, Some(false)) => Some(false),
         (Some(true), Some(true)) => Some(true),
@@ -18,7 +22,7 @@ fn boolean_and(left: Option<bool>, right: Option<bool>) -> Option<bool> {
     }
 }
 
-fn boolean_or(left: Option<bool>, right: Option<bool>) -> Option<bool> {
+pub(crate) fn or(left: Option<bool>, right: Option<bool>) -> Option<bool> {
     match (left, right) {
         (Some(true), _) | (_, Some(true)) => Some(true),
         (Some(false), Some(false)) => Some(false),
@@ -68,18 +72,16 @@ impl BooleanExpression {
     pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         crate::validate_expression_inputs(inputs, self.input_types())?;
         match self.operator {
-            BooleanOperator::Not => {
-                crate::evaluate_unary::<bool, bool, _>(inputs[0].clone(), |value| !value)
-            }
+            BooleanOperator::Not => crate::evaluate_unary::<bool, bool, _>(inputs[0].clone(), not),
             BooleanOperator::And => crate::evaluate_nullable_binary::<bool, bool, bool, _>(
                 inputs[0].clone(),
                 inputs[1].clone(),
-                |left, right| Ok(boolean_and(left, right)),
+                |left, right| Ok(and(left, right)),
             ),
             BooleanOperator::Or => crate::evaluate_nullable_binary::<bool, bool, bool, _>(
                 inputs[0].clone(),
                 inputs[1].clone(),
-                |left, right| Ok(boolean_or(left, right)),
+                |left, right| Ok(or(left, right)),
             ),
         }
     }

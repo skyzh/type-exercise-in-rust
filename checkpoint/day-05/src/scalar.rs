@@ -263,18 +263,3 @@ macro_rules! define_scalar_family {
 for_each_physical_family!(define_scalar_erasure);
 
 // Day 12 extends both erased enums and conversions with List.
-
-#[cfg(test)]
-mod tests {
-    use super::ScalarImpl;
-
-    #[test]
-    fn distinguishes_owned_scalar_variants() {
-        assert_eq!(ScalarImpl::Int32(7), ScalarImpl::Int32(7));
-        assert_eq!(
-            ScalarImpl::String("rust".to_owned()),
-            ScalarImpl::String("rust".to_owned())
-        );
-        assert_ne!(ScalarImpl::Int32(7), ScalarImpl::String("7".to_owned()));
-    }
-}

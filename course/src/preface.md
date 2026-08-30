@@ -28,7 +28,7 @@ ternary auto-vectorizers let a new expression author supply only one scalar oper
 
 ![Map of the typed expression engine](./assets/map-of-types.svg)
 
-The map has three reading directions:
+The map has four reading directions:
 
 1. `DataType` tells the planner what a value means; `PhysicalType` selects storage.
 2. `Scalar`, `ScalarRef`, `Array`, and `ArrayBuilder` form one compile-time family, while erased
@@ -55,6 +55,9 @@ return-position `impl Trait` in the concrete places that need them.
 Every chapter names prerequisites, exact starter targets, required work, extensions, and a copied
 test. Passing the test is necessary; you should also be able to explain why the new boundary exists
 and which failure it prevents.
+
+Treat each of the fourteen focused chapters as roughly half a day. An experienced Rust learner can
+finish the course in about seven working days; newer learners should expect to take longer.
 
 Continue to [Environment Setup](./setup.md).
 

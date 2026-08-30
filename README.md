@@ -12,7 +12,9 @@ operation, while generic unary, binary, and ternary adapters reuse the checked b
 
 Read the [published course](https://skyzh.github.io/type-exercise-in-rust/). Work through the
 chapters in order; each chapter extends the same starter and keeps earlier supplied tests green.
-The book's `SUMMARY.md` is the sole ordered chapter list.
+The book's `SUMMARY.md` is the sole ordered chapter list. Plan each of the fourteen focused
+chapters as roughly half a day: an experienced Rust learner can finish in about seven working
+days, while newer learners should expect to take longer.
 
 ## What you will build
 

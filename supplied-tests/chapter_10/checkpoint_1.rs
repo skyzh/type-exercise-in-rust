@@ -1,10 +1,7 @@
-use crate::{
-    Array, ArrayImpl, ColumnViewImpl, PhysicalType, ScalarRefImpl, StringArray,
-    build_builtin_expression,
-};
+use crate::{Array, StringArray};
 
 #[test]
-fn string_array_pins_bytes_offsets_and_validity() {
+fn checkpoint_1_string_array_pins_bytes_offsets_and_validity() {
     let array = StringArray::from_slice(&[Some("rust"), None, Some(""), Some("类型")]);
     assert_eq!(array.data(), "rust类型".as_bytes());
     assert_eq!(array.offsets(), &[0, 4, 4, 4, 10]);

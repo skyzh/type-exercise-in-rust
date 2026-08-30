@@ -984,6 +984,7 @@ pub(crate) struct StringBinaryExpression {
 
 impl StringBinaryExpression {
     pub(crate) fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        crate::validate_expression_inputs(inputs, &self.input_types)?;
         let left = inputs[0].clone();
         let right = inputs[1].clone();
         match self.operator {
@@ -1062,6 +1063,7 @@ pub(crate) struct BoolComparisonExpression {
 
 impl BoolComparisonExpression {
     pub(crate) fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        crate::validate_expression_inputs(inputs, &self.input_types)?;
         let left = inputs[0].clone();
         let right = inputs[1].clone();
         match self.operator {

@@ -298,6 +298,40 @@ fn strings_compare_and_contains_with_strict_nulls() {
 }
 
 #[test]
+fn public_string_and_boolean_comparisons_reject_wrong_runtime_arity() {
+    let registry = FunctionRegistry::with_builtins();
+    let expressions = [
+        registry
+            .bind_binary("contains", DataType::Varchar, DataType::Varchar)
+            .unwrap(),
+        registry
+            .bind_binary("=", DataType::Boolean, DataType::Boolean)
+            .unwrap(),
+    ];
+    let inputs = [
+        ColumnViewImpl::constant(ScalarRefImpl::Bool(true), 1),
+        ColumnViewImpl::constant(ScalarRefImpl::Bool(false), 1),
+        ColumnViewImpl::constant(ScalarRefImpl::Bool(true), 1),
+    ];
+
+    for expression in expressions {
+        for (actual, expected) in [
+            (0, "input arity mismatch: expected 2, got 0"),
+            (1, "input arity mismatch: expected 2, got 1"),
+            (3, "input arity mismatch: expected 2, got 3"),
+        ] {
+            assert_eq!(
+                expression
+                    .evaluate(&inputs[..actual])
+                    .unwrap_err()
+                    .to_string(),
+                expected
+            );
+        }
+    }
+}
+
+#[test]
 fn slice_registry_rejects_wrong_arity_before_a_binary_factory_can_index() {
     let registry = FunctionRegistry::with_builtins();
     for inputs in [

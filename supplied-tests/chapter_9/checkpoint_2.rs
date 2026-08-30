@@ -1,9 +1,8 @@
 use std::any::Any;
 
 use crate::{
-    Array, ArrayBuilder, ArrayImpl, BUILTIN_EXPRESSION_NAMES, BatchExpression, BinaryExpression,
-    BoolArray, BooleanOperator, ColumnView, ColumnViewImpl, Expression, I32Array, PhysicalType,
-    ScalarRefImpl, StringArray, build_boolean_expression, build_builtin_expression,
+    Array, ArrayBuilder, ArrayImpl, BinaryExpression, ColumnView, ColumnViewImpl, Expression,
+    I32Add, I32Array, PhysicalType, PrimitiveBinaryExpression, ScalarRefImpl, StringArray,
 };
 
 fn assert_expression_bounds<T: Any + Send + Sync + ?Sized>() {}
@@ -37,8 +36,9 @@ fn mixed_fixed_width_add_batch(inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<
 }
 
 #[test]
-fn evaluates_a_builtin_through_a_trait_object() {
-    let expression: Box<dyn Expression> = build_builtin_expression("i32_add").unwrap();
+fn checkpoint_1_evaluates_one_typed_expression_through_a_trait_object() {
+    let expression: Box<dyn Expression> =
+        Box::new(PrimitiveBinaryExpression::new("i32_add", I32Add));
     assert_eq!(expression.name(), "i32_add");
     assert_eq!(expression.arity(), 2);
     assert_eq!(
@@ -48,56 +48,28 @@ fn evaluates_a_builtin_through_a_trait_object() {
     assert_eq!(expression.output_type(), PhysicalType::Int32);
 
     let left: ArrayImpl = I32Array::from_slice(&[Some(10), None, Some(30)]).into();
-    let inputs = [
-        ColumnViewImpl::array(&left),
-        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 3),
-    ];
-    let result = expression.evaluate(&inputs).unwrap();
-    let result = <&I32Array>::try_from(&result).unwrap();
+    let output = expression
+        .evaluate(&[
+            ColumnViewImpl::array(&left),
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 3),
+        ])
+        .unwrap();
     assert_eq!(
-        result.iter().collect::<Vec<_>>(),
+        <&I32Array>::try_from(&output)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
         vec![Some(12), None, Some(32)]
     );
-
-    let expression: Box<dyn Expression> = Box::new(BinaryExpression::new(
-        "mixed_fixed_width_add",
-        [PhysicalType::Int32, PhysicalType::Int32],
-        PhysicalType::Int32,
-        mixed_fixed_width_add_batch,
-    ));
-    assert_eq!(
-        expression.input_types(),
-        &[PhysicalType::Int32, PhysicalType::Int32]
-    );
-    assert_eq!(expression.output_type(), PhysicalType::Int32);
-
-    let values: ArrayImpl = I32Array::from_slice(&[Some(4), None]).into();
-    let inputs = [
-        ColumnViewImpl::array(&values),
-        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 2),
-    ];
-    let result = expression.evaluate(&inputs).unwrap();
-    let result = <&I32Array>::try_from(&result).unwrap();
-    assert_eq!(result.iter().collect::<Vec<_>>(), vec![Some(6), None]);
 }
 
 #[test]
-fn erased_expression_boundary_is_any_send_and_sync() {
+fn checkpoint_1_erased_expression_boundary_is_any_send_and_sync() {
     assert_expression_bounds::<dyn Expression>();
 }
 
 #[test]
-fn generates_the_complete_builtin_catalog() {
-    assert!(BUILTIN_EXPRESSION_NAMES.contains(&"i32_add"));
-    for name in BUILTIN_EXPRESSION_NAMES {
-        assert_eq!(build_builtin_expression(name).unwrap().name(), *name);
-    }
-    assert!(build_builtin_expression("add").is_none());
-    assert!(build_builtin_expression("missing").is_none());
-}
-
-#[test]
-fn rejects_a_kernel_result_that_disagrees_with_declared_metadata() {
+fn checkpoint_2_rejects_a_kernel_result_with_wrong_metadata() {
     let expression = BinaryExpression::new(
         "mismatched_output",
         [PhysicalType::Int32, PhysicalType::Int32],
@@ -118,29 +90,30 @@ fn rejects_a_kernel_result_that_disagrees_with_declared_metadata() {
 }
 
 #[test]
-fn preserves_strict_nulls_through_the_erased_adapter() {
+fn checkpoint_2_preserves_strict_nulls_through_erasure() {
     let expression: Box<dyn Expression> = Box::new(BinaryExpression::new(
         "panic_on_call",
         [PhysicalType::Int32, PhysicalType::Int32],
         PhysicalType::Int32,
         panic_on_non_null_batch,
     ));
+    let output = expression
+        .evaluate(&[
+            ColumnViewImpl::null(PhysicalType::Int32, 2),
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 2),
+        ])
+        .unwrap();
     assert_eq!(
-        expression.input_types(),
-        &[PhysicalType::Int32, PhysicalType::Int32]
+        <&I32Array>::try_from(&output)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![None, None]
     );
-    assert_eq!(expression.output_type(), PhysicalType::Int32);
-    let inputs = [
-        ColumnViewImpl::null(PhysicalType::Int32, 2),
-        ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 2),
-    ];
-    let result = expression.evaluate(&inputs).unwrap();
-    let result = <&I32Array>::try_from(&result).unwrap();
-    assert_eq!(result.iter().collect::<Vec<_>>(), vec![None, None]);
 }
 
 #[test]
-fn rejects_arity_before_indexing_or_converting_inputs() {
+fn checkpoint_2_rejects_arity_before_indexing_inputs() {
     let expression: Box<dyn Expression> = Box::new(BinaryExpression::new(
         "mixed_fixed_width_add",
         [PhysicalType::Int32, PhysicalType::Int32],
@@ -148,14 +121,47 @@ fn rejects_arity_before_indexing_or_converting_inputs() {
         mixed_fixed_width_add_batch,
     ));
     assert!(expression.evaluate(&[]).is_err());
+    assert!(
+        expression
+            .evaluate(&[ColumnViewImpl::null(PhysicalType::Int32, 1)])
+            .is_err()
+    );
+    assert!(
+        expression
+            .evaluate(&[
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 1),
+                ColumnViewImpl::null(PhysicalType::Int32, 1),
+            ])
+            .is_err()
+    );
+}
 
-    let inputs = [ColumnViewImpl::null(PhysicalType::Int32, 1)];
-    assert!(expression.evaluate(&inputs).is_err());
+#[test]
+fn checkpoint_2_delegates_type_errors_to_the_typed_boundary() {
+    let expression: Box<dyn Expression> =
+        Box::new(PrimitiveBinaryExpression::new("i32_add", I32Add));
+    let strings: ArrayImpl = StringArray::from_slice(&[Some("wrong")]).into();
+    assert!(
+        expression
+            .evaluate(&[
+                ColumnViewImpl::array(&strings),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
+            ])
+            .is_err()
+    );
+}
 
-    let inputs = [
-        ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
-        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 1),
-        ColumnViewImpl::null(PhysicalType::Int32, 1),
-    ];
-    assert!(expression.evaluate(&inputs).is_err());
+#[test]
+fn checkpoint_2_delegates_length_errors_to_the_typed_boundary() {
+    let expression: Box<dyn Expression> =
+        Box::new(PrimitiveBinaryExpression::new("i32_add", I32Add));
+    assert!(
+        expression
+            .evaluate(&[
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 2),
+            ])
+            .is_err()
+    );
 }

@@ -164,15 +164,8 @@ An `f64` value carries its interpretation in its bits. An `i128` coefficient doe
 whether `12345` means `12345`, `123.45`, or `12.345`. Decimal therefore cannot use the static
 primitive relationship unchanged.
 
-Adding a dependency is the one exception to this chapter's normal source-only editing boundary.
-From the repository root, add `anyhow` to the learner crate before continuing:
-
-```console
-cargo add anyhow@1 --package type-exercise-starter-expr
-```
-
-This updates both `type-exercise-starter/Cargo.toml` and the workspace lockfile, so the documented
-`--locked` checks below remain reproducible. Then implement `DecimalType` and `Decimal` in
+The starter already includes `anyhow`; do not change its manifest or the workspace lockfile here.
+Implement `DecimalType` and `Decimal` in
 `src/decimal.rs` with `anyhow::Result`. This chapter needs readable checked failures, not a public
 Decimal-specific error taxonomy. `DecimalType` owns the
 precision and scale and accepts only:
