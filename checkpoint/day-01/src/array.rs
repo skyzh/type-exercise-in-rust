@@ -6,7 +6,6 @@ pub use string_array::{StringArray, StringArrayBuilder};
 
 use std::fmt::Debug;
 
-use crate::variant_catalog::for_each_physical_family;
 use crate::{PhysicalType, Scalar, ScalarRef, ScalarRefImpl, TypeMismatch};
 
 pub trait Array:
@@ -45,78 +44,106 @@ pub trait ArrayBuilder: Sized {
     fn finish(self) -> Self::Array;
 }
 
-macro_rules! define_array_erasure {
-    ($( { $kind:ident, $variant:ident, $array:ident, $builder:ident, $owned:ty, $borrowed:ty } ),+ $(,)?) => {
-        #[derive(Clone, Debug, PartialEq)]
-        pub enum ArrayImpl {
-            $($variant($array)),+
-        }
-
-        impl ArrayImpl {
-            pub fn physical_type(&self) -> PhysicalType {
-                match self {
-                    $(Self::$variant(_) => PhysicalType::$variant),+
-                }
-            }
-
-            pub fn len(&self) -> usize {
-                match self {
-                    $(Self::$variant(array) => array.len()),+
-                }
-            }
-
-            pub fn is_empty(&self) -> bool {
-                self.len() == 0
-            }
-
-            pub fn get(&self, row: usize) -> Option<ScalarRefImpl<'_>> {
-                if row >= self.len() {
-                    return None;
-                }
-                match self {
-                    $(Self::$variant(array) => array.get(row).map(ScalarRefImpl::$variant)),+
-                }
-            }
-        }
-
-        $(define_array_family!($kind, $variant, $array);)+
-    };
+#[derive(Clone, Debug, PartialEq)]
+pub enum ArrayImpl {
+    Int32(I32Array),
+    String(StringArray),
 }
 
-macro_rules! define_array_family {
-    ($kind:ident, $variant:ident, $array:ident) => {
-        impl From<$array> for ArrayImpl {
-            fn from(array: $array) -> Self {
-                Self::$variant(array)
-            }
+impl ArrayImpl {
+    pub fn physical_type(&self) -> PhysicalType {
+        match self {
+            Self::Int32(_) => PhysicalType::Int32,
+            Self::String(_) => PhysicalType::String,
         }
+    }
 
-        impl TryFrom<ArrayImpl> for $array {
-            type Error = TypeMismatch;
-            fn try_from(array: ArrayImpl) -> Result<Self, Self::Error> {
-                match array {
-                    ArrayImpl::$variant(array) => Ok(array),
-                    other => Err(TypeMismatch {
-                        expected: PhysicalType::$variant,
-                        actual: other.physical_type(),
-                    }),
-                }
-            }
+    pub fn len(&self) -> usize {
+        match self {
+            Self::Int32(array) => array.len(),
+            Self::String(array) => array.len(),
         }
+    }
 
-        impl<'a> TryFrom<&'a ArrayImpl> for &'a $array {
-            type Error = TypeMismatch;
-            fn try_from(array: &'a ArrayImpl) -> Result<Self, Self::Error> {
-                match array {
-                    ArrayImpl::$variant(array) => Ok(array),
-                    other => Err(TypeMismatch {
-                        expected: PhysicalType::$variant,
-                        actual: other.physical_type(),
-                    }),
-                }
-            }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn get(&self, row: usize) -> Option<ScalarRefImpl<'_>> {
+        if row >= self.len() {
+            return None;
         }
-    };
+        match self {
+            Self::Int32(array) => array.get(row).map(ScalarRefImpl::Int32),
+            Self::String(array) => array.get(row).map(ScalarRefImpl::String),
+        }
+    }
 }
 
-for_each_physical_family!(define_array_erasure);
+impl From<I32Array> for ArrayImpl {
+    fn from(array: I32Array) -> Self {
+        Self::Int32(array)
+    }
+}
+
+impl TryFrom<ArrayImpl> for I32Array {
+    type Error = TypeMismatch;
+
+    fn try_from(array: ArrayImpl) -> Result<Self, Self::Error> {
+        match array {
+            ArrayImpl::Int32(array) => Ok(array),
+            other => Err(TypeMismatch {
+                expected: PhysicalType::Int32,
+                actual: other.physical_type(),
+            }),
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a ArrayImpl> for &'a I32Array {
+    type Error = TypeMismatch;
+
+    fn try_from(array: &'a ArrayImpl) -> Result<Self, Self::Error> {
+        match array {
+            ArrayImpl::Int32(array) => Ok(array),
+            other => Err(TypeMismatch {
+                expected: PhysicalType::Int32,
+                actual: other.physical_type(),
+            }),
+        }
+    }
+}
+
+impl From<StringArray> for ArrayImpl {
+    fn from(array: StringArray) -> Self {
+        Self::String(array)
+    }
+}
+
+impl TryFrom<ArrayImpl> for StringArray {
+    type Error = TypeMismatch;
+
+    fn try_from(array: ArrayImpl) -> Result<Self, Self::Error> {
+        match array {
+            ArrayImpl::String(array) => Ok(array),
+            other => Err(TypeMismatch {
+                expected: PhysicalType::String,
+                actual: other.physical_type(),
+            }),
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a ArrayImpl> for &'a StringArray {
+    type Error = TypeMismatch;
+
+    fn try_from(array: &'a ArrayImpl) -> Result<Self, Self::Error> {
+        match array {
+            ArrayImpl::String(array) => Ok(array),
+            other => Err(TypeMismatch {
+                expected: PhysicalType::String,
+                actual: other.physical_type(),
+            }),
+        }
+    }
+}

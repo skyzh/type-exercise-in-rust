@@ -54,6 +54,6 @@ pub enum ArrayImpl {
     // Day 12: add `List(ListArray)`.
 }
 
-// Day 1, checkpoint 4: add erased dispatch plus owned and borrowed checked conversions for both
-// variants. Generate the repeated conversion implementations from the physical-family catalog.
-// Day 2 extends the same machinery rather than adding parallel hand-written dispatch.
+// Day 1, checkpoint 4: add erased dispatch for Int32 and String plus their explicit owned `From`,
+// owned `TryFrom`, and borrowed `TryFrom` conversions. Keep these two families handwritten;
+// Day 2 introduces catalog-driven generation when the physical-family inventory scales.
