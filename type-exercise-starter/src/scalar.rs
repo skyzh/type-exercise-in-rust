@@ -41,7 +41,8 @@ pub enum ScalarRefImpl<'a> {
 // Day 1, checkpoint 3: connect each ArrayType placeholder to its concrete array.
 // Day 1, checkpoint 2: add physical-type methods and checked From/TryFrom conversions for both
 // erased enums. Wrong variants return TypeMismatch rather than panicking.
-// Day 2: extend those implementations to the remaining scalar families and Decimal.
+// Day 2: replace the repeated family relationships with catalog callbacks, then extend the
+// catalog to the remaining scalar families and Decimal.
 
 #[cfg(test)]
 mod tests {
