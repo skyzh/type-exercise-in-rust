@@ -27,14 +27,16 @@ The goal is not to hide the type system behind a general framework. It is to kee
 ## What is in the starter
 
 Begin from your completed Chapter 1 workspace. `src/variant_catalog.rs` contains exactly the
-Int32 and String rows. Those rows already drive scalar and array erasure. `src/physical_type.rs`,
-`src/scalar.rs`, and `src/array.rs` therefore expose two physical families, and
+Int32 and String rows. On Day 1, those rows drive only `PHYSICAL_FAMILY_CATALOG`; scalar and array
+erasure remains handwritten in `src/scalar.rs` and `src/array.rs`. Day 2 first replaces that
+Int32/String erasure with catalog callbacks, then extends the inventory. `src/physical_type.rs`,
+`src/scalar.rs`, and `src/array.rs` expose those two physical families, and
 `src/array/primitive_array.rs` has the working `I32Array` layout you implemented.
 
 The Day 2 starter does not predeclare the rest of the solution. Comments in the active files mark
 where the primitive variants and aliases belong. `src/data_type.rs`, `src/decimal.rs`, and
 `src/array/decimal_array.rs` are still docstrings rather than executable declarations, and their
-modules remain commented in `src/lib.rs` and `src/array.rs`. You will make those files executable
+modules remain commented in `src/core.rs` and `src/array.rs`. You will make those files executable
 only when their checkpoints introduce the concepts.
 
 Copy the cumulative supplied test before editing:
@@ -102,10 +104,11 @@ Extend the inventory with the static Day 2 families: Int16, Int64, Bool, Float32
 Int32 remains in place, and String remains the one `borrowed` row because its array yields `&str`
 rather than copying an owned `String`.
 
-The existing catalog callbacks in `src/scalar.rs` and `src/array.rs` should now generate the new
-erased scalar and array variants, scalar-family relationships, physical-type dispatch, and
-variant-specific checked conversions without five hand-written copies. They do not generate the
-primitive aliases or duplicate the generic `Array` implementation from Checkpoint 1. Add the
+Add catalog callbacks in `src/scalar.rs` and `src/array.rs` that replace the handwritten
+Int32/String erasure. Then use those callbacks to generate the new erased scalar and array
+variants, scalar-family relationships, physical-type dispatch, and variant-specific checked
+conversions without five hand-written copies. They do not generate the primitive aliases or
+duplicate the generic `Array` implementation from Checkpoint 1. Add the
 matching variants to `PhysicalType` and `PhysicalFamily` in `src/physical_type.rs`, and keep
 `PHYSICAL_FAMILY_CATALOG` in the same public order. The supplied test treats that public list as an
 audit surface: an omitted, duplicated, or misnamed family is a failure even if some generated code
@@ -155,7 +158,7 @@ Implement `physical_type`, `is_string`, and `is_numeric`. `Boolean` is not numer
 Do not add a nullable logical variant or List. Keep one primitive array representation with its validity bitmap. Nullability is a physical property beside `PhysicalType`, expressed as `Nullability::{NonNull, Nullable}`. Day 7 will make `ColumnViewImpl` carry that property and make expressions derive their output property with `Expression::output_nullability`; `BoundExpression` only delegates it. An ordinary `ColumnViewImpl::array` remains conservatively `Nullable`. A checked `try_non_null_array` can establish `NonNull` once, after which the selected dense loop reads the same array's `values()` and leaves its bitmap structurally present but unused. This does not require a second Arrow array type or a cached null count. List arrives with its own scalar and array relationships on Day 12.
 
 Checkpoint 4 adds the Decimal variants and checked constructor to this same file. After that work,
-uncomment the `data_type` and `decimal` modules and exports in `src/lib.rs`; do not enable any
+uncomment the `data_type` and `decimal` modules and exports in `src/core.rs`; do not enable any
 later-day module.
 
 ## Checkpoint 4: Keep Decimal metadata with the physical value
