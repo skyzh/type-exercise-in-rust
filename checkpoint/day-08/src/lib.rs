@@ -1,13 +1,8 @@
 #![forbid(unsafe_code)]
 
-mod arithmetic;
 mod boolean;
-mod comparison;
+mod numeric;
 
-#[cfg(test)]
-mod tests;
-
-pub use arithmetic::*;
 pub use boolean::*;
-pub use comparison::*;
+pub use numeric::*;
 pub use type_exercise_checkpoint_08_core::*;

@@ -2,7 +2,9 @@ use std::any::Any;
 use std::future::Future;
 use std::pin::Pin;
 
-use crate::column::DenseI32Column;
+use bitvec::vec::BitVec;
+
+use crate::column::RawI32Column;
 use crate::{
     Array, ArrayBuilder, ArrayImpl, ColumnView, ColumnViewImpl, I32Array, Nullability,
     PhysicalType, Scalar, ScalarRefImpl, TypeMismatch,
@@ -77,6 +79,7 @@ impl AsyncExpression for AsyncExpressionAdapter {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PrimitiveLoop {
     General,
+    Indexed,
     ArrayArray,
     ArrayConstant,
     ConstantArray,
@@ -443,52 +446,86 @@ pub struct PrimitiveBinaryExpression<F> {
     function: F,
 }
 
-fn dense_array_array<F>(function: &F, left: &I32Array, right: &I32Array) -> Vec<i32>
+fn raw_array_array<F>(function: &F, left: &[i32], right: &[i32]) -> Vec<i32>
 where
     F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32>,
 {
-    let mut output = Vec::with_capacity(left.values().len());
-    for row in 0..left.values().len() {
-        let left = left.values()[row];
-        let right = right.values()[row];
+    let mut output = Vec::with_capacity(left.len());
+    for row in 0..left.len() {
+        let left = left[row];
+        let right = right[row];
         output.push(function.evaluate(left, right));
     }
     output
 }
 
-fn dense_array_constant<F>(function: &F, left: &I32Array, right: i32) -> Vec<i32>
+fn raw_array_constant<F>(function: &F, left: &[i32], right: i32) -> Vec<i32>
 where
     F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32>,
 {
-    let mut output = Vec::with_capacity(left.values().len());
-    for row in 0..left.values().len() {
-        let left = left.values()[row];
+    let mut output = Vec::with_capacity(left.len());
+    for row in 0..left.len() {
+        let left = left[row];
         output.push(function.evaluate(left, right));
     }
     output
 }
 
-fn dense_constant_array<F>(function: &F, left: i32, right: &I32Array) -> Vec<i32>
+fn raw_constant_array<F>(function: &F, left: i32, right: &[i32]) -> Vec<i32>
 where
     F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32>,
 {
-    let mut output = Vec::with_capacity(right.values().len());
-    for row in 0..right.values().len() {
-        let right = right.values()[row];
+    let mut output = Vec::with_capacity(right.len());
+    for row in 0..right.len() {
+        let right = right[row];
         output.push(function.evaluate(left, right));
     }
     output
 }
 
-fn dense_constant_constant<F>(function: &F, left: i32, right: i32, len: usize) -> Vec<i32>
+fn raw_constant_constant<F>(function: &F, left: i32, right: i32, len: usize) -> Vec<i32>
 where
     F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32>,
 {
-    let mut output = Vec::with_capacity(len);
-    for _row in 0..len {
-        output.push(function.evaluate(left, right));
+    if len == 0 {
+        Vec::new()
+    } else {
+        vec![function.evaluate(left, right); len]
     }
-    output
+}
+
+fn and_raw_i32_validity(left: RawI32Column<'_>, right: RawI32Column<'_>, len: usize) -> BitVec {
+    match (left, right) {
+        (
+            RawI32Column::Array { validity: left, .. },
+            RawI32Column::Array {
+                validity: right, ..
+            },
+        ) => {
+            let words = left
+                .as_raw_slice()
+                .iter()
+                .zip(right.as_raw_slice())
+                .map(|(left, right)| *left & *right)
+                .collect();
+            let mut validity = BitVec::from_vec(words);
+            validity.truncate(len);
+            validity
+        }
+        (RawI32Column::Array { validity, .. }, RawI32Column::Constant { valid: true, .. })
+        | (RawI32Column::Constant { valid: true, .. }, RawI32Column::Array { validity, .. }) => {
+            validity.clone()
+        }
+        (
+            RawI32Column::Constant {
+                valid: left_valid, ..
+            },
+            RawI32Column::Constant {
+                valid: right_valid, ..
+            },
+        ) => BitVec::repeat(left_valid & right_valid, len),
+        _ => BitVec::repeat(false, len),
+    }
 }
 
 impl<F> PrimitiveBinaryExpression<F>
@@ -538,43 +575,57 @@ where
             );
         }
 
-        let Some(left) = inputs[0].as_dense_i32() else {
+        if inputs[0].is_indexed() || inputs[1].is_indexed() {
             return Ok((
                 evaluate_binary(&self.function, inputs[0].clone(), inputs[1].clone())?,
-                PrimitiveLoop::General,
+                PrimitiveLoop::Indexed,
             ));
-        };
-        let Some(right) = inputs[1].as_dense_i32() else {
-            return Ok((
-                evaluate_binary(&self.function, inputs[0].clone(), inputs[1].clone())?,
-                PrimitiveLoop::General,
-            ));
-        };
+        }
+        let left = inputs[0]
+            .as_raw_i32()
+            .expect("validated non-indexed Int32 input");
+        let right = inputs[1]
+            .as_raw_i32()
+            .expect("validated non-indexed Int32 input");
         debug_assert_eq!(left.len(), right.len());
+        let len = left.len();
 
         let (values, selected_loop) = match (left, right) {
-            (DenseI32Column::Array(left), DenseI32Column::Array(right)) => (
-                dense_array_array(&self.function, left, right),
+            (
+                RawI32Column::Array { values: left, .. },
+                RawI32Column::Array { values: right, .. },
+            ) => (
+                raw_array_array(&self.function, left, right),
                 PrimitiveLoop::ArrayArray,
             ),
-            (DenseI32Column::Array(left), DenseI32Column::Constant { value: right, .. }) => (
-                dense_array_constant(&self.function, left, right),
+            (
+                RawI32Column::Array { values: left, .. },
+                RawI32Column::Constant { value: right, .. },
+            ) => (
+                raw_array_constant(&self.function, left, right),
                 PrimitiveLoop::ArrayConstant,
             ),
-            (DenseI32Column::Constant { value: left, .. }, DenseI32Column::Array(right)) => (
-                dense_constant_array(&self.function, left, right),
+            (
+                RawI32Column::Constant { value: left, .. },
+                RawI32Column::Array { values: right, .. },
+            ) => (
+                raw_constant_array(&self.function, left, right),
                 PrimitiveLoop::ConstantArray,
             ),
             (
-                DenseI32Column::Constant { value: left, len },
-                DenseI32Column::Constant { value: right, .. },
+                RawI32Column::Constant { value: left, .. },
+                RawI32Column::Constant { value: right, .. },
             ) => (
-                dense_constant_constant(&self.function, left, right, len),
+                raw_constant_constant(&self.function, left, right, len),
                 PrimitiveLoop::ConstantConstant,
             ),
         };
+        let validity = and_raw_i32_validity(left, right, len);
 
-        Ok((I32Array::from_values(values).into(), selected_loop))
+        Ok((
+            I32Array::from_raw_parts(values, validity).into(),
+            selected_loop,
+        ))
     }
 }
 
@@ -738,5 +789,58 @@ impl Expression for BinaryExpression {
             );
         }
         Ok((output, selected_loop))
+    }
+}
+
+use crate::PhysicalType as BatchPhysicalType;
+
+/// One monomorphized evaluator for a complete input batch.
+pub type BatchKernel<const N: usize> =
+    for<'a> fn(&BatchExpression<N>, &[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
+
+/// A fixed-arity expression whose only callable operation is vectorized.
+pub struct BatchExpression<const N: usize> {
+    name: &'static str,
+    input_types: [BatchPhysicalType; N],
+    output_type: BatchPhysicalType,
+    kernel: BatchKernel<N>,
+}
+
+impl<const N: usize> BatchExpression<N> {
+    pub fn new(
+        name: &'static str,
+        input_types: [BatchPhysicalType; N],
+        output_type: BatchPhysicalType,
+        kernel: BatchKernel<N>,
+    ) -> Self {
+        Self {
+            name,
+            input_types,
+            output_type,
+            kernel,
+        }
+    }
+
+    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        validate_expression_inputs(inputs, &self.input_types)?;
+        (self.kernel)(self, inputs)
+    }
+}
+
+impl<const N: usize> Expression for BatchExpression<N> {
+    fn name(&self) -> &'static str {
+        self.name
+    }
+
+    fn input_types(&self) -> &[BatchPhysicalType] {
+        &self.input_types
+    }
+
+    fn output_type(&self) -> BatchPhysicalType {
+        self.output_type.clone()
+    }
+
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        self.evaluate(inputs)
     }
 }

@@ -1,9 +1,6 @@
 #![forbid(unsafe_code)]
 
-mod arithmetic;
+mod numeric;
 
-#[cfg(test)]
-mod tests;
-
-pub use arithmetic::*;
+pub use numeric::*;
 pub use type_exercise_checkpoint_04_core::*;

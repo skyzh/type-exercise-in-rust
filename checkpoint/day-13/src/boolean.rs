@@ -118,3 +118,57 @@ impl Expression for BooleanExpression {
         self.evaluate(inputs)
     }
 }
+
+use crate::{ComparisonOperator, auto_vectorize_binary};
+
+pub(crate) struct BoolComparisonExpression {
+    name: &'static str,
+    input_types: [PhysicalType; 2],
+    operator: ComparisonOperator,
+}
+
+impl BoolComparisonExpression {
+    pub(crate) fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        crate::validate_expression_inputs(inputs, &self.input_types)?;
+        let left = inputs[0].clone();
+        let right = inputs[1].clone();
+        match self.operator {
+            ComparisonOperator::Equal => {
+                auto_vectorize_binary::<bool, bool, bool, _>(left, right, crate::numeric::equal)
+            }
+            ComparisonOperator::NotEqual => {
+                auto_vectorize_binary::<bool, bool, bool, _>(left, right, crate::numeric::not_equal)
+            }
+            _ => unreachable!("ordered boolean comparison"),
+        }
+    }
+}
+
+impl Expression for BoolComparisonExpression {
+    fn name(&self) -> &'static str {
+        self.name
+    }
+
+    fn input_types(&self) -> &[PhysicalType] {
+        &self.input_types
+    }
+
+    fn output_type(&self) -> PhysicalType {
+        PhysicalType::Bool
+    }
+
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        self.evaluate(inputs)
+    }
+}
+
+pub(crate) fn build_bool_comparison_expression(
+    name: &'static str,
+    operator: ComparisonOperator,
+) -> BoolComparisonExpression {
+    BoolComparisonExpression {
+        name,
+        input_types: [PhysicalType::Bool, PhysicalType::Bool],
+        operator,
+    }
+}

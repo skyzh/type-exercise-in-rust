@@ -4,8 +4,8 @@ use std::num::Wrapping;
 use std::ops::{Add, Mul, Sub};
 
 use crate::{
-    Array, ArrayBuilder, ArrayImpl, BinaryExpression, BinaryScalarFunction, ColumnView,
-    ColumnViewImpl, ComparisonOperator, PhysicalType, Scalar, ScalarRefImpl, TypeMismatch,
+    ArrayImpl, BinaryExpression, BinaryScalarFunction, ColumnViewImpl, Expression, PhysicalType,
+    Scalar, ScalarRefImpl, TypeMismatch, auto_vectorize_binary, try_auto_vectorize_binary,
 };
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -50,39 +50,6 @@ pub(crate) fn validate_expression_inputs(
         }
     }
     Ok(len)
-}
-
-/// One monomorphized evaluator for a complete input batch.
-pub type BatchKernel<const N: usize> =
-    for<'a> fn(&BatchExpression<N>, &[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
-
-/// A fixed-arity expression whose only callable operation is vectorized.
-pub struct BatchExpression<const N: usize> {
-    name: &'static str,
-    input_types: [PhysicalType; N],
-    output_type: PhysicalType,
-    kernel: BatchKernel<N>,
-}
-
-impl<const N: usize> BatchExpression<N> {
-    pub fn new(
-        name: &'static str,
-        input_types: [PhysicalType; N],
-        output_type: PhysicalType,
-        kernel: BatchKernel<N>,
-    ) -> Self {
-        Self {
-            name,
-            input_types,
-            output_type,
-            kernel,
-        }
-    }
-
-    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-        validate_expression_inputs(inputs, &self.input_types)?;
-        (self.kernel)(self, inputs)
-    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -234,7 +201,7 @@ where
 type NumericBinaryBatchKernel = for<'a> fn(&[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
 type NumericComparisonBatchKernel =
     for<'a> fn(&NumericComparisonExpression, &[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
-pub(crate) struct NumericComparisonExpression {
+pub struct NumericComparisonExpression {
     name: &'static str,
     input_types: [PhysicalType; 2],
     operator: ComparisonOperator,
@@ -244,6 +211,12 @@ pub(crate) struct NumericComparisonExpression {
 impl NumericComparisonExpression {
     pub(crate) fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         (self.kernel)(self, inputs)
+    }
+}
+
+impl Expression for NumericComparisonExpression {
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        self.evaluate(inputs)
     }
 }
 
@@ -265,25 +238,11 @@ where
     for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
 {
-    let len = validate_expression_inputs(inputs, &[L::PHYSICAL_TYPE, R::PHYSICAL_TYPE])?;
-    let left = ColumnView::<L>::try_from(inputs[0].clone())?;
-    let right = ColumnView::<R>::try_from(inputs[1].clone())?;
-    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(len);
-    for row in 0..len {
-        let value = match (left.get(row), right.get(row)) {
-            (Some(left), Some(right)) => {
-                let left = lossless_try_from::<O, L>(left);
-                let right = lossless_try_from::<O, R>(right);
-                Some(O::from_arithmetic(operation(
-                    left.into_arithmetic(),
-                    right.into_arithmetic(),
-                )))
-            }
-            _ => None,
-        };
-        output.push(value.as_ref().map(Scalar::as_scalar_ref));
-    }
-    Ok(output.finish().into())
+    auto_vectorize_binary::<L, R, O, _>(inputs[0].clone(), inputs[1].clone(), |left, right| {
+        let left = lossless_try_from::<O, L>(left);
+        let right = lossless_try_from::<O, R>(right);
+        O::from_arithmetic(operation(left.into_arithmetic(), right.into_arithmetic()))
+    })
 }
 
 fn evaluate_numeric_add<L, R, O>(inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl>
@@ -352,25 +311,11 @@ where
     for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
 {
-    let len = validate_expression_inputs(inputs, &[L::PHYSICAL_TYPE, R::PHYSICAL_TYPE])?;
-    let left = ColumnView::<L>::try_from(inputs[0].clone())?;
-    let right = ColumnView::<R>::try_from(inputs[1].clone())?;
-    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(len);
-    for row in 0..len {
-        let value = match (left.get(row), right.get(row)) {
-            (Some(left), Some(right)) => {
-                let left = lossless_try_from::<O, L>(left);
-                let right = lossless_try_from::<O, R>(right);
-                Some(
-                    left.checked_divide(right)
-                        .map_err(|error| anyhow::anyhow!("row {row}: {error}"))?,
-                )
-            }
-            _ => None,
-        };
-        output.push(value.as_ref().map(Scalar::as_scalar_ref));
-    }
-    Ok(output.finish().into())
+    try_auto_vectorize_binary::<L, R, O, _>(inputs[0].clone(), inputs[1].clone(), |left, right| {
+        let left = lossless_try_from::<O, L>(left);
+        let right = lossless_try_from::<O, R>(right);
+        left.checked_divide(right)
+    })
 }
 
 fn numeric_binary_kernel<L, R, O>(operator: ArithmeticOperator) -> NumericBinaryBatchKernel
@@ -414,29 +359,19 @@ where
     for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
 {
     let operation: fn(O, O) -> bool = match expression.operator {
-        ComparisonOperator::Less => crate::comparison::less::<O>,
-        ComparisonOperator::LessOrEqual => crate::comparison::less_or_equal::<O>,
-        ComparisonOperator::Greater => crate::comparison::greater::<O>,
-        ComparisonOperator::GreaterOrEqual => crate::comparison::greater_or_equal::<O>,
-        ComparisonOperator::Equal => crate::comparison::equal::<O>,
-        ComparisonOperator::NotEqual => crate::comparison::not_equal::<O>,
+        ComparisonOperator::Less => less::<O>,
+        ComparisonOperator::LessOrEqual => less_or_equal::<O>,
+        ComparisonOperator::Greater => greater::<O>,
+        ComparisonOperator::GreaterOrEqual => greater_or_equal::<O>,
+        ComparisonOperator::Equal => equal::<O>,
+        ComparisonOperator::NotEqual => not_equal::<O>,
     };
-    let len = validate_expression_inputs(inputs, &expression.input_types)?;
-    let left = ColumnView::<L>::try_from(inputs[0].clone())?;
-    let right = ColumnView::<R>::try_from(inputs[1].clone())?;
-    let mut output = <<bool as Scalar>::ArrayType as Array>::Builder::with_capacity(len);
-    for row in 0..len {
-        let value = match (left.get(row), right.get(row)) {
-            (Some(left), Some(right)) => {
-                let left = lossless_try_from::<O, L>(left);
-                let right = lossless_try_from::<O, R>(right);
-                Some(operation(left, right))
-            }
-            _ => None,
-        };
-        output.push(value);
-    }
-    Ok(output.finish().into())
+    validate_expression_inputs(inputs, &expression.input_types)?;
+    auto_vectorize_binary::<L, R, bool, _>(inputs[0].clone(), inputs[1].clone(), |left, right| {
+        let left = lossless_try_from::<O, L>(left);
+        let right = lossless_try_from::<O, R>(right);
+        operation(left, right)
+    })
 }
 
 struct NumericKernels {
@@ -539,7 +474,7 @@ fn numeric_kernels(
     }
 }
 
-pub(crate) fn build_numeric_binary_expression(
+pub fn build_numeric_binary_expression(
     name: &'static str,
     operator: ArithmeticOperator,
     left: PhysicalType,
@@ -550,7 +485,7 @@ pub(crate) fn build_numeric_binary_expression(
     BinaryExpression::new_with_scalar_rows(name, [left, right], output, kernel)
 }
 
-pub(crate) fn build_numeric_comparison_expression(
+pub fn build_numeric_comparison_expression(
     name: &'static str,
     operator: ComparisonOperator,
     left: PhysicalType,
@@ -564,4 +499,38 @@ pub(crate) fn build_numeric_comparison_expression(
         operator,
         kernel,
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ComparisonOperator {
+    Less,
+    LessOrEqual,
+    Greater,
+    GreaterOrEqual,
+    Equal,
+    NotEqual,
+}
+
+pub(crate) fn less<T: PartialOrd>(left: T, right: T) -> bool {
+    left < right
+}
+
+pub(crate) fn less_or_equal<T: PartialOrd>(left: T, right: T) -> bool {
+    left <= right
+}
+
+pub(crate) fn greater<T: PartialOrd>(left: T, right: T) -> bool {
+    left > right
+}
+
+pub(crate) fn greater_or_equal<T: PartialOrd>(left: T, right: T) -> bool {
+    left >= right
+}
+
+pub(crate) fn equal<T: PartialEq>(left: T, right: T) -> bool {
+    left == right
+}
+
+pub(crate) fn not_equal<T: PartialEq>(left: T, right: T) -> bool {
+    left != right
 }

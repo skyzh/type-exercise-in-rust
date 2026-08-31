@@ -1,4 +1,5 @@
 use anyhow::{Result, anyhow};
+use bitvec::vec::BitVec;
 
 use crate::{
     Array, ArrayImpl, ListArray, ListError, ListScalarRef, Nullability, PhysicalType, Scalar,
@@ -30,15 +31,22 @@ enum ColumnViewImplKind<'a> {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) enum DenseI32Column<'a> {
-    Array(&'a crate::I32Array),
-    Constant { value: i32, len: usize },
+pub(crate) enum RawI32Column<'a> {
+    Array {
+        values: &'a [i32],
+        validity: &'a BitVec,
+    },
+    Constant {
+        value: i32,
+        valid: bool,
+        len: usize,
+    },
 }
 
-impl DenseI32Column<'_> {
+impl RawI32Column<'_> {
     pub(crate) fn len(self) -> usize {
         match self {
-            Self::Array(array) => array.values().len(),
+            Self::Array { values, .. } => values.len(),
             Self::Constant { len, .. } => len,
         }
     }
@@ -136,24 +144,27 @@ impl<'a> ColumnViewImpl<'a> {
         }
     }
 
-    pub(crate) fn as_dense_i32(&self) -> Option<DenseI32Column<'a>> {
-        if self.nullability != Nullability::NonNull {
-            return None;
-        }
+    pub(crate) fn as_raw_i32(&self) -> Option<RawI32Column<'_>> {
         match &self.kind {
-            ColumnViewImplKind::Array(ArrayImpl::Int32(array)) => {
-                Some(DenseI32Column::Array(array))
-            }
-            ColumnViewImplKind::Constant {
-                value: Some(ScalarRefImpl::Int32(value)),
-                len,
-                ..
-            } => Some(DenseI32Column::Constant {
-                value: *value,
+            ColumnViewImplKind::Array(ArrayImpl::Int32(array)) => Some(RawI32Column::Array {
+                values: array.values(),
+                validity: array.validity(),
+            }),
+            ColumnViewImplKind::Constant { value, len, .. } => Some(RawI32Column::Constant {
+                value: match value {
+                    Some(ScalarRefImpl::Int32(value)) => *value,
+                    None => 0,
+                    Some(_) => return None,
+                },
+                valid: value.is_some(),
                 len: *len,
             }),
             _ => None,
         }
+    }
+
+    pub(crate) fn is_indexed(&self) -> bool {
+        matches!(self.kind, ColumnViewImplKind::Indexed { .. })
     }
 
     pub fn try_as_list(self, element_type: PhysicalType) -> Result<ListColumnView<'a>, ListError> {

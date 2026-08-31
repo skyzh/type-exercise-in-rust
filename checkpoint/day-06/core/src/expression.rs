@@ -2,6 +2,11 @@ use crate::{
     Array, ArrayBuilder, ArrayImpl, ColumnView, ColumnViewImpl, Scalar, ScalarRefImpl, TypeMismatch,
 };
 
+/// A batch expression whose implementation owns no caller-side row loop.
+pub trait Expression: Send + Sync {
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl>;
+}
+
 pub trait BinaryScalarFunction {
     type Left: Scalar;
     type Right: Scalar;
@@ -156,6 +161,13 @@ impl BinaryExpression {
         Ok(output)
     }
 }
+
+impl Expression for BinaryExpression {
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        self.evaluate(inputs)
+    }
+}
+
 pub fn auto_vectorize_binary<L, R, O, F>(
     left: ColumnViewImpl<'_>,
     right: ColumnViewImpl<'_>,
@@ -339,4 +351,40 @@ where
         output.push(value.as_ref().map(Scalar::as_scalar_ref));
     }
     Ok(output.finish().into())
+}
+
+use crate::PhysicalType as BatchPhysicalType;
+
+/// One monomorphized evaluator for a complete input batch.
+pub type BatchKernel<const N: usize> =
+    for<'a> fn(&BatchExpression<N>, &[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
+
+/// A fixed-arity expression whose only callable operation is vectorized.
+#[allow(dead_code)]
+pub struct BatchExpression<const N: usize> {
+    name: &'static str,
+    input_types: [BatchPhysicalType; N],
+    output_type: BatchPhysicalType,
+    kernel: BatchKernel<N>,
+}
+
+impl<const N: usize> BatchExpression<N> {
+    pub fn new(
+        name: &'static str,
+        input_types: [BatchPhysicalType; N],
+        output_type: BatchPhysicalType,
+        kernel: BatchKernel<N>,
+    ) -> Self {
+        Self {
+            name,
+            input_types,
+            output_type,
+            kernel,
+        }
+    }
+
+    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        validate_expression_inputs(inputs, &self.input_types)?;
+        (self.kernel)(self, inputs)
+    }
 }

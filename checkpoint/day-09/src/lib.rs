@@ -1,15 +1,10 @@
 #![forbid(unsafe_code)]
 
-mod arithmetic;
 mod binder;
 mod boolean;
-mod comparison;
+mod numeric;
 
-#[cfg(test)]
-mod tests;
-
-pub use arithmetic::*;
 pub use binder::*;
 pub use boolean::*;
-pub use comparison::*;
+pub use numeric::*;
 pub use type_exercise_checkpoint_09_core::*;

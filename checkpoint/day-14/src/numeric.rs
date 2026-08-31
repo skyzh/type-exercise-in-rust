@@ -1,47 +1,12 @@
-#![allow(dead_code)]
-
 use std::cmp::Ordering;
 use std::num::Wrapping;
 use std::ops::{Add, Mul, Neg, Sub};
 
 use crate::{
-    ArrayImpl, BinaryExpression, ColumnViewImpl, ComparisonOperator, PhysicalType, Scalar,
-    ScalarRefImpl, TypeMismatch, auto_vectorize_binary, evaluate_unary, try_evaluate_binary,
-    try_evaluate_ternary, validate_expression_inputs,
+    ArrayImpl, BinaryExpression, ColumnViewImpl, Expression, PhysicalType, Scalar, ScalarRefImpl,
+    TypeMismatch, auto_vectorize_binary, evaluate_unary, try_evaluate_binary, try_evaluate_ternary,
+    validate_expression_inputs,
 };
-
-/// One monomorphized evaluator for a complete input batch.
-pub type BatchKernel<const N: usize> =
-    for<'a> fn(&BatchExpression<N>, &[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
-
-/// A fixed-arity expression whose only callable operation is vectorized.
-pub struct BatchExpression<const N: usize> {
-    name: &'static str,
-    input_types: [PhysicalType; N],
-    output_type: PhysicalType,
-    kernel: BatchKernel<N>,
-}
-
-impl<const N: usize> BatchExpression<N> {
-    pub fn new(
-        name: &'static str,
-        input_types: [PhysicalType; N],
-        output_type: PhysicalType,
-        kernel: BatchKernel<N>,
-    ) -> Self {
-        Self {
-            name,
-            input_types,
-            output_type,
-            kernel,
-        }
-    }
-
-    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-        validate_expression_inputs(inputs, &self.input_types)?;
-        (self.kernel)(self, inputs)
-    }
-}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ArithmeticOperator {
@@ -249,7 +214,7 @@ type NumericNegBatchKernel =
     for<'a> fn(&NumericNegExpression, &[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
 type NumericClampBatchKernel =
     for<'a> fn(&NumericClampExpression, &[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
-pub(crate) struct NumericComparisonExpression {
+pub struct NumericComparisonExpression {
     name: &'static str,
     input_types: [PhysicalType; 2],
     operator: ComparisonOperator,
@@ -263,7 +228,22 @@ impl NumericComparisonExpression {
     }
 }
 
-pub(crate) struct NumericNegExpression {
+impl Expression for NumericComparisonExpression {
+    fn name(&self) -> &'static str {
+        self.name
+    }
+    fn input_types(&self) -> &[PhysicalType] {
+        &self.input_types
+    }
+    fn output_type(&self) -> PhysicalType {
+        PhysicalType::Bool
+    }
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        self.evaluate(inputs)
+    }
+}
+
+pub struct NumericNegExpression {
     name: &'static str,
     input_types: [PhysicalType; 1],
     kernel: NumericNegBatchKernel,
@@ -276,7 +256,22 @@ impl NumericNegExpression {
     }
 }
 
-pub(crate) struct NumericClampExpression {
+impl Expression for NumericNegExpression {
+    fn name(&self) -> &'static str {
+        self.name
+    }
+    fn input_types(&self) -> &[PhysicalType] {
+        &self.input_types
+    }
+    fn output_type(&self) -> PhysicalType {
+        self.input_types[0].clone()
+    }
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        self.evaluate(inputs)
+    }
+}
+
+pub struct NumericClampExpression {
     name: &'static str,
     input_types: [PhysicalType; 3],
     output_type: PhysicalType,
@@ -295,6 +290,21 @@ impl NumericClampExpression {
             );
         }
         Ok(output)
+    }
+}
+
+impl Expression for NumericClampExpression {
+    fn name(&self) -> &'static str {
+        self.name
+    }
+    fn input_types(&self) -> &[PhysicalType] {
+        &self.input_types
+    }
+    fn output_type(&self) -> PhysicalType {
+        self.output_type.clone()
+    }
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        self.evaluate(inputs)
     }
 }
 
@@ -467,18 +477,12 @@ where
     }
 
     match expression.operator {
-        ComparisonOperator::Less => evaluate::<L, R, O, _>(inputs, crate::comparison::less),
-        ComparisonOperator::LessOrEqual => {
-            evaluate::<L, R, O, _>(inputs, crate::comparison::less_or_equal)
-        }
-        ComparisonOperator::Greater => evaluate::<L, R, O, _>(inputs, crate::comparison::greater),
-        ComparisonOperator::GreaterOrEqual => {
-            evaluate::<L, R, O, _>(inputs, crate::comparison::greater_or_equal)
-        }
-        ComparisonOperator::Equal => evaluate::<L, R, O, _>(inputs, crate::comparison::equal),
-        ComparisonOperator::NotEqual => {
-            evaluate::<L, R, O, _>(inputs, crate::comparison::not_equal)
-        }
+        ComparisonOperator::Less => evaluate::<L, R, O, _>(inputs, less),
+        ComparisonOperator::LessOrEqual => evaluate::<L, R, O, _>(inputs, less_or_equal),
+        ComparisonOperator::Greater => evaluate::<L, R, O, _>(inputs, greater),
+        ComparisonOperator::GreaterOrEqual => evaluate::<L, R, O, _>(inputs, greater_or_equal),
+        ComparisonOperator::Equal => evaluate::<L, R, O, _>(inputs, equal),
+        ComparisonOperator::NotEqual => evaluate::<L, R, O, _>(inputs, not_equal),
     }
 }
 
@@ -855,7 +859,7 @@ fn numeric_clamp_kernel(
     }
 }
 
-pub(crate) fn build_numeric_binary_expression(
+pub fn build_numeric_binary_expression(
     name: &'static str,
     operator: ArithmeticOperator,
     left: PhysicalType,
@@ -866,7 +870,7 @@ pub(crate) fn build_numeric_binary_expression(
     BinaryExpression::new_with_scalar_rows(name, [left, right], output, kernel)
 }
 
-pub(crate) fn build_numeric_neg_expression(
+pub fn build_numeric_neg_expression(
     name: &'static str,
     input: PhysicalType,
 ) -> NumericNegExpression {
@@ -878,7 +882,7 @@ pub(crate) fn build_numeric_neg_expression(
     }
 }
 
-pub(crate) fn build_numeric_clamp_expression(
+pub fn build_numeric_clamp_expression(
     name: &'static str,
     inputs: [PhysicalType; 3],
     output: PhysicalType,
@@ -892,7 +896,7 @@ pub(crate) fn build_numeric_clamp_expression(
     }
 }
 
-pub(crate) fn build_numeric_comparison_expression(
+pub fn build_numeric_comparison_expression(
     name: &'static str,
     operator: ComparisonOperator,
     left: PhysicalType,
@@ -906,4 +910,38 @@ pub(crate) fn build_numeric_comparison_expression(
         operator,
         kernel,
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ComparisonOperator {
+    Less,
+    LessOrEqual,
+    Greater,
+    GreaterOrEqual,
+    Equal,
+    NotEqual,
+}
+
+pub(crate) fn less<T: PartialOrd>(left: T, right: T) -> bool {
+    left < right
+}
+
+pub(crate) fn less_or_equal<T: PartialOrd>(left: T, right: T) -> bool {
+    left <= right
+}
+
+pub(crate) fn greater<T: PartialOrd>(left: T, right: T) -> bool {
+    left > right
+}
+
+pub(crate) fn greater_or_equal<T: PartialOrd>(left: T, right: T) -> bool {
+    left >= right
+}
+
+pub(crate) fn equal<T: PartialEq>(left: T, right: T) -> bool {
+    left == right
+}
+
+pub(crate) fn not_equal<T: PartialEq>(left: T, right: T) -> bool {
+    left != right
 }

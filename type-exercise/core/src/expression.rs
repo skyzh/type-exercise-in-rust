@@ -797,3 +797,56 @@ impl Expression for BinaryExpression {
         Ok((output, selected_loop))
     }
 }
+
+use crate::PhysicalType as BatchPhysicalType;
+
+/// One monomorphized evaluator for a complete input batch.
+pub type BatchKernel<const N: usize> =
+    for<'a> fn(&BatchExpression<N>, &[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
+
+/// A fixed-arity expression whose only callable operation is vectorized.
+pub struct BatchExpression<const N: usize> {
+    name: &'static str,
+    input_types: [BatchPhysicalType; N],
+    output_type: BatchPhysicalType,
+    kernel: BatchKernel<N>,
+}
+
+impl<const N: usize> BatchExpression<N> {
+    pub fn new(
+        name: &'static str,
+        input_types: [BatchPhysicalType; N],
+        output_type: BatchPhysicalType,
+        kernel: BatchKernel<N>,
+    ) -> Self {
+        Self {
+            name,
+            input_types,
+            output_type,
+            kernel,
+        }
+    }
+
+    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        validate_expression_inputs(inputs, &self.input_types)?;
+        (self.kernel)(self, inputs)
+    }
+}
+
+impl<const N: usize> Expression for BatchExpression<N> {
+    fn name(&self) -> &'static str {
+        self.name
+    }
+
+    fn input_types(&self) -> &[BatchPhysicalType] {
+        &self.input_types
+    }
+
+    fn output_type(&self) -> BatchPhysicalType {
+        self.output_type.clone()
+    }
+
+    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+        self.evaluate(inputs)
+    }
+}

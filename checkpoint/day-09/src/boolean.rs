@@ -1,4 +1,4 @@
-//! SQL three-valued Boolean scalar operations.
+//! SQL three-valued Boolean scalar operations and Boolean-only comparison selection.
 
 use crate::{ArrayImpl, ColumnViewImpl, Expression, PhysicalType};
 

@@ -1,4 +1,4 @@
-//! Variable-width scalar operations and their writer-backed adapters.
+//! Variable-width scalar operations, comparisons, and their writer-backed adapters.
 
 use crate::{
     ArrayImpl, BinaryExpression, ColumnViewImpl, PhysicalType, Writer, WriterUsed,
