@@ -72,7 +72,7 @@ impl DecimalArray {
         self.storage.values().is_empty()
     }
 
-    // Day 11 adds checked slicing for List child storage.
+    // Day 12 adds checked slicing for List child storage.
 }
 
 /// A fail-closed Decimal builder that requires metadata before any row.

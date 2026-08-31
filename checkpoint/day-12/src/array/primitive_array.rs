@@ -134,27 +134,3 @@ where
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use bitvec::vec::BitVec;
-
-    use super::PrimitiveArray;
-    use crate::{Array, I32Array};
-
-    #[test]
-    fn fixed_width_values_and_validity_have_arrow_like_storage() {
-        let array = I32Array::from_slice(&[Some(10), None, Some(30)]);
-        let validity: &BitVec = array.validity();
-
-        assert_eq!(array.values(), &[10, 0, 30]);
-        assert_eq!(
-            validity.iter().by_vals().collect::<Vec<_>>(),
-            [true, false, true]
-        );
-        assert_eq!(array.values().len(), validity.len());
-
-        let many = PrimitiveArray::from_values((0_i32..130).collect());
-        assert!(std::mem::size_of_val(many.validity().as_raw_slice()) < many.len());
-    }
-}

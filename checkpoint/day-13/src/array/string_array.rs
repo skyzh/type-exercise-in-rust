@@ -22,6 +22,32 @@ pub struct StringValueWriter<'a> {
     data: &'a mut Vec<u8>,
 }
 
+/// An unpublished output row. Consuming [`Writer::write`] is the only way to
+/// turn it into [`WriterUsed`].
+///
+/// ```compile_fail
+/// # use type_exercise::{Writer, WriterUsed};
+/// fn skip_write(writer: Writer<'_>) -> WriterUsed<'_> {
+///     writer
+/// }
+/// ```
+pub struct Writer<'a> {
+    builder: &'a mut StringArrayBuilder,
+}
+
+/// Proof that one output row was written exactly once.
+///
+/// ```compile_fail
+/// # use type_exercise::Writer;
+/// fn write_twice(writer: Writer<'_>) {
+///     let writer = writer.write(|value| value.push_str("first"));
+///     let _ = writer.write(|value| value.push_str("second"));
+/// }
+/// ```
+pub struct WriterUsed<'a> {
+    builder: &'a mut StringArrayBuilder,
+}
+
 impl StringValueWriter<'_> {
     /// Append one UTF-8 fragment directly to the pending value.
     pub fn push_str(&mut self, value: &str) {
@@ -29,7 +55,31 @@ impl StringValueWriter<'_> {
     }
 }
 
+impl<'a> Writer<'a> {
+    /// Publish exactly one non-null row, possibly from several UTF-8 fragments.
+    pub fn write(self, write: impl FnOnce(&mut StringValueWriter<'_>)) -> WriterUsed<'a> {
+        self.builder
+            .try_push_with(|value| {
+                write(value);
+                Ok::<_, std::convert::Infallible>(())
+            })
+            .unwrap_or_else(|never| match never {});
+        WriterUsed {
+            builder: self.builder,
+        }
+    }
+}
+
+impl<'a> WriterUsed<'a> {
+    pub(crate) fn into_builder(self) -> &'a mut StringArrayBuilder {
+        self.builder
+    }
+}
+
 impl StringArrayBuilder {
+    pub(crate) fn writer(&mut self) -> Writer<'_> {
+        Writer { builder: self }
+    }
     /// Append a null row without changing the shared byte buffer.
     pub fn push_null(&mut self) {
         self.validity.push(false);
@@ -126,80 +176,5 @@ impl ArrayBuilder for StringArrayBuilder {
             offsets: self.offsets,
             validity: self.validity,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use bitvec::vec::BitVec;
-
-    use crate::{Array, StringArray};
-
-    #[test]
-    fn strings_share_one_byte_buffer_with_offsets_and_packed_validity() {
-        let array = StringArray::from_slice(&[Some("a"), None, Some("é"), Some("")]);
-        let validity: &BitVec = array.validity();
-
-        assert_eq!(array.data(), "aé".as_bytes());
-        assert_eq!(array.offsets(), &[0, 1, 1, 3, 3]);
-        assert_eq!(
-            validity.iter().by_vals().collect::<Vec<_>>(),
-            [true, false, true, true]
-        );
-        assert_eq!(array.offsets().len(), validity.len() + 1);
-        assert!(array.offsets().windows(2).all(|pair| pair[0] <= pair[1]));
-        assert_eq!(array.offsets().last().copied(), Some(array.data().len()));
-
-        let borrowed = array.get(2).unwrap();
-        assert_eq!(
-            borrowed.as_ptr() as usize,
-            array.data().as_ptr() as usize + array.offsets()[2]
-        );
-    }
-
-    #[test]
-    fn empty_and_all_null_strings_keep_valid_arrow_like_offsets() {
-        let empty = StringArray::from_slice(&[]);
-        assert!(empty.data().is_empty());
-        assert_eq!(empty.offsets(), &[0]);
-        assert!(empty.validity().is_empty());
-
-        let all_null = StringArray::from_slice(&[None, None, None]);
-        assert!(all_null.data().is_empty());
-        assert_eq!(all_null.offsets(), &[0, 0, 0, 0]);
-        assert_eq!(
-            all_null.validity().iter().by_vals().collect::<Vec<_>>(),
-            [false, false, false]
-        );
-    }
-
-    #[test]
-    fn transactional_writes_publish_once_or_roll_back_completely() {
-        use crate::{ArrayBuilder, StringArrayBuilder};
-
-        let mut builder = StringArrayBuilder::with_capacity(3);
-        builder
-            .try_push_with(|writer| {
-                writer.push_str("left");
-                writer.push_str("right");
-                Ok::<_, &'static str>(())
-            })
-            .unwrap();
-        let error = builder
-            .try_push_with(|writer| {
-                writer.push_str("partial");
-                Err("stop")
-            })
-            .unwrap_err();
-        assert_eq!(error, "stop");
-        builder.push_null();
-
-        let array = builder.finish();
-        assert_eq!(array.data(), b"leftright");
-        assert_eq!(array.offsets(), &[0, 9, 9]);
-        assert_eq!(
-            array.validity().iter().by_vals().collect::<Vec<_>>(),
-            [true, false]
-        );
     }
 }

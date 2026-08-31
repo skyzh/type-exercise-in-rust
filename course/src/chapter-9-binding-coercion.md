@@ -1,105 +1,76 @@
 {{#include wip-banner.md}}
 
-# Chapter 9: Bind and Coerce Logical Calls
+# Chapter 9: Erase Typed Expressions at Runtime
 
-Physical kernels exist, but a parsed call contains logical types and a name. The binder must choose
-one kernel, apply only approved widening promotion, and reject unsupported signatures before a
-batch runs.
+The evaluator families are generic so Rust can specialize their scalar and row work. A query plan,
+however, needs one collection containing expressions with different concrete types and arities.
+Erasure belongs around the complete batch expression—not around each scalar operation.
 
-**Prerequisites:** Chapters 2, 5, 7, and 8; `HashMap`; closures; logical versus physical types.
+This chapter introduces that boundary in three stages. The typed evaluator remains responsible for
+validation, nulls, row errors, and output construction. The erased shell exposes stable metadata
+and delegates one whole batch.
 
-**By the end of this chapter, you will:**
-
-- bind functions of any arity through slice-based metadata;
-- keep logical metadata consistent with the chosen physical expression; and
-- support correct numeric comparisons, string comparisons, `contains`, and existing `concat`.
+## Checkpoint 1: one object-safe expression boundary
 
 ```console
-cargo x copy-test --chapter 9
-cargo test -p type-exercise-starter chapter_9 --locked
+cargo x copy-test --chapter 9 --checkpoint 1
+cargo test -p type-exercise-starter-expr chapter_9 --locked
 ```
 
-The first run should fail on slice-based binding, comparison semantics, or `contains`.
+Define the object-safe `Expression: Any + Send + Sync` trait with name, input physical types,
+output type, nullability, and `evaluate`. Store the complete input signature as a slice; deriving
+arity from `input_types().len()` keeps unary, binary, and ternary metadata consistent.
 
-## Separate four kinds of conversion
+Adapt one existing typed builtin to `Box<dyn Expression>`. The checkpoint proves both successful
+evaluation and the `Any + Send + Sync` boundary. Do not place `dyn Fn` inside the row loop.
 
-- **Numeric promotion** converts values to a planner-selected common type.
-- **Erased downcast** checks whether a runtime enum contains the requested physical family.
-- **Trait-object downcast** recovers one concrete expression type through `Any`.
-- **Lifetime shortening** reborrows a value for a shorter valid lifetime.
-
-Only the first is logical coercion. Do not call all four “casts” or restore an obsolete GAT upcast
-helper.
-
-## Checkpoint 1: generalize the registry
-
-- **Target:** `type-exercise-starter/src/binder.rs::{BindError, BoundExpression, FunctionRegistry::register,
-  register_unary, register_binary, register_ternary, bind}`.
-- **Change:** store logical inputs as a slice/boxed slice and check requested arity before a factory
-  indexes it.
-- **Preserve:** unknown name, wrong arity, unsupported arguments, missing physical expression, and
-  metadata mismatch remain distinct errors.
-- **Run:** the Chapter 9 focused test.
-- **Passing means:** `neg`, arithmetic, `clamp`, and custom slice factories share one planning
-  boundary across unary, binary, and ternary arities.
-
-`BoundExpression::new` maps logical inputs and output to physical types and compares them with the
-selected expression's metadata. A valid bound expression records that proof once; evaluation then
-delegates without rebinding each batch.
-
-## Checkpoint 2: bind comparisons and strings
-
-- **Target:** `type-exercise-starter/src/operators.rs::{ComparisonOperator}` and binder factories registered by
-  `FunctionRegistry::with_builtins`.
-- **Change:** support `<`, `<=`, `>`, `>=`, `=`, `!=`, `contains`, and `concat` for their approved
-  logical signatures.
-- **Preserve:** names match behavior. Any ordered float comparison with NaN is false; equality is
-  false and inequality is true. Null input produces null before comparison.
-- **Run:** focused and cumulative tests.
-- **Passing means:** equal operands distinguish strict/inclusive operators and NaN never panics.
-
-String `Char` and `Varchar` both use physical `String`, but their logical metadata stays distinct.
-This course does not enforce `Char` width.
-
-Wire the binder into the starter crate root like the earlier chapters:
-
-```rust,ignore
-mod binder;
-pub use binder::{BindError, BoundExpression, FunctionRegistry};
-```
-
-## Checkpoint 3: bind three-valued Boolean functions
-
-- **Target:** `type-exercise-starter/src/binder.rs::bind_boolean` and the builtin registry entries
-  for `boolean_and`, `boolean_or`, and `boolean_not`.
-- **Change:** register the Day 7 expressions through the same slice registry: `boolean_and` and
-  `boolean_or` take two `Boolean` inputs, `boolean_not` takes one; the bound output is `Boolean`.
-- **Preserve:** arity is checked before a factory indexes its slice; unsupported signatures are
-  bind errors; evaluation keeps the SQL three-valued semantics from Day 7.
-- **Run:** the focused and cumulative tests.
-- **Passing means:** one-input `boolean_not` binds (never rejected by a two-arity signature) and
-  bound Boolean evaluation matches the Day 7 truth table.
-
-## Checkpoint 4: keep promotion lossless
-
-- **Target:** `type-exercise-starter/src/promotion.rs::promote_numeric` and its callers in
-  `type-exercise-starter/src/binder.rs::{bind_arithmetic, bind_comparison}`.
-- **Change:** apply the same approved common type in both paths and both operand orders.
-- **Preserve:** unsupported or precision-losing pairs are bind errors; no silent narrowing.
-- **Run:** the full Chapter 9 contract.
-- **Passing means:** logical output metadata agrees with the chosen physical output.
-
-## Required and extension work
-
-Slice-based binding, lossless promotion, six comparisons, `contains`, and `concat` are required.
-Narrowing casts, parsing casts, SQL-complete coercion, Decimal arithmetic, and overload selection
-from untyped `NULL` are extensions that need separate semantics.
+## Checkpoint 2: preserve typed validation through erasure
 
 ```console
-cargo test -p type-exercise-starter chapter_9 --locked
-cargo test -p type-exercise-starter --lib --locked
+cargo x copy-test --chapter 9 --checkpoint 2
+cargo test -p type-exercise-starter-expr chapter_9 --locked
 ```
 
-Next: [Chapter 10 specializes one representative dense loop](./chapter-10-primitive-loops.md).
+Add erased adapters for the complete typed evaluator families. Their job is deliberately narrow:
+
+1. publish name and physical metadata;
+2. pass borrowed erased column views to the selected typed kernel; and
+3. verify that the returned physical family matches the declared output.
+
+Do not repeat arity, type, length, strict-null, or row-context logic in the adapter. The six-stage
+test proves that errors and nulls still originate at the typed boundary, including a deliberately
+wrong kernel result.
+
+## Checkpoint 3: assemble the fixed builtin catalog
+
+```console
+cargo x copy-test --chapter 9 --checkpoint 3
+cargo test -p type-exercise-starter-expr chapter_9 --locked
+cargo check -p type-exercise-starter-core --locked
+```
+
+Finish the unary, binary, and ternary erased shells and build the finite builtin catalog used by
+the course. Each catalog entry stores one preselected batch kernel. It may describe arithmetic,
+comparison, or Boolean work, but it does not inspect an operation for every row.
+
+The 13 focused tests prove:
+
+- complete builtin coverage and metadata;
+- typed validation and strict-null behavior through trait objects;
+- unary, binary, and ternary delegation;
+- Boolean delegation through the same erased surface; and
+- safe sharing of erased expressions across threads.
+
+The core-only command is the architectural control: storage, views, generic evaluators, and
+erasure compile without importing the facade's concrete function catalog.
+
+## Why erasure comes after specialization
+
+Erasing `i32`, `f64`, or the scalar operation in every row would replace compile-time selection
+with repeated runtime matching. Erasing the whole `Expression` lets a planner keep heterogeneous
+objects while each object still owns a monomorphized batch kernel. Runtime flexibility and typed
+inner loops are complementary when the boundary is placed at batch granularity.
+
+Next: [Chapter 10 builds variable-width strings transactionally](./chapter-10-primitive-loops.md).
 
 {{#include copyright.md}}

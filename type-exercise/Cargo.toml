@@ -1,5 +1,5 @@
 [package]
-name = "type-exercise"
+name = "type-exercise-expr"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,6 +8,7 @@ publish.workspace = true
 [dependencies]
 anyhow = "1"
 bitvec = "1"
+type-exercise-core = { path = "core" }
 
 [dev-dependencies]
 criterion = "0.8.2"

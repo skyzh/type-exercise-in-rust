@@ -1,17 +1,12 @@
 use crate::{ColumnViewImpl, PhysicalType, ScalarRefImpl, validate_expression_inputs};
 
-// === Chapter 6 checkpoint 1 ===
-
 #[test]
-fn checkpoint_1_validates_arity_then_type_then_length_for_any_arity() {
+fn checkpoint_1_validation_is_arity_then_type_then_length() {
     let wrong_arity = [ColumnViewImpl::constant(ScalarRefImpl::String("wrong"), 3)];
     assert_eq!(
-        validate_expression_inputs(
-            &wrong_arity,
-            &[PhysicalType::Int32, PhysicalType::Int32],
-        )
-        .unwrap_err()
-        .to_string(),
+        validate_expression_inputs(&wrong_arity, &[PhysicalType::Int32, PhysicalType::Int32])
+            .unwrap_err()
+            .to_string(),
         "input arity mismatch: expected 2, got 1"
     );
 

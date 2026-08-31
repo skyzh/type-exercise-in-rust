@@ -1,14 +1,12 @@
 use anyhow::{Result, anyhow};
 
-use crate::{
-    Array, ArrayImpl, ListArray, ListError, ListScalarRef, Nullability, PhysicalType, Scalar,
-    ScalarRefImpl, TypeMismatch,
-};
+use crate::{Array, ArrayImpl, Nullability, PhysicalType, Scalar, ScalarRefImpl, TypeMismatch};
 
 /// A borrowed column whose scalar and array types are known only at runtime.
 ///
-/// The public wrapper keeps construction checked while the private kind prevents
-/// callers from bypassing those checks, and it stores batch nullability once.
+/// The public wrapper keeps its representation enum private, so callers must use the checked
+/// constructors instead of creating an unvalidated indexed view. It also carries nullability once
+/// for the whole batch instead of repeating that metadata in every representation variant.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ColumnViewImpl<'a> {
     kind: ColumnViewImplKind<'a>,
@@ -155,101 +153,6 @@ impl<'a> ColumnViewImpl<'a> {
             _ => None,
         }
     }
-
-    pub fn try_as_list(self, element_type: PhysicalType) -> Result<ListColumnView<'a>, ListError> {
-        if matches!(element_type, PhysicalType::List(_)) {
-            return Err(ListError::NestedList);
-        }
-        let expected = PhysicalType::List(Box::new(element_type));
-        let actual = self.physical_type();
-        if actual != expected {
-            return Err(TypeMismatch { expected, actual }.into());
-        }
-        match self.kind {
-            ColumnViewImplKind::Array(ArrayImpl::List(array)) => Ok(ListColumnView {
-                kind: ListColumnViewKind::Array(array),
-            }),
-            ColumnViewImplKind::Constant { value, len, .. } => {
-                let value = match value {
-                    Some(ScalarRefImpl::List(value)) => Some(value),
-                    None => None,
-                    Some(other) => {
-                        return Err(TypeMismatch {
-                            expected,
-                            actual: other.physical_type(),
-                        }
-                        .into());
-                    }
-                };
-                Ok(ListColumnView {
-                    kind: ListColumnViewKind::Constant { value, len },
-                })
-            }
-            ColumnViewImplKind::Indexed {
-                indices,
-                values: ArrayImpl::List(values),
-            } => Ok(ListColumnView {
-                kind: ListColumnViewKind::Indexed { indices, values },
-            }),
-            ColumnViewImplKind::Array(array) => Err(TypeMismatch {
-                expected,
-                actual: array.physical_type(),
-            }
-            .into()),
-            ColumnViewImplKind::Indexed { values, .. } => Err(TypeMismatch {
-                expected,
-                actual: values.physical_type(),
-            }
-            .into()),
-        }
-    }
-}
-
-/// A borrowed List column whose element physical type was checked once.
-#[derive(Debug)]
-pub struct ListColumnView<'a> {
-    kind: ListColumnViewKind<'a>,
-}
-
-#[derive(Debug)]
-enum ListColumnViewKind<'a> {
-    Array(&'a ListArray),
-    Constant {
-        value: Option<ListScalarRef<'a>>,
-        len: usize,
-    },
-    Indexed {
-        indices: &'a [u32],
-        values: &'a ListArray,
-    },
-}
-
-impl<'a> ListColumnView<'a> {
-    pub fn len(&self) -> usize {
-        match &self.kind {
-            ListColumnViewKind::Array(array) => array.len(),
-            ListColumnViewKind::Constant { len, .. } => *len,
-            ListColumnViewKind::Indexed { indices, .. } => indices.len(),
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    pub fn get(&self, row: usize) -> Result<Option<ListScalarRef<'a>>, ListError> {
-        if row >= self.len() {
-            return Err(ListError::RowOutOfBounds {
-                row,
-                len: self.len(),
-            });
-        }
-        match &self.kind {
-            ListColumnViewKind::Array(array) => array.get(row),
-            ListColumnViewKind::Constant { value, .. } => Ok(*value),
-            ListColumnViewKind::Indexed { indices, values } => values.get(indices[row] as usize),
-        }
-    }
 }
 
 /// A borrowed logical column whose scalar family is known at compile time.
@@ -331,45 +234,5 @@ where
                 },
             }),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::ColumnViewImpl;
-    use crate::{
-        ArrayImpl, Decimal, DecimalArray, DecimalType, PhysicalType, ScalarImpl, ScalarRefImpl,
-    };
-
-    #[test]
-    fn decimal_array_constant_null_and_indexed_keep_exact_metadata() {
-        let decimal_type = DecimalType::try_new(8, 2).unwrap();
-        let value = Decimal::try_new(12_345, decimal_type).unwrap();
-        let array: ArrayImpl = DecimalArray::try_from_slice(decimal_type, &[Some(value), None])
-            .unwrap()
-            .into();
-        let exact = PhysicalType::Decimal(decimal_type);
-
-        let array_view = ColumnViewImpl::array(&array);
-        assert_eq!(array_view.physical_type(), exact);
-        assert_eq!(array_view.get(0), Some(ScalarRefImpl::Decimal(value)));
-        assert_eq!(array_view.get(1), None);
-
-        let constant = ColumnViewImpl::constant(ScalarRefImpl::Decimal(value), 2);
-        assert_eq!(constant.physical_type(), exact);
-        assert_eq!(constant.get(1), Some(ScalarRefImpl::Decimal(value)));
-
-        let null = ColumnViewImpl::null(exact.clone(), 2);
-        assert_eq!(null.physical_type(), exact);
-        assert_eq!(null.get(0), None);
-
-        let indices = [1, 0, 1];
-        let indexed = ColumnViewImpl::indexed(&indices, &array).unwrap();
-        assert_eq!(indexed.physical_type(), exact);
-        assert_eq!(indexed.get(0), None);
-        assert_eq!(indexed.get(1), Some(ScalarRefImpl::Decimal(value)));
-        assert_eq!(indexed.get(2), None);
-
-        assert_eq!(ScalarImpl::from(value).physical_type(), exact);
     }
 }

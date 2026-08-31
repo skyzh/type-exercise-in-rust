@@ -5,25 +5,30 @@ borrow strings without copying, preserve nulls, read several column encodings, c
 select functions at runtime.
 
 This course builds the type families and checked boundaries that move those decisions out of each
-row loop. The result is a small vectorized expression engine whose generic code has a visible
-payoff: new types, operators, and arities reuse the same execution path.
+row loop. The result is a small auto-vectorized expression engine: authors write one scalar
+operation, while generic unary, binary, and ternary adapters reuse the checked batch path.
 
 ## Read the course
 
 Read the [published course](https://skyzh.github.io/type-exercise-in-rust/). Work through the
 chapters in order; each chapter extends the same starter and keeps earlier supplied tests green.
-The book's `SUMMARY.md` is the sole ordered chapter list.
+The book's `SUMMARY.md` is the sole ordered chapter list. Plan each of the fourteen focused
+chapters as roughly half a day: an experienced Rust learner can finish in about seven working
+days, while newer learners should expect to take longer.
 
 ## What you will build
 
-The currently published Chapters 1–13 build these outcomes:
+The fourteen chapters build these outcomes:
 
 - Connect logical types, owned values, borrowed values, physical arrays, and checked erased enums.
 - Read nullable arrays, constants, and Indexed views without materializing a new column.
 - Apply unary, binary, and ternary scalar functions through generic, erased, and bound interfaces.
+- Keep reusable evaluators in a core crate while concrete scalar operations live in a one-way
+  expression facade.
 - Promote supported numeric pairs for `+`, `-`, `*`, `/`, comparisons, and string `contains`.
 - Represent one-level Lists with checked offsets and independent outer and child nullability.
-- Preserve the same results and errors through one representative fast path.
+- Select all-valid fixed-width loops once per batch while preserving a nullable/indexed fallback.
+- Build variable-width strings from bytes, offsets, validity, and a consumed writer.
 - Expose one ready future per batch through static, erased, and already-bound expression paths.
 
 The course deliberately stops short of Decimal arithmetic, casts, and rounding, implicit
@@ -39,7 +44,7 @@ You should know ordinary Cargo use, enums, traits, references, and `Option`. Fol
 ```console
 git fetch origin
 git switch --create course-work --track origin/main
-cargo check -p type-exercise-starter --lib --locked
+cargo check -p type-exercise-starter-expr --lib --locked
 ```
 
 Choose another branch name if `course-work` already exists. The starter baseline should compile.
@@ -51,7 +56,7 @@ Copy the cumulative supplied contract when you are ready to start a chapter:
 
 ```console
 cargo x copy-test --chapter 1
-cargo test -p type-exercise-starter chapter_1 --locked
+cargo test -p type-exercise-starter-expr chapter_1 --locked
 ```
 
 The first focused run should fail because the new behavior is missing. Read the copied destination

@@ -1,6 +1,6 @@
 //! Learner-owned binding checkpoints.
 //!
-//! Day 9, checkpoint 1: add the runtime registry and bound expression here.
+//! Day 11: add the runtime registry and bound expression here.
 // pub enum BindError { /* name, arity, and unsupported-signature failures */ }
 // pub struct BoundExpression { /* logical metadata plus one selected expression */ }
 // impl BoundExpression {
@@ -22,14 +22,14 @@
 //     /* pub fn bind_binary(&self, name: &str, left: DataType, right: DataType) -> Result<BoundExpression, BindError> */
 // }
 //
-//! Day 9, checkpoint 2: add arithmetic, comparison, and string binding helpers here.
+//! Day 11: add arithmetic, comparison, and string binding helpers here.
 // fn bind_arithmetic(/* operator and input types */) -> Result<BoundExpression, BindError>;
 // fn bind_comparison(/* operator and input types */) -> Result<BoundExpression, BindError>;
 //
-//! Day 9, checkpoint 3: bind the Day 7 three-valued Boolean expressions here.
+//! Day 11: bind the Day 8 three-valued Boolean expressions here.
 // fn bind_boolean(/* name, operator, and inputs */) -> Result<BoundExpression, BindError>;
 //
-//! Day 10, checkpoint 2: delegate output nullability and forward a preselected primitive loop here.
+//! Day 11: delegate output nullability and forward a preselected primitive loop here.
 // impl BoundExpression {
 //     /* pub fn output_nullability(&self, inputs: &[Nullability]) -> Nullability */
 //     pub fn evaluate_with_loop(
@@ -38,10 +38,10 @@
 //     ) -> anyhow::Result<(ArrayImpl, PrimitiveLoop)>;
 // }
 //
-//! Day 12, checkpoint 3: require registered factories to be Send + Sync + 'static here.
+//! Day 13: require registered factories to be Send + Sync + 'static here.
 // impl FunctionRegistry { /* strengthen register, register_unary, register_binary, register_ternary */ }
 //
-//! Day 13, checkpoint 3: forward the already-bound expression through the async boundary here.
+//! Day 14: forward the already-bound expression through the async boundary here.
 // impl AsyncExpression for BoundExpression {
 //     fn evaluate_async<'a>(&'a self, inputs: &'a [ColumnViewImpl<'a>]) -> BatchFuture<'a>;
 // }

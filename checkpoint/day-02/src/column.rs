@@ -16,7 +16,7 @@
 //     pub fn get(&self, row: usize) -> Option<ScalarRefImpl<'a>>;
 // }
 //
-//! Day 10, checkpoint 1: make `ColumnViewImpl` carry physical `Nullability`. Keep `array`
+//! Day 7, checkpoint 1: make `ColumnViewImpl` carry physical `Nullability`. Keep `array`
 //! conservatively `Nullable`; add a checked `try_non_null_array` constructor that proves every
 //! row valid once. Constants with a value are `NonNull`; typed nulls and indexed views remain
 //! `Nullable`.
@@ -29,7 +29,7 @@
 // }
 // impl<'a, S> TryFrom<ColumnViewImpl<'a>> for ColumnView<'a, S> { /* checked conversion */ }
 //
-//! Day 11, checkpoint 3: extend this file with checked one-level List views.
+//! Day 12: extend this file with checked one-level List views.
 // pub struct ListColumnView<'a> { /* checked List state */ }
 // impl<'a> ListColumnView<'a> {
 //     pub fn len(&self) -> usize;

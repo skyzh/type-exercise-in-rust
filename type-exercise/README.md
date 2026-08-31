@@ -1,6 +1,7 @@
 # Reference Solution
 
-This crate contains the maintained reference implementation for the current course checkpoints.
+The `type-exercise-expr` facade and its nested `type-exercise-core` dependency contain the
+maintained reference implementation for the current course checkpoints.
 Learners work only in `type-exercise-starter/`; they should not inspect this directory while
 solving a chapter.
 

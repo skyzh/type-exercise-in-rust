@@ -1,68 +1,112 @@
 {{#include wip-banner.md}}
 
-# Chapter 7: Implement Three-Valued Boolean Logic
+# Chapter 7: Select Dense Fixed-Width Loops
 
-SQL engines do not stop at two truth values. A missing value makes `NULL AND FALSE` false and
-`NULL OR TRUE` true, so nulls must flow into the Boolean scalar function instead of always
-short-circuiting.
+Chapter 6 made operation authorship small: a scalar function is lifted by one reusable evaluator.
+That general evaluator must still support nullable arrays, constants, typed nulls, and Indexed
+views, so its row loop asks each view for an `Option` on every iteration. Fixed-width, all-valid
+input has a simpler representation and deserves a simpler loop.
 
-**Prerequisites:** Chapter 6, the checked-expression boundary, and nullable `Boolean` columns.
+This chapter adds that path without weakening the general contract. One batch-level decision
+selects either a dense loop or the existing nullable-aware fallback. The dense loop contains only
+loads, the already selected scalar call, and output writes; it does not redispatch the operation or
+recheck nullability inside each row.
 
-**By the end of this chapter, you will:**
+## What is in the starter
 
-- distinguish strict null short-circuiting from SQL's non-strict null semantics;
-- implement `AND`, `OR`, and `NOT` over `TRUE`/`FALSE`/`NULL`; and
-- publish one checked expression whose validation and row loop follow the same
-  arity-before-type-before-length contract as the earlier shells.
-
-```console
-cargo x copy-test --chapter 7
-cargo test -p type-exercise-starter chapter_7 --locked
-```
-
-The first run should fail on the missing Boolean operator, truth table, or expression builder.
-
-## Two null policies
-
-The Day 4–6 shells skip the scalar function for any strict null input: the row is null, and the
-function never sees it. That is the `Strict` policy. SQL's three-valued logic needs more: a null
-operand can still decide the result when the other operand is absorbing (`FALSE AND ...`, `TRUE OR
-...`). That is the `NonStrict` policy, where nulls are passed to the scalar function and the truth
-table decides.
-
-## Checkpoint 1: pin the truth table
-
-- **Target:** `type-exercise-starter/src/boolean_logic.rs::{NullEvaluationPolicy, BooleanOperator, BooleanTruthRow, BOOLEAN_TRUTH_TABLE}`.
-- **Change:** declare both policies, the three operators, and the 21 required nullable-Boolean rows
-  (nine `AND`, nine `OR`, three `NOT`), with `FALSE` absorbing for `AND`, `TRUE` absorbing for
-  `OR`, and `NOT NULL` staying null.
-- **Preserve:** the row order and values match the supplied expected table exactly.
-- **Run:** the Chapter 7 focused test.
-- **Passing means:** the table rows are exactly the required three-valued truth table.
-
-## Checkpoint 2: evaluate one operator
-
-- **Target:** `type-exercise-starter/src/boolean_logic.rs::{BooleanExpression, build_boolean_expression}`.
-- **Change:** validate arity (two for `AND`/`OR`, one for `NOT`), physical types, and lengths before
-  any row work, then build `Boolean` rows. `build_boolean_expression` selects the SQL `NonStrict`
-  policy; `BooleanExpression::new(operator, policy)` exposes the strict variant for comparison.
-- **Preserve:** the row error and null behavior stay inside the checked-expression contract; the
-  error representation is your readable choice.
-- **Run:** the focused and cumulative tests.
-- **Passing means:** evaluation reproduces the full truth table, strict short-circuits before the
-  truth table, and wrong arity/type/length fail closed.
-
-## Required and extension work
-
-Both policies, all three operators, the exact truth table, and the checked builder are required.
-Nested expression trees and short-circuit execution plans are extensions outside this course.
+Begin from completed Chapter 6 and copy the first cumulative checkpoint:
 
 ```console
-cargo test -p type-exercise-starter chapter_7 --locked
-cargo test -p type-exercise-starter --lib --locked
+cargo x copy-test --chapter 7 --checkpoint 1
+cargo test -p type-exercise-starter-expr chapter_7 --locked
 ```
 
+The shared storage and evaluator work belongs in the core package. The concrete `I32Add` scalar
+operation remains in the expression facade. You will add:
 
-Next: [Chapter 8 erases typed expressions behind one object-safe boundary](./chapter-8-runtime-erasure.md).
+- physical `Nullability` observations for erased column views;
+- checked recovery of a non-null fixed-width array view;
+- four dense input-shape loops for array/array, array/constant, constant/array, and
+  constant/constant; and
+- a `PrimitiveBinaryExpression` that chooses one loop before traversing rows.
+
+Nullable arrays, null constants, and Indexed views must keep using the general Chapter 6 path.
+
+## Checkpoint 1: make the representation fact explicit
+
+An ordinary `ColumnViewImpl::array` is conservatively nullable even when its current validity
+buffer happens to contain no null bits. `try_non_null_array` inspects that physical fact and returns
+a view whose `Nullability` is `NonNull`. Constants with a value are non-null; typed-null and
+Indexed views remain nullable.
+
+Do not add a second array representation. The non-null view is a checked promise about the same
+fixed-width buffers, so an empty all-valid array is also a valid dense input.
+
+Run the first checkpoint again. Its two tests pin both the nullability classification and the
+checked recovery boundary.
+
+## Checkpoint 2: select a dense loop once
+
+Copy the second stage:
+
+```console
+cargo x copy-test --chapter 7 --checkpoint 2
+cargo test -p type-exercise-starter-expr chapter_7 --locked
+```
+
+Implement `PrimitiveBinaryExpression<F>` for a typed `BinaryScalarFunction`. Validate arity,
+physical types, and lengths before choosing a path. Then classify each input once:
+
+- a non-null `i32` array supplies a direct values slice;
+- a non-null `i32` constant supplies one copied scalar; and
+- every other representation delegates to `evaluate_binary`.
+
+Expose the selected shape as `PrimitiveLoop` so the supplied test can prove the choice rather than
+infer it from timing. Each specialized loop returns `Vec<i32>` and is source-equivalent to the
+simple scalar traversal:
+
+```rust,ignore
+for row in 0..len {
+    output.push(function(left[row], right[row]));
+}
+```
+
+The actual array/constant shapes vary only in how each operand is loaded. No operation match,
+nullability branch, erased scalar conversion, or builder validity update belongs in that loop.
+
+## Checkpoint 3: preserve the fallback contract
+
+Copy the completed Chapter 7 test:
+
+```console
+cargo x copy-test --chapter 7 --checkpoint 3
+cargo test -p type-exercise-starter-expr chapter_7 --locked
+cargo check -p type-exercise-starter-core --locked
+```
+
+The seven focused tests now prove all four dense shapes, general fallback for nullable and Indexed
+views, wrapping `i32` addition, metadata nullability, and unchanged arity/type/length errors. The
+core-only check proves the reusable machinery has no dependency on `I32Add` or any facade module.
+
+Install `cargo-expand` if needed, then inspect the selected implementation:
+
+```console
+cargo expand -p type-exercise-starter-expr --lib arithmetic
+```
+
+Locate the concrete `I32Add` path and follow its call into the core evaluator. The expanded facade
+must not contain an operation-specific batch loop. In the core dense helper, confirm that the hot
+loop performs only typed loads, the preselected scalar call, and pushes. This is a source-level
+ownership check, not a promise that LLVM will vectorize every target in the same way.
+
+## Why the fallback stays
+
+The strict no-branch loop is impossible for the general representation. `ColumnView::get` must
+distinguish null rows, and `ArrayBuilder::push(Option<_>)` must update validity. Moving those facts
+into generated code would hide the branches rather than remove them. Selecting the dense path once
+per batch gives the fast case its honest simple loop while retaining correct null and dictionary
+semantics everywhere else.
+
+Next: [Chapter 8 adds three-valued Boolean logic](./chapter-8-runtime-erasure.md).
 
 {{#include copyright.md}}

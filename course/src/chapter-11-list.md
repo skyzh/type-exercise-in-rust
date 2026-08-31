@@ -1,81 +1,71 @@
-# Chapter 11: Build a One-Level List Column
-
 {{#include wip-banner.md}}
 
-List is not another primitive enum row. Each outer row points through offsets into one child array,
-and the outer row can be null independently of any child value.
+# Chapter 11: Bind and Coerce Logical Calls
 
-**Prerequisites:** Chapters 2–3, checked erased arrays, and slice ranges.
+The physical catalog can evaluate a known signature, but SQL starts with a logical name and
+logical argument types. Binding is the planning step that resolves that call once. Evaluation must
+not redo name lookup, promotion, or kernel selection for every batch or row.
 
-**By the end of this chapter, you will:**
+## The learner-owned boundary
 
-- store one-level List values with explicit child type, offsets, and outer validity;
-- distinguish a null list, an empty list, and a list containing a null child; and
-- expose List arrays, constants, dictionaries, and typed nulls through checked views.
+Start from completed Chapter 10:
 
 ```console
 cargo x copy-test --chapter 11
-cargo test -p type-exercise-starter chapter_11 --locked
+cargo test -p type-exercise-starter-expr chapter_11 --locked
 ```
 
-The first run should fail on the missing List types, invariants, and column integration.
+Enable `src/binder.rs` and implement the public `FunctionRegistry`, `BoundExpression`, and binding
+errors. A registry entry is a factory over a complete logical input slice, not a binary-only
+closure. The factory either rejects the signature or returns one erased physical expression whose
+metadata agrees with the requested logical call.
 
-## Keep the two null layers independent
+Binding follows this order:
 
-For `n` outer rows:
+1. resolve the logical function name;
+2. check arity from the logical input slice;
+3. apply explicit logical promotion rules where the function permits them;
+4. choose one physical factory and validate its input/output metadata; and
+5. store the finished expression in `BoundExpression`.
 
-```text
-validity.len() == n
-offsets.len() == n + 1
-offsets[0] == 0
-offsets are monotone
-offsets[n] == child.len()
-```
+Evaluation then delegates directly to that expression.
 
-A null outer row and an empty non-null row both repeat an offset. Their validity bits differ. A
-non-null row may span child values that include their own nulls.
+## Arithmetic and comparisons
 
-## Checkpoint 1: add typed List scalars
+Register arithmetic and numeric comparison names through Chapter 5's promotion table. Reject
+lossy pairs rather than inventing a cast. Arithmetic returns the promoted numeric type;
+comparisons return Boolean while still comparing through the approved common family.
 
-- **Target:** `type-exercise-starter/src/array/list_array.rs::{ListScalar, ListScalarRef,
-  ListError}` and List variants in
-  `type-exercise-starter/src/{data_type,physical_type,scalar}.rs`.
-- **Change:** retain the child physical type even for empty and all-null values; make `get`, `slice`,
-  and owned conversion checked.
-- **Preserve:** nested List child types return `ListError::NestedList`.
-- **Run:** the Chapter 11 focused test.
-- **Passing means:** borrowed and owned List values cannot lose or invent child types.
+Keep operation names distinct. `add`, `subtract`, and `multiply` cannot share one accidental
+default; the same applies to all six comparisons and their NaN behavior. The registry selects the
+operation before the expression reaches a row loop.
 
-## Checkpoint 2: construct valid outer arrays
+## Boolean and strings
 
-- **Target:** `type-exercise-starter/src/array/list_array.rs::{ListArray, ListArrayBuilder, try_from_rows,
-  try_from_raw_parts}`.
-- **Change:** validate child family, offsets, validity, and null spans before returning an array.
-- **Preserve:** `ListArray::len()` is the outer row count, never the flattened child length; a
-  failed row does not expose partial output.
-- **Run:** focused and cumulative tests.
-- **Passing means:** zero-row, all-null, empty-row, and mixed arrays retain exact invariants.
+Register unary `not`, binary `and`/`or`, strict string comparisons, `contains`, and the Chapter 10
+concatenation path with their exact logical signatures. Logical `String` and `Varchar` may share a
+physical representation without becoming the same planner type. Binding preserves that
+distinction even though evaluation borrows the same UTF-8 slices.
 
-## Checkpoint 3: integrate Column views
+## Complete contract
 
-- **Target:** `type-exercise-starter/src/column.rs::{ListColumnView, ColumnViewImpl::try_as_list}` and List erasure in
-  `type-exercise-starter/src/array.rs`.
-- **Change:** support List array, constant, Indexed, and typed-null representations.
-- **Preserve:** Indexed validation and expected/actual type errors from Chapter 3.
-- **Run:** the full Chapter 11 contract.
-- **Passing means:** one-level List values reuse the existing representation boundary.
-
-## Required and extension work
-
-One-level storage and List inputs are required. Nested Lists, List equality as a scalar builtin,
-list-producing functions, and arbitrary List casts are extensions. The public type descriptor can
-represent a nested shape, but construction must reject it until those contracts exist.
+Run the final course boundary:
 
 ```console
-cargo test -p type-exercise-starter chapter_11 --locked
-cargo test -p type-exercise-starter --lib --locked
+cargo test -p type-exercise-starter-expr chapter_11 --locked
+cargo test -p type-exercise-starter-expr --lib --locked
+cargo check -p type-exercise-starter-core --locked
 ```
 
-Next: [Chapter 12 strengthens Rust type boundaries](./chapter-12-rust-boundaries.md).
+The 19 focused tests cover successful numeric, Boolean, comparison, and string calls; unknown
+names; unsupported and lossy signatures; inconsistent factory metadata; arbitrary arity slices;
+custom registration; checked runtime errors; and nullability propagation through both physical
+and bound expressions.
+
+The dependency direction remains important. The facade owns concrete operations and the builtin
+registry. Core owns only the generic registry and erased expression vocabulary needed to store a
+finished factory result. Core never imports the builtin catalog.
+
+Next: [Chapter 12 builds a one-level List column](./chapter-12-rust-boundaries.md).
 
 {{#include copyright.md}}

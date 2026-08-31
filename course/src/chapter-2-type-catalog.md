@@ -27,21 +27,23 @@ The goal is not to hide the type system behind a general framework. It is to kee
 ## What is in the starter
 
 Begin from your completed Chapter 1 workspace. `src/variant_catalog.rs` contains exactly the
-Int32 and String rows. Those rows already drive scalar and array erasure. `src/physical_type.rs`,
-`src/scalar.rs`, and `src/array.rs` therefore expose two physical families, and
+Int32 and String rows. On Day 1, those rows drive only `PHYSICAL_FAMILY_CATALOG`; scalar and array
+erasure remains handwritten in `src/scalar.rs` and `src/array.rs`. Day 2 first replaces that
+Int32/String erasure with catalog callbacks, then extends the inventory. `src/physical_type.rs`,
+`src/scalar.rs`, and `src/array.rs` expose those two physical families, and
 `src/array/primitive_array.rs` has the working `I32Array` layout you implemented.
 
 The Day 2 starter does not predeclare the rest of the solution. Comments in the active files mark
 where the primitive variants and aliases belong. `src/data_type.rs`, `src/decimal.rs`, and
 `src/array/decimal_array.rs` are still docstrings rather than executable declarations, and their
-modules remain commented in `src/lib.rs` and `src/array.rs`. You will make those files executable
+modules remain commented in `src/core.rs` and `src/array.rs`. You will make those files executable
 only when their checkpoints introduce the concepts.
 
 Copy the cumulative supplied test before editing:
 
 ```console
 cargo x copy-test --chapter 2
-cargo test -p type-exercise-starter chapter_2 --locked
+cargo test -p type-exercise-starter-expr chapter_2 --locked
 ```
 
 The Chapter 2 test is one final contract, not four progressive test files. Its first run should
@@ -52,7 +54,7 @@ modules together after both implementations exist. The focused Chapter 2 test be
 all four checkpoints are complete.
 
 ```console
-cargo check -p type-exercise-starter --lib --locked
+cargo check -p type-exercise-starter-expr --lib --locked
 ```
 
 ## Checkpoint 1: Generalize the primitive array family
@@ -87,7 +89,7 @@ The six aliases are ordinary Rust declarations, not generated execution code. Re
 the remaining physical catalog rows.
 
 ```console
-cargo check -p type-exercise-starter --lib --locked
+cargo check -p type-exercise-starter-expr --lib --locked
 ```
 
 ## Checkpoint 2: Make the catalog own the repeated relationships
@@ -102,10 +104,11 @@ Extend the inventory with the static Day 2 families: Int16, Int64, Bool, Float32
 Int32 remains in place, and String remains the one `borrowed` row because its array yields `&str`
 rather than copying an owned `String`.
 
-The existing catalog callbacks in `src/scalar.rs` and `src/array.rs` should now generate the new
-erased scalar and array variants, scalar-family relationships, physical-type dispatch, and
-variant-specific checked conversions without five hand-written copies. They do not generate the
-primitive aliases or duplicate the generic `Array` implementation from Checkpoint 1. Add the
+Add catalog callbacks in `src/scalar.rs` and `src/array.rs` that replace the handwritten
+Int32/String erasure. Then use those callbacks to generate the new erased scalar and array
+variants, scalar-family relationships, physical-type dispatch, and variant-specific checked
+conversions without five hand-written copies. They do not generate the primitive aliases or
+duplicate the generic `Array` implementation from Checkpoint 1. Add the
 matching variants to `PhysicalType` and `PhysicalFamily` in `src/physical_type.rs`, and keep
 `PHYSICAL_FAMILY_CATALOG` in the same public order. The supplied test treats that public list as an
 audit surface: an omitted, duplicated, or misnamed family is a failure even if some generated code
@@ -126,7 +129,7 @@ coefficient and validity storage, but its builder still needs a runtime `Decimal
 accept any row.
 
 ```console
-cargo check -p type-exercise-starter --lib --locked
+cargo check -p type-exercise-starter-expr --lib --locked
 ```
 
 ## Checkpoint 3: Separate logical type from physical storage
@@ -152,10 +155,10 @@ logical variants and the two string variants, then map them explicitly:
 Implement `physical_type`, `is_string`, and `is_numeric`. `Boolean` is not numeric. The `width` in
 `Char { width }` remains logical metadata even though it does not change the physical array.
 
-Do not add a nullable logical variant or List. Keep one primitive array representation with its validity bitmap. Nullability is a physical property beside `PhysicalType`, expressed as `Nullability::{NonNull, Nullable}`. Day 10 will make `ColumnViewImpl` carry that property and make expressions derive their output property with `Expression::output_nullability`; `BoundExpression` only delegates it. An ordinary `ColumnViewImpl::array` remains conservatively `Nullable`. A checked `try_non_null_array` can establish `NonNull` once, after which the selected dense loop reads the same array's `values()` and leaves its bitmap structurally present but unused. This does not require a second Arrow array type or a cached null count. List arrives with its own scalar and array relationships on Day 11.
+Do not add a nullable logical variant or List. Keep one primitive array representation with its validity bitmap. Nullability is a physical property beside `PhysicalType`, expressed as `Nullability::{NonNull, Nullable}`. Day 7 will make `ColumnViewImpl` carry that property and make expressions derive their output property with `Expression::output_nullability`; `BoundExpression` only delegates it. An ordinary `ColumnViewImpl::array` remains conservatively `Nullable`. A checked `try_non_null_array` can establish `NonNull` once, after which the selected dense loop reads the same array's `values()` and leaves its bitmap structurally present but unused. This does not require a second Arrow array type or a cached null count. List arrives with its own scalar and array relationships on Day 12.
 
 Checkpoint 4 adds the Decimal variants and checked constructor to this same file. After that work,
-uncomment the `data_type` and `decimal` modules and exports in `src/lib.rs`; do not enable any
+uncomment the `data_type` and `decimal` modules and exports in `src/core.rs`; do not enable any
 later-day module.
 
 ## Checkpoint 4: Keep Decimal metadata with the physical value
@@ -164,15 +167,8 @@ An `f64` value carries its interpretation in its bits. An `i128` coefficient doe
 whether `12345` means `12345`, `123.45`, or `12.345`. Decimal therefore cannot use the static
 primitive relationship unchanged.
 
-Adding a dependency is the one exception to this chapter's normal source-only editing boundary.
-From the repository root, add `anyhow` to the learner crate before continuing:
-
-```console
-cargo add anyhow@1 --package type-exercise-starter
-```
-
-This updates both `type-exercise-starter/Cargo.toml` and the workspace lockfile, so the documented
-`--locked` checks below remain reproducible. Then implement `DecimalType` and `Decimal` in
+The starter already includes `anyhow`; do not change its manifest or the workspace lockfile here.
+Implement `DecimalType` and `Decimal` in
 `src/decimal.rs` with `anyhow::Result`. This chapter needs readable checked failures, not a public
 Decimal-specific error taxonomy. `DecimalType` owns the
 precision and scale and accepts only:
@@ -221,8 +217,8 @@ would have to preserve.
 Run the final contract and the starter library tests:
 
 ```console
-cargo test -p type-exercise-starter chapter_2 --locked
-cargo test -p type-exercise-starter --lib --locked
+cargo test -p type-exercise-starter-expr chapter_2 --locked
+cargo test -p type-exercise-starter-expr --lib --locked
 ```
 
 Before continuing, make sure you can explain three boundaries in your own words:

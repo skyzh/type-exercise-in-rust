@@ -31,7 +31,7 @@ Copy the supplied Chapter 1 test and run it once before editing the starter:
 
 ```console
 cargo x copy-test --chapter 1 --checkpoint 1
-cargo test -p type-exercise-starter chapter_1 --locked
+cargo test -p type-exercise-starter-expr chapter_1 --locked
 ```
 
 The test is cumulative course material; do not edit the copied file. Work only in the learner files named below.
@@ -83,7 +83,7 @@ Run the focused test again:
 
 ```console
 cargo x copy-test --chapter 1 --checkpoint 1
-cargo test -p type-exercise-starter chapter_1 --locked
+cargo test -p type-exercise-starter-expr chapter_1 --locked
 ```
 
 ## Checkpoint 2: Add scalar type erasure
@@ -109,7 +109,7 @@ Run the same focused test. Its scalar-erasure checkpoint should now round-trip b
 
 ```console
 cargo x copy-test --chapter 1 --checkpoint 2
-cargo test -p type-exercise-starter chapter_1 --locked
+cargo test -p type-exercise-starter-expr chapter_1 --locked
 ```
 
 ## Checkpoint 3: Implement primitive and string arrays
@@ -154,20 +154,20 @@ Preserve the row count and null position for normal, empty, and all-null inputs.
 
 ```console
 cargo x copy-test --chapter 1 --checkpoint 3
-cargo test -p type-exercise-starter chapter_1 --locked
+cargo test -p type-exercise-starter-expr chapter_1 --locked
 ```
 
 When this checkpoint passes, the scalar relationship from Checkpoint 1 becomes observable: `I32Array::get` produces `Option<i32>`, while `StringArray::get` produces `Option<&str>` borrowing the array.
 
-## Checkpoint 4: Add array type erasure with a macro
+## Checkpoint 4: Handwrite the erased array boundary
 
 Concrete arrays are ideal for generic code, but a database operator often receives a column selected from a runtime schema. `ArrayImpl` in `src/array.rs` is the erased boundary for that case. On Day 1 it has only `Int32(I32Array)` and `String(StringArray)` variants.
 
-Implement the common erased-array operations and the checked conversions between each concrete array and `ArrayImpl`. As with scalar erasure, upcasting with `From` cannot fail, while downcasting with `TryFrom` must return `TypeMismatch` for the wrong variant. Support both owned recovery and borrowed recovery so callers can inspect an erased array without cloning its buffers.
+Keep every Day 1 erased boundary handwritten. Checkpoint 2 gave `ScalarImpl` and `ScalarRefImpl` explicit physical-type dispatch plus owned and borrowed checked conversions in `src/scalar.rs`. In this checkpoint, do the same for `ArrayImpl` in `src/array.rs`: implement its common erased-array operations and write the Int32 and String conversion implementations directly. Upcasting with `From` cannot fail, while downcasting with `TryFrom` must return `TypeMismatch` for the wrong variant. Support both owned recovery and borrowed recovery so callers can inspect an erased array without cloning its buffers.
 
-The two families need the same conversion shape. Write that shape once as a `macro_rules!` macro, then invoke it for Int32 and String. Keep the family inventory in `src/variant_catalog.rs` to exactly the two Day 1 rows. The catalog supplies the type names to the macro; it must not contain the later physical families yet.
+Also complete the family inventory in `src/variant_catalog.rs` with exactly the Int32 and String rows. On Day 1, that callback supplies only the public `PHYSICAL_FAMILY_CATALOG` audit list. Do not use it to generate scalar or array variants, match arms, or conversion implementations yet, and do not add the later physical families.
 
-The point of this macro is narrow: remove repetitive enum conversion code while keeping each generated implementation ordinary, inspectable Rust. It is not a generic reflection system. Later chapters will extend the catalog and reuse the same expansion boundary.
+Writing the two families explicitly makes the repeated conversion shape visible before a macro hides it. Chapter 2 will expand the finite inventory and then use catalog callbacks to generate that repeated erased dispatch and conversion code. The catalog is a compile-time inventory, not a runtime reflection system.
 
 Finish by checking these behaviors:
 
@@ -181,8 +181,8 @@ Run the focused test, then the starter library tests:
 
 ```console
 cargo x copy-test --chapter 1 --checkpoint 4
-cargo test -p type-exercise-starter chapter_1 --locked
-cargo test -p type-exercise-starter --lib --locked
+cargo test -p type-exercise-starter-expr chapter_1 --locked
+cargo test -p type-exercise-starter-expr --lib --locked
 ```
 
 Before continuing, make sure you can explain three boundaries in your own words:
@@ -191,7 +191,7 @@ Before continuing, make sure you can explain three boundaries in your own words:
 2. Why can generic code trust a `Scalar` relationship, while erased code must perform a checked downcast?
 3. Which bytes represent a null string row, and which structure tells you that it is null rather than empty?
 
-You have connected the first two concrete families by hand. Chapter 2 will extend the physical-family catalog and let the macros reproduce those connections for more types without turning the Day 1 starter into a completed framework.
+You have connected the first two concrete families by hand and recorded them in a two-row physical-family inventory. Chapter 2 will expand that inventory and only then use catalog callbacks to generate the repeated erased dispatch and conversion implementations for more types.
 
 Next: [Chapter 2 scales the family without copying every connection](./chapter-2-type-catalog.md).
 

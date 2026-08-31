@@ -14,7 +14,7 @@ pub enum DataType {
     Varchar,
     Char { width: u16 },
     Decimal(DecimalType),
-    List(Box<DataType>),
+    // Day 12 adds `List(Box<DataType>)`.
 }
 
 impl DataType {
@@ -28,7 +28,6 @@ impl DataType {
             Self::Double => PhysicalType::Float64,
             Self::Varchar | Self::Char { .. } => PhysicalType::String,
             Self::Decimal(decimal_type) => PhysicalType::Decimal(*decimal_type),
-            Self::List(element_type) => PhysicalType::List(Box::new(element_type.physical_type())),
         }
     }
 

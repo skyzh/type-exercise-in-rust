@@ -26,7 +26,7 @@ jobs:
       - name: Test current workspace and reference solution
         run: cargo test --workspace --locked
       - name: Check minimal starter
-        run: cargo check -p type-exercise-starter --lib --locked
+        run: cargo check -p type-exercise-starter-expr --lib --locked
       - name: Copy supplied tests into the starter
         run: |
           cargo x copy-test --chapter 1
@@ -40,6 +40,9 @@ jobs:
           cargo x copy-test --chapter 9
           cargo x copy-test --chapter 10
           cargo x copy-test --chapter 11
+          cargo x copy-test --chapter 12
+          cargo x copy-test --chapter 13
+          cargo x copy-test --chapter 14
           git diff --exit-code -- type-exercise-starter/src ":(exclude)type-exercise-starter/src/tests.rs" ":(exclude)type-exercise-starter/src/tests/**"
       - name: Test course
         run: mdbook test course

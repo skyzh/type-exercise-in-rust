@@ -1,66 +1,57 @@
-# Chapter 13: Add a Batch Async Boundary
-
 {{#include wip-banner.md}}
 
-Some engines need a uniform asynchronous interface even when a local expression is immediately
-ready. The useful boundary is one future per batch, not one future per row.
+# Chapter 13: Strengthen Rust Type Boundaries
 
-**Prerequisites:** Chapter 12, `Future`, `Pin`, and return-position `impl Trait`.
+The engine now has borrowed views, erased expressions, registries, and List slices. This chapter
+does not add a new database feature. It makes the Rust contracts around those existing values
+explicit so the compiler can preserve borrowing and thread-safety across generic and erased code.
 
-**By the end of this chapter, you will:**
-
-- wrap static expression evaluation in a borrowed batch future;
-- erase that future behind an object-safe asynchronous interface; and
-- preserve every synchronous result and error without evaluating twice.
+## The learner-owned boundary
 
 ```console
 cargo x copy-test --chapter 13
-cargo test -p type-exercise-starter chapter_13 --locked
+cargo test -p type-exercise-starter-expr chapter_13 --locked
 ```
 
-The first run should fail on the missing static or erased batch future boundary.
+You will strengthen three connected surfaces.
 
-## Checkpoint 1: return one static future
+### Return opaque borrowed iterators
 
-- **Target:** `type-exercise-starter/src/expression.rs::evaluate_static`.
-- **Change:** return `impl Future<Output = anyhow::Result<ArrayImpl>> + Send + 'a` that
-  borrows the expression and input slice.
-- **Preserve:** the body delegates to the existing synchronous batch evaluation exactly once.
-- **Run:** the Chapter 13 focused test.
-- **Passing means:** static sync and async paths return identical arrays and errors.
+Make `Array::iter` return `impl Iterator` while retaining the lifetime that borrows its array. The
+caller can traverse nullable fixed-width and string rows without naming the private iterator type
+or allocating owned strings. Empty arrays remain ordinary empty iterators.
 
-## Checkpoint 2: erase the future
+### Recover erased expression objects safely
 
-- **Target:** `type-exercise-starter/src/expression.rs::{BatchFuture, AsyncExpression,
-  AsyncExpressionAdapter}`.
-- **Change:** add `AsyncExpressionAdapter::new`, then box and pin the borrowed batch future so it
-  can be returned from a trait object.
-- **Preserve:** the future lifetime covers the expression, the view slice, and every borrowed
-  backing array.
-- **Run:** the focused test.
-- **Passing means:** erased async evaluation matches static and synchronous evaluation.
+Keep `Expression: Any + Send + Sync`, then support checked recovery and direct trait-object
+upcasting where the language permits it. The erased object must be safe to share with worker
+threads because its selected kernel and metadata are immutable for evaluation.
 
-## Checkpoint 3: forward a bound plan
+### Preserve captures and shorten borrows
 
-- **Target:** `type-exercise-starter/src/binder.rs::BoundExpression::evaluate_async`.
-- **Change:** delegate to the already-selected expression without repeating logical binding.
-- **Preserve:** arity, type, length, null, and operation errors keep the same contextual messages
-  and precedence.
-- **Run:** focused and cumulative tests.
-- **Passing means:** the planning boundary remains one-time and the batch kernel remains synchronous.
+Allow logical factories to capture thread-safe shared state. Keep `ColumnViewImpl<'a>` covariant
+so a view with a longer borrow can be used for a shorter evaluation scope. Do not use `unsafe` or
+erase the view lifetime to `'static`; the type relationship should follow from the data each enum
+variant actually contains.
 
-## Required and extension work
-
-One ready future per batch is required. I/O, timers, retries, background threads, cancellation
-protocols, custom runtimes, and per-row futures are outside this course.
+Run the full contract:
 
 ```console
-cargo test -p type-exercise-starter chapter_13 --locked
-cargo test -p type-exercise-starter --doc --locked
-cargo test -p type-exercise-starter --lib --locked
+cargo test -p type-exercise-starter-expr chapter_13 --locked
+cargo test -p type-exercise-starter-expr --doc --locked
+cargo test -p type-exercise-starter-expr --lib --locked
+cargo check -p type-exercise-starter-core --locked
 ```
 
-You have now moved type selection, representation dispatch, validation, promotion, and runtime
-selection out of the row loop while keeping each failure boundary explicit.
+The six focused tests prove opaque iteration over integers and borrowed strings, checked
+trait-object recovery, cross-thread expression use, captured shared state, and lifetime shortening
+for erased views. These are compile-time API properties exercised through runnable values, not a
+parallel hierarchy of marker types.
+
+The result is still the same synchronous expression engine. The stronger ownership boundary is
+what lets Chapter 14 borrow expressions and input views across one future without cloning their
+contents.
+
+Next: [Chapter 14 adds a batch async boundary](./chapter-14-async-boundary.md).
 
 {{#include copyright.md}}

@@ -81,6 +81,10 @@ fn chapter_checkpoint_count(chapter: usize) -> Option<usize> {
     match chapter {
         1 => Some(4),
         6 => Some(3),
+        7 => Some(3),
+        8 => Some(2),
+        9 => Some(3),
+        10 => Some(3),
         _ => None,
     }
 }
@@ -180,10 +184,10 @@ fn copy_test(root: &Path, chapter: usize, checkpoint: Option<usize>) -> Result<C
 
     if let Some(checkpoint) = checkpoint {
         println!(
-            "copied cumulative Chapter {chapter} checkpoint {checkpoint} tests into type-exercise-starter"
+            "copied cumulative Chapter {chapter} checkpoint {checkpoint} tests into type-exercise-starter-expr"
         );
     } else {
-        println!("copied cumulative Chapters 1-{chapter} tests into type-exercise-starter");
+        println!("copied cumulative Chapters 1-{chapter} tests into type-exercise-starter-expr");
     }
     Ok(CopyReport { changed_files })
 }

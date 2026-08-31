@@ -8,7 +8,7 @@ pub enum PhysicalType {
     Int32,
     String,
     // Day 2 adds the remaining primitive families and Decimal.
-    // Day 11 adds List.
+    // Day 12 adds List.
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]

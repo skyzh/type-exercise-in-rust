@@ -12,7 +12,7 @@ pub use primitive_array::{
     I16ArrayBuilder, I32Array, I32ArrayBuilder, I64Array, I64ArrayBuilder, PrimitiveArray,
     PrimitiveArrayBuilder,
 };
-pub use string_array::{StringArray, StringArrayBuilder};
+pub use string_array::{StringArray, StringArrayBuilder, Writer, WriterUsed};
 
 use anyhow::anyhow;
 use std::fmt::Debug;
@@ -86,7 +86,7 @@ where
     /// Iterate without exposing the concrete iterator type.
     ///
     /// ```compile_fail
-    /// use type_exercise::ArrayIterator;
+    /// use type_exercise_core::ArrayIterator;
     /// ```
     fn iter<'a>(&'a self) -> impl Iterator<Item = Option<Self::RefItem<'a>>> + 'a {
         ArrayIterator::new(self)

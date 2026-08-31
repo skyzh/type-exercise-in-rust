@@ -1,21 +1,17 @@
-use crate::{
-    Array, ArrayImpl, ColumnViewImpl, I16Array, I64Array, PhysicalType, ScalarRefImpl,
-    validate_expression_inputs,
-};
-use crate::operators::build_numeric_clamp_expression;
+use std::cell::Cell;
 
-// === Chapter 6 checkpoint 1 ===
+use crate::{
+    Array, ArrayImpl, ColumnViewImpl, I16Array, I32Array, I64Array, PhysicalType, ScalarRefImpl,
+    evaluate_unary, try_evaluate_ternary, validate_expression_inputs,
+};
 
 #[test]
-fn checkpoint_1_validates_arity_then_type_then_length_for_any_arity() {
+fn checkpoint_1_validation_is_arity_then_type_then_length() {
     let wrong_arity = [ColumnViewImpl::constant(ScalarRefImpl::String("wrong"), 3)];
     assert_eq!(
-        validate_expression_inputs(
-            &wrong_arity,
-            &[PhysicalType::Int32, PhysicalType::Int32],
-        )
-        .unwrap_err()
-        .to_string(),
+        validate_expression_inputs(&wrong_arity, &[PhysicalType::Int32, PhysicalType::Int32])
+            .unwrap_err()
+            .to_string(),
         "input arity mismatch: expected 2, got 1"
     );
 
@@ -56,46 +52,51 @@ fn checkpoint_1_validates_arity_then_type_then_length_for_any_arity() {
     );
 }
 
-// === Chapter 6 checkpoint 2 ===
+#[test]
+fn checkpoint_2_strict_unary_vectorization_skips_null_rows() {
+    let calls = Cell::new(0);
+    let input: ArrayImpl = I32Array::from_slice(&[Some(1), None, Some(3)]).into();
+    let output = evaluate_unary::<i32, i32, _>(ColumnViewImpl::array(&input), |value| {
+        calls.set(calls.get() + 1);
+        value + 10
+    })
+    .unwrap();
+
+    assert_eq!(calls.get(), 2);
+    assert_eq!(
+        <&I32Array>::try_from(&output)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![Some(11), None, Some(13)]
+    );
+}
 
 #[test]
-fn checkpoint_2_runs_one_mixed_typed_ternary_loop() {
-    let expression = build_numeric_clamp_expression(
-        "mixed_clamp",
-        [
-            PhysicalType::Int16,
-            PhysicalType::Int32,
-            PhysicalType::Int64,
-        ],
-        PhysicalType::Int64,
-    );
+fn checkpoint_2_runs_one_direct_mixed_ternary_evaluator() {
     let values: ArrayImpl = I16Array::from_slice(&[Some(5), None, Some(25)]).into();
     let uppers: ArrayImpl = I64Array::from_values(vec![20, 0, 20]).into();
-    let output = expression
-        .evaluate(&[
-            ColumnViewImpl::array(&values),
-            ColumnViewImpl::constant(ScalarRefImpl::Int32(10), 3),
-            ColumnViewImpl::array(&uppers),
-        ])
-        .unwrap();
+    let output = try_evaluate_ternary::<i16, i32, i64, i64, _>(
+        ColumnViewImpl::array(&values),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(10), 3),
+        ColumnViewImpl::array(&uppers),
+        "mixed_clamp",
+        |value, lower, upper| {
+            let value = i64::from(value);
+            let lower = i64::from(lower);
+            if lower > upper {
+                anyhow::bail!("invalid clamp bounds");
+            }
+            Ok(value.clamp(lower, upper))
+        },
+    )
+    .unwrap();
+
     assert_eq!(
         <&I64Array>::try_from(&output)
             .unwrap()
             .iter()
             .collect::<Vec<_>>(),
         vec![Some(10), None, Some(20)]
-    );
-
-    let invalid_uppers: ArrayImpl = I64Array::from_values(vec![20, 0]).into();
-    assert_eq!(
-        expression
-            .evaluate(&[
-            ColumnViewImpl::constant(ScalarRefImpl::Int16(5), 2),
-            ColumnViewImpl::constant(ScalarRefImpl::Int32(10), 2),
-            ColumnViewImpl::array(&invalid_uppers),
-            ])
-            .unwrap_err()
-            .to_string(),
-        "function `mixed_clamp` failed at row 1: invalid clamp bounds"
     );
 }

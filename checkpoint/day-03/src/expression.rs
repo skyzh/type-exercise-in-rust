@@ -9,7 +9,7 @@
 //! Day 4, checkpoint 2: add the fixed-width scalar adapter and whole-batch shells. Their tests
 //! exercise contextual arity, type, length, and scalar-evaluation errors.
 //
-//! Day 8, checkpoint 1: add the object-safe runtime expression boundary here.
+//! Day 9, checkpoint 1: add the object-safe runtime expression boundary here.
 // pub trait Expression: Any + Send + Sync {
 //     /* fn name(&self) -> &'static str */
 //     /* fn arity(&self) -> usize */
@@ -21,11 +21,11 @@
 // pub struct BinaryExpression { /* physical metadata plus one whole-batch kernel */ }
 // impl BinaryExpression { /* pub fn new(name, input_types, output_type, kernel) -> Self */ }
 //
-//! Day 8, checkpoint 3: add the builtin catalog here.
+//! Day 9, checkpoint 3: add the builtin catalog here.
 // pub fn build_builtin_expression(name: &str) -> Option<Box<dyn Expression>>;
 // pub const BUILTIN_EXPRESSION_NAMES: &[&str];
 //
-//! Day 10, checkpoint 1: add one representative batch loop choice here. Select it only from checked physical `Nullability` metadata while keeping one primitive array representation.
+//! Day 7, checkpoint 1: add one representative batch loop choice here. Select it only from checked physical `Nullability` metadata while keeping one primitive array representation.
 //     /* fn output_nullability(&self, inputs: &[Nullability]) -> Nullability */
 // pub enum PrimitiveLoop { /* supported dense loops plus general fallback */ }
 // pub struct PrimitiveBinaryExpression<F> { /* typed i32 function plus runtime metadata */ }
@@ -39,14 +39,14 @@
 //     ) -> anyhow::Result<(ArrayImpl, PrimitiveLoop)>;
 // }
 //
-//! Day 12, checkpoint 2: add checked Any recovery and downcast helpers to the erased boundary here.
+//! Day 13: add checked Any recovery and downcast helpers to the erased boundary here.
 // impl dyn Expression { /* checked Any recovery */ }
 //
-//! Day 13, checkpoint 1: add one static batch future here.
+//! Day 14: add one static batch future here.
 // pub fn evaluate_static<'a, E>(expression: &'a E, inputs: &'a [ColumnViewImpl<'a>])
 //     -> impl Future<Output = anyhow::Result<ArrayImpl>> + Send + 'a;
 //
-//! Day 13, checkpoint 2: add the object-safe async adapter here.
+//! Day 14: add the object-safe async adapter here.
 // pub type BatchFuture<'a> = Pin<Box<dyn Future<Output = anyhow::Result<ArrayImpl>> + Send + 'a>>;
 // pub trait AsyncExpression: Send + Sync {
 //     fn evaluate_async<'a>(&'a self, inputs: &'a [ColumnViewImpl<'a>]) -> BatchFuture<'a>;

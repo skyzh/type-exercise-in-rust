@@ -19,7 +19,7 @@ Begin from your completed Chapter 3 workspace. `src/column.rs` already provides
 comment shells:
 
 - `src/expression.rs` names the first typed binary scalar function and evaluator;
-- `src/operators.rs` names the fixed-arity batch shell and its vectorized kernel pointer; and
+- `src/arithmetic.rs` names the fixed-arity batch shell and its vectorized kernel pointer; and
 - `src/lib.rs` keeps both modules and their exports commented out.
 
 You own two additions in this chapter:
@@ -36,7 +36,7 @@ Copy the cumulative supplied test before editing:
 
 ```console
 cargo x copy-test --chapter 4
-cargo test -p type-exercise-starter chapter_4 --locked
+cargo test -p type-exercise-starter-expr chapter_4 --locked
 ```
 
 The first focused run should fail because the Day 4 modules and public items do not exist yet. Do
@@ -82,7 +82,7 @@ The typed conversions perform the physical-family checks. They also recover the 
 shape established in Chapter 1: a mixed-family function can receive `&str` from a string column and
 `i32` from a primitive column without allocating either input value. This first adapter deliberately
 requires a copyable fixed-width output. A variable-width result cannot be built safely as one
-temporary scalar value here; Chapter 8 introduces a transactional string builder at the
+temporary scalar value here; Chapter 10 introduces a transactional string builder at the
 whole-batch boundary.
 
 Use `anyhow::Result<ArrayImpl>` for batch failures. Add ordinary context that identifies the input
@@ -94,7 +94,7 @@ The copied Chapter 4 test also imports the Checkpoint 2 shells, so it cannot be 
 honest library boundary here:
 
 ```console
-cargo check -p type-exercise-starter --lib --locked
+cargo check -p type-exercise-starter-expr --lib --locked
 ```
 
 Passing means the first vectorized loop and its public surface compile. The completed focused test
@@ -104,7 +104,7 @@ length rejection.
 
 ## Checkpoint 2: erase one complete batch operation
 
-Now open `src/operators.rs`. Define `BatchExpression<const N: usize>` with a static function name,
+Now open `src/arithmetic.rs`. Define `BatchExpression<const N: usize>` with a static function name,
 an `[PhysicalType; N]` input contract, one output type, and a function pointer for a complete
 batch. Name that pointer type `BatchKernel<N>`. Its signature receives the expression metadata and
 the borrowed `&[ColumnViewImpl<'_>]`, and returns `anyhow::Result<ArrayImpl>`.
@@ -143,14 +143,14 @@ not return a partially built array.
 The kernel borrows every input view and returns a new owned array. Do not materialize an input
 representation just to simplify the loop.
 
-Enable `operators` in `src/lib.rs` and export `BatchExpression` and `BatchKernel`. Keep the later
+Enable `arithmetic` in `src/lib.rs` and export `BatchExpression` and `BatchKernel`. Keep the later
 `Expression` trait and runtime catalog commented out.
 
 Run the focused contract, then the cumulative learner-library suite:
 
 ```console
-cargo test -p type-exercise-starter chapter_4 --locked
-cargo test -p type-exercise-starter --lib --locked
+cargo test -p type-exercise-starter-expr chapter_4 --locked
+cargo test -p type-exercise-starter-expr --lib --locked
 ```
 
 The 14 focused cases prove the complete boundary:

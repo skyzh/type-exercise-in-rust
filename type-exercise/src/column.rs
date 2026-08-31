@@ -1,18 +1,18 @@
 use anyhow::{Result, anyhow};
+use bitvec::vec::BitVec;
 
 use crate::{
-    Array, ArrayImpl, ListArray, ListError, ListScalarRef, Nullability, PhysicalType, Scalar,
-    ScalarRefImpl, TypeMismatch,
+    Array, ArrayImpl, ListArray, ListError, ListScalarRef, PhysicalType, Scalar, ScalarRefImpl,
+    TypeMismatch,
 };
 
 /// A borrowed column whose scalar and array types are known only at runtime.
 ///
 /// The public wrapper keeps construction checked while the private kind prevents
-/// callers from bypassing those checks, and it stores batch nullability once.
+/// callers from bypassing those checks.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ColumnViewImpl<'a> {
     kind: ColumnViewImplKind<'a>,
-    nullability: Nullability,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -30,15 +30,22 @@ enum ColumnViewImplKind<'a> {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) enum DenseI32Column<'a> {
-    Array(&'a crate::I32Array),
-    Constant { value: i32, len: usize },
+pub(crate) enum RawI32Column<'a> {
+    Array {
+        values: &'a [i32],
+        validity: &'a BitVec,
+    },
+    Constant {
+        value: i32,
+        valid: bool,
+        len: usize,
+    },
 }
 
-impl DenseI32Column<'_> {
+impl RawI32Column<'_> {
     pub(crate) fn len(self) -> usize {
         match self {
-            Self::Array(array) => array.values().len(),
+            Self::Array { values, .. } => values.len(),
             Self::Constant { len, .. } => len,
         }
     }
@@ -48,17 +55,7 @@ impl<'a> ColumnViewImpl<'a> {
     pub fn array(array: &'a ArrayImpl) -> Self {
         Self {
             kind: ColumnViewImplKind::Array(array),
-            nullability: Nullability::Nullable,
         }
-    }
-
-    pub fn try_non_null_array(array: &'a ArrayImpl) -> Option<Self> {
-        (0..array.len())
-            .all(|row| array.get(row).is_some())
-            .then_some(Self {
-                kind: ColumnViewImplKind::Array(array),
-                nullability: Nullability::NonNull,
-            })
     }
 
     pub fn constant(value: ScalarRefImpl<'a>, len: usize) -> Self {
@@ -68,7 +65,6 @@ impl<'a> ColumnViewImpl<'a> {
                 physical_type: value.physical_type(),
                 len,
             },
-            nullability: Nullability::NonNull,
         }
     }
 
@@ -79,7 +75,6 @@ impl<'a> ColumnViewImpl<'a> {
                 physical_type,
                 len,
             },
-            nullability: Nullability::Nullable,
         }
     }
 
@@ -98,7 +93,6 @@ impl<'a> ColumnViewImpl<'a> {
 
         Ok(Self {
             kind: ColumnViewImplKind::Indexed { indices, values },
-            nullability: Nullability::Nullable,
         })
     }
 
@@ -122,10 +116,6 @@ impl<'a> ColumnViewImpl<'a> {
         }
     }
 
-    pub fn nullability(&self) -> Nullability {
-        self.nullability
-    }
-
     /// Return one erased scalar after the caller has checked the row bound.
     pub fn get(&self, row: usize) -> Option<ScalarRefImpl<'a>> {
         assert!(row < self.len(), "column view row out of bounds");
@@ -136,24 +126,27 @@ impl<'a> ColumnViewImpl<'a> {
         }
     }
 
-    pub(crate) fn as_dense_i32(&self) -> Option<DenseI32Column<'a>> {
-        if self.nullability != Nullability::NonNull {
-            return None;
-        }
+    pub(crate) fn as_raw_i32(&self) -> Option<RawI32Column<'_>> {
         match &self.kind {
-            ColumnViewImplKind::Array(ArrayImpl::Int32(array)) => {
-                Some(DenseI32Column::Array(array))
-            }
-            ColumnViewImplKind::Constant {
-                value: Some(ScalarRefImpl::Int32(value)),
-                len,
-                ..
-            } => Some(DenseI32Column::Constant {
-                value: *value,
+            ColumnViewImplKind::Array(ArrayImpl::Int32(array)) => Some(RawI32Column::Array {
+                values: array.values(),
+                validity: array.validity(),
+            }),
+            ColumnViewImplKind::Constant { value, len, .. } => Some(RawI32Column::Constant {
+                value: match value {
+                    Some(ScalarRefImpl::Int32(value)) => *value,
+                    None => 0,
+                    Some(_) => return None,
+                },
+                valid: value.is_some(),
                 len: *len,
             }),
             _ => None,
         }
+    }
+
+    pub(crate) fn is_indexed(&self) -> bool {
+        matches!(self.kind, ColumnViewImplKind::Indexed { .. })
     }
 
     pub fn try_as_list(self, element_type: PhysicalType) -> Result<ListColumnView<'a>, ListError> {
@@ -331,45 +324,5 @@ where
                 },
             }),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::ColumnViewImpl;
-    use crate::{
-        ArrayImpl, Decimal, DecimalArray, DecimalType, PhysicalType, ScalarImpl, ScalarRefImpl,
-    };
-
-    #[test]
-    fn decimal_array_constant_null_and_indexed_keep_exact_metadata() {
-        let decimal_type = DecimalType::try_new(8, 2).unwrap();
-        let value = Decimal::try_new(12_345, decimal_type).unwrap();
-        let array: ArrayImpl = DecimalArray::try_from_slice(decimal_type, &[Some(value), None])
-            .unwrap()
-            .into();
-        let exact = PhysicalType::Decimal(decimal_type);
-
-        let array_view = ColumnViewImpl::array(&array);
-        assert_eq!(array_view.physical_type(), exact);
-        assert_eq!(array_view.get(0), Some(ScalarRefImpl::Decimal(value)));
-        assert_eq!(array_view.get(1), None);
-
-        let constant = ColumnViewImpl::constant(ScalarRefImpl::Decimal(value), 2);
-        assert_eq!(constant.physical_type(), exact);
-        assert_eq!(constant.get(1), Some(ScalarRefImpl::Decimal(value)));
-
-        let null = ColumnViewImpl::null(exact.clone(), 2);
-        assert_eq!(null.physical_type(), exact);
-        assert_eq!(null.get(0), None);
-
-        let indices = [1, 0, 1];
-        let indexed = ColumnViewImpl::indexed(&indices, &array).unwrap();
-        assert_eq!(indexed.physical_type(), exact);
-        assert_eq!(indexed.get(0), None);
-        assert_eq!(indexed.get(1), Some(ScalarRefImpl::Decimal(value)));
-        assert_eq!(indexed.get(2), None);
-
-        assert_eq!(ScalarImpl::from(value).physical_type(), exact);
     }
 }

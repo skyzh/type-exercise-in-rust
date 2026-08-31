@@ -24,7 +24,7 @@ pub enum ScalarImpl {
     Int32(i32),
     String(String),
     // Day 2: add the remaining primitive and Decimal variants.
-    // Day 11: add `List(ListScalar)`.
+    // Day 12: add `List(ListScalar)`.
 }
 
 /// The two borrowed scalar variants visible at the start of Day 1.
@@ -33,7 +33,7 @@ pub enum ScalarRefImpl<'a> {
     Int32(i32),
     String(&'a str),
     // Day 2: add the remaining primitive and Decimal variants.
-    // Day 11: add `List(ListScalarRef<'a>)`.
+    // Day 12: add `List(ListScalarRef<'a>)`.
 }
 
 // Day 1, checkpoint 1: implement Scalar/ScalarRef for i32 and String/&str. The owned↔borrowed
@@ -41,7 +41,8 @@ pub enum ScalarRefImpl<'a> {
 // Day 1, checkpoint 3: connect each ArrayType placeholder to its concrete array.
 // Day 1, checkpoint 2: add physical-type methods and checked From/TryFrom conversions for both
 // erased enums. Wrong variants return TypeMismatch rather than panicking.
-// Day 2: extend those implementations to the remaining scalar families and Decimal.
+// Day 2: replace the repeated family relationships with catalog callbacks, then extend the
+// catalog to the remaining scalar families and Decimal.
 
 #[cfg(test)]
 mod tests {

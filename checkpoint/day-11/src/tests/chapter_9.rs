@@ -1,46 +1,51 @@
+use std::any::Any;
+
 use crate::{
-    Array, ArrayImpl, BindError, BoolArray, BoundExpression, ColumnViewImpl, DataType, Expression,
-    FunctionRegistry, I32Array, PhysicalType, ScalarRefImpl, StringArray, build_builtin_expression,
+    Array, ArrayBuilder, ArrayImpl, BUILTIN_EXPRESSION_NAMES, BatchExpression, BinaryExpression,
+    BoolArray, BooleanOperator, ColumnView, ColumnViewImpl, Expression, I32Array, PhysicalType,
+    ScalarRefImpl, StringArray, build_boolean_expression, build_builtin_expression,
 };
 
-struct MetadataExpression {
-    input_types: Vec<PhysicalType>,
+fn assert_expression_bounds<T: Any + Send + Sync + ?Sized>() {}
+
+fn panic_on_non_null_batch(inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+    let left = ColumnView::<i32>::try_from(inputs[0].clone())?;
+    let right = ColumnView::<i32>::try_from(inputs[1].clone())?;
+    let mut output = <I32Array as Array>::Builder::with_capacity(left.len());
+    for row in 0..left.len() {
+        let value = left
+            .get(row)
+            .zip(right.get(row))
+            .map(|_| panic!("strict expressions must not evaluate a null row"));
+        output.push(value);
+    }
+    Ok(output.finish().into())
 }
 
-impl Expression for MetadataExpression {
-    fn name(&self) -> &'static str {
-        "metadata_only"
+fn mixed_fixed_width_add_batch(inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+    let left = ColumnView::<i32>::try_from(inputs[0].clone())?;
+    let right = ColumnView::<i32>::try_from(inputs[1].clone())?;
+    let mut output = <I32Array as Array>::Builder::with_capacity(left.len());
+    for row in 0..left.len() {
+        output.push(
+            left.get(row)
+                .zip(right.get(row))
+                .map(|(left, right)| left.wrapping_add(right)),
+        );
     }
-
-    fn input_types(&self) -> &[PhysicalType] {
-        &self.input_types
-    }
-
-    fn output_type(&self) -> PhysicalType {
-        PhysicalType::Int32
-    }
-
-    fn evaluate(&self, _inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-        unreachable!("the metadata-only expression is never evaluated")
-    }
-}
-
-fn expect_bind_error(result: Result<BoundExpression, BindError>) {
-    assert!(result.is_err(), "binding unexpectedly succeeded");
+    Ok(output.finish().into())
 }
 
 #[test]
-fn binds_integer_addition_before_execution() {
-    let registry = FunctionRegistry::with_builtins();
-    let expression = registry
-        .bind_binary("+", DataType::Integer, DataType::Integer)
-        .unwrap();
+fn evaluates_a_builtin_through_a_trait_object() {
+    let expression: Box<dyn Expression> = build_builtin_expression("i32_add").unwrap();
+    assert_eq!(expression.name(), "i32_add");
+    assert_eq!(expression.arity(), 2);
     assert_eq!(
         expression.input_types(),
-        &[DataType::Integer, DataType::Integer]
+        &[PhysicalType::Int32, PhysicalType::Int32]
     );
-    assert_eq!(expression.output_type(), DataType::Integer);
-    assert_eq!(expression.physical_name(), "i32_add");
+    assert_eq!(expression.output_type(), PhysicalType::Int32);
 
     let left: ArrayImpl = I32Array::from_slice(&[Some(10), None, Some(30)]).into();
     let inputs = [
@@ -53,368 +58,311 @@ fn binds_integer_addition_before_execution() {
         result.iter().collect::<Vec<_>>(),
         vec![Some(12), None, Some(32)]
     );
-}
 
-#[test]
-fn binds_unary_and_real_ternary_functions() {
-    let registry = FunctionRegistry::with_builtins();
-
-    let neg = registry.bind("neg", &[DataType::BigInt]).unwrap();
-    assert_eq!(neg.input_types(), &[DataType::BigInt]);
-    assert_eq!(neg.output_type(), DataType::BigInt);
-    assert_eq!(neg.physical_name(), "numeric_neg");
-
-    let clamp = registry
-        .bind(
-            "clamp",
-            &[DataType::SmallInt, DataType::Integer, DataType::BigInt],
-        )
-        .unwrap();
+    let expression: Box<dyn Expression> = Box::new(BinaryExpression::new(
+        "mixed_fixed_width_add",
+        [PhysicalType::Int32, PhysicalType::Int32],
+        PhysicalType::Int32,
+        mixed_fixed_width_add_batch,
+    ));
     assert_eq!(
-        clamp.input_types(),
-        &[DataType::SmallInt, DataType::Integer, DataType::BigInt]
+        expression.input_types(),
+        &[PhysicalType::Int32, PhysicalType::Int32]
     );
-    assert_eq!(clamp.output_type(), DataType::BigInt);
-    assert_eq!(clamp.physical_name(), "numeric_clamp");
-}
+    assert_eq!(expression.output_type(), PhysicalType::Int32);
 
-#[test]
-fn preserves_distinct_logical_string_types() {
-    let registry = FunctionRegistry::with_builtins();
-    let char = DataType::Char { width: 4 };
-    for (left, right) in [
-        (DataType::Varchar, DataType::Varchar),
-        (DataType::Varchar, char.clone()),
-        (char.clone(), DataType::Varchar),
-        (char.clone(), char.clone()),
-    ] {
-        let expression = registry
-            .bind_binary("concat", left.clone(), right.clone())
-            .unwrap();
-        assert_eq!(expression.input_types(), &[left, right]);
-        assert_eq!(expression.output_type(), DataType::Varchar);
-        assert_eq!(expression.physical_name(), "string_concat");
-    }
-
-    let expression = registry
-        .bind_binary("concat", char, DataType::Varchar)
-        .unwrap();
-
-    let values: ArrayImpl = StringArray::from_slice(&[Some("data"), None, Some("rust")]).into();
-    let keys = [0, 1, 2];
+    let values: ArrayImpl = I32Array::from_slice(&[Some(4), None]).into();
     let inputs = [
-        ColumnViewImpl::indexed(&keys, &values).unwrap(),
-        ColumnViewImpl::constant(ScalarRefImpl::String("base"), 3),
+        ColumnViewImpl::array(&values),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 2),
     ];
     let result = expression.evaluate(&inputs).unwrap();
-    let result = <&StringArray>::try_from(&result).unwrap();
-    assert_eq!(
-        result.iter().collect::<Vec<_>>(),
-        vec![Some("database"), None, Some("rustbase")]
-    );
+    let result = <&I32Array>::try_from(&result).unwrap();
+    assert_eq!(result.iter().collect::<Vec<_>>(), vec![Some(6), None]);
 }
 
 #[test]
-fn rejects_an_unknown_logical_function() {
-    let registry = FunctionRegistry::with_builtins();
-    expect_bind_error(registry.bind_binary("missing", DataType::Integer, DataType::Integer));
+fn erased_expression_boundary_is_any_send_and_sync() {
+    assert_expression_bounds::<dyn Expression>();
 }
 
 #[test]
-fn rejects_unsupported_logical_signatures() {
-    let registry = FunctionRegistry::with_builtins();
-    for (name, left, right) in [
-        ("+", DataType::Varchar, DataType::Integer),
-        ("+", DataType::Integer, DataType::Varchar),
-        ("concat", DataType::Integer, DataType::Varchar),
-        ("concat", DataType::Varchar, DataType::Integer),
-    ] {
-        expect_bind_error(registry.bind_binary(name, left, right));
+fn generates_the_complete_builtin_catalog() {
+    assert!(BUILTIN_EXPRESSION_NAMES.contains(&"i32_add"));
+    for name in BUILTIN_EXPRESSION_NAMES {
+        assert_eq!(build_builtin_expression(name).unwrap().name(), *name);
     }
+    assert!(build_builtin_expression("add").is_none());
+    assert!(build_builtin_expression("missing").is_none());
 }
 
 #[test]
-fn rejects_a_factory_with_inconsistent_physical_metadata() {
-    assert!(
-        BoundExpression::new(
-            build_builtin_expression("string_concat").unwrap(),
-            [DataType::Integer, DataType::Integer],
-            DataType::Varchar,
-        )
-        .is_err()
+fn rejects_a_kernel_result_that_disagrees_with_declared_metadata() {
+    let expression = BinaryExpression::new(
+        "mismatched_output",
+        [PhysicalType::Int32, PhysicalType::Int32],
+        PhysicalType::Bool,
+        mixed_fixed_width_add_batch,
     );
-
-    assert!(
-        BoundExpression::new(
-            build_builtin_expression("string_concat").unwrap(),
-            [DataType::Varchar, DataType::Varchar],
-            DataType::Integer,
-        )
-        .is_err()
+    let values: ArrayImpl = I32Array::from_values(vec![4]).into();
+    let error = expression
+        .evaluate(&[
+            ColumnViewImpl::array(&values),
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 1),
+        ])
+        .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "output type mismatch: expected Bool, got Int32"
     );
 }
 
 #[test]
-fn preserves_checked_execution_errors_after_binding() {
-    let registry = FunctionRegistry::with_builtins();
-    let expression = registry
-        .bind_binary("+", DataType::Integer, DataType::Integer)
-        .unwrap();
+fn preserves_strict_nulls_through_the_erased_adapter() {
+    let expression: Box<dyn Expression> = Box::new(BinaryExpression::new(
+        "panic_on_call",
+        [PhysicalType::Int32, PhysicalType::Int32],
+        PhysicalType::Int32,
+        panic_on_non_null_batch,
+    ));
+    assert_eq!(
+        expression.input_types(),
+        &[PhysicalType::Int32, PhysicalType::Int32]
+    );
+    assert_eq!(expression.output_type(), PhysicalType::Int32);
+    let inputs = [
+        ColumnViewImpl::null(PhysicalType::Int32, 2),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 2),
+    ];
+    let result = expression.evaluate(&inputs).unwrap();
+    let result = <&I32Array>::try_from(&result).unwrap();
+    assert_eq!(result.iter().collect::<Vec<_>>(), vec![None, None]);
+}
+
+#[test]
+fn rejects_arity_before_indexing_or_converting_inputs() {
+    let expression: Box<dyn Expression> = Box::new(BinaryExpression::new(
+        "mixed_fixed_width_add",
+        [PhysicalType::Int32, PhysicalType::Int32],
+        PhysicalType::Int32,
+        mixed_fixed_width_add_batch,
+    ));
+    assert!(expression.evaluate(&[]).is_err());
+
+    let inputs = [ColumnViewImpl::null(PhysicalType::Int32, 1)];
+    assert!(expression.evaluate(&inputs).is_err());
+
+    let inputs = [
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 1),
+        ColumnViewImpl::null(PhysicalType::Int32, 1),
+    ];
+    assert!(expression.evaluate(&inputs).is_err());
+}
+
+#[test]
+fn delegates_physical_type_errors_to_the_typed_boundary() {
+    let expression = build_builtin_expression("i32_add").unwrap();
     let strings: ArrayImpl = StringArray::from_slice(&[Some("wrong")]).into();
     let inputs = [
         ColumnViewImpl::array(&strings),
         ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
     ];
     assert!(expression.evaluate(&inputs).is_err());
-    assert!(expression.evaluate(&inputs[..1]).is_err());
 }
 
 #[test]
-fn registers_a_custom_logical_name() {
-    let mut registry = FunctionRegistry::default();
-    registry.register_binary("wrapping_add", |left, right| {
-        assert_eq!((&left, &right), (&DataType::Integer, &DataType::Integer));
-        BoundExpression::new(
-            build_builtin_expression("i32_add").expect("i32_add is a builtin"),
-            [left, right],
-            DataType::Integer,
-        )
-    });
-
-    let expression = registry
-        .bind_binary("wrapping_add", DataType::Integer, DataType::Integer)
-        .unwrap();
-    assert_eq!(expression.physical_name(), "i32_add");
+fn delegates_length_errors_to_the_typed_boundary() {
+    let expression = build_builtin_expression("i32_add").unwrap();
+    let inputs = [
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 2),
+    ];
+    assert!(expression.evaluate(&inputs).is_err());
 }
 
 #[test]
-fn stores_and_validates_slice_metadata_for_any_arity() {
-    for input_types in [
-        vec![],
-        vec![DataType::Integer],
-        vec![DataType::Integer; 3],
-        vec![DataType::Integer; 5],
-    ] {
-        let expression = BoundExpression::new(
-            Box::new(MetadataExpression {
-                input_types: vec![PhysicalType::Int32; input_types.len()],
-            }),
-            input_types.clone(),
-            DataType::Integer,
-        )
-        .unwrap();
-        assert_eq!(expression.input_types(), input_types);
-    }
+fn i32_builtin_uses_the_shared_binary_auto_vectorizer() {
+    let binder = include_str!("../binder.rs");
+    assert!(binder.contains("PrimitiveBinaryExpression::new(\"i32_add\", I32Add)"));
+    let core = include_str!("../expression.rs");
+    assert!(!core.contains("evaluate_i32_add_batch"));
+    assert!(core.contains("impl<F> PrimitiveBinaryExpression<F>"));
 }
 
 #[test]
-fn comparison_names_and_nan_semantics_are_not_swappable() {
-    let registry = FunctionRegistry::with_builtins();
-    for (name, physical_name, expected) in [
-        ("<", "numeric_less", true),
-        ("<=", "numeric_less_or_equal", true),
-        (">", "numeric_greater", false),
-        (">=", "numeric_greater_or_equal", false),
-        ("=", "numeric_equal", false),
-        ("!=", "numeric_not_equal", true),
-    ] {
-        let expression = registry
-            .bind_binary(name, DataType::Integer, DataType::BigInt)
-            .unwrap();
-        assert_eq!(expression.physical_name(), physical_name);
-        let output = expression
-            .evaluate(&[
-                ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 1),
-                ColumnViewImpl::constant(ScalarRefImpl::Int64(3), 1),
-            ])
-            .unwrap();
-        assert_eq!(
-            <&BoolArray>::try_from(&output).unwrap().get(0),
-            Some(expected)
-        );
-    }
+fn boolean_expressions_delegate_through_the_erased_boundary() {
+    // Day 8 deferred ledger: the three-valued Boolean expression must reach
+    // the same rows and metadata through dyn Expression as through its
+    // inherent evaluate.
+    let and: Box<dyn Expression> = Box::new(build_boolean_expression(BooleanOperator::And));
+    assert_eq!(and.name(), "boolean_and");
+    assert_eq!(and.arity(), 2);
+    assert_eq!(and.input_types(), &[PhysicalType::Bool, PhysicalType::Bool]);
+    assert_eq!(and.output_type(), PhysicalType::Bool);
 
-    for (name, expected) in [
-        ("<", false),
-        ("<=", false),
-        (">", false),
-        (">=", false),
-        ("=", false),
-        ("!=", true),
-    ] {
-        let expression = registry
-            .bind_binary(name, DataType::Double, DataType::Double)
-            .unwrap();
-        let output = expression
-            .evaluate(&[
-                ColumnViewImpl::constant(ScalarRefImpl::Float64(f64::NAN), 1),
-                ColumnViewImpl::constant(ScalarRefImpl::Float64(1.0), 1),
-            ])
-            .unwrap();
-        assert_eq!(
-            <&BoolArray>::try_from(&output).unwrap().get(0),
-            Some(expected)
-        );
-    }
-}
-
-#[test]
-fn strings_compare_and_contains_with_strict_nulls() {
-    let registry = FunctionRegistry::with_builtins();
-    let contains = registry
-        .bind_binary("contains", DataType::Char { width: 8 }, DataType::Varchar)
-        .unwrap();
-    let haystacks: ArrayImpl =
-        StringArray::from_slice(&[Some("database"), None, Some("rust")]).into();
-    let output = contains
-        .evaluate(&[
-            ColumnViewImpl::array(&haystacks),
-            ColumnViewImpl::constant(ScalarRefImpl::String("base"), 3),
-        ])
-        .unwrap();
-    assert_eq!(
-        <&BoolArray>::try_from(&output)
-            .unwrap()
-            .iter()
-            .collect::<Vec<_>>(),
-        vec![Some(true), None, Some(false)]
-    );
-
-    let less = registry
-        .bind_binary("<", DataType::Varchar, DataType::Char { width: 4 })
-        .unwrap();
-    let output = less
-        .evaluate(&[
-            ColumnViewImpl::constant(ScalarRefImpl::String("alpha"), 1),
-            ColumnViewImpl::constant(ScalarRefImpl::String("beta"), 1),
-        ])
-        .unwrap();
-    assert_eq!(<&BoolArray>::try_from(&output).unwrap().get(0), Some(true));
-}
-
-#[test]
-fn slice_registry_rejects_wrong_arity_before_a_binary_factory_can_index() {
-    let registry = FunctionRegistry::with_builtins();
-    for inputs in [
-        vec![],
-        vec![DataType::Integer],
-        vec![DataType::Integer; 3],
-        vec![DataType::Integer; 5],
-    ] {
-        expect_bind_error(registry.bind("+", &inputs));
-    }
-}
-
-#[test]
-fn binds_boolean_and_or_not_with_correct_arity_and_metadata() {
-    let registry = FunctionRegistry::with_builtins();
-
-    let and = registry
-        .bind_binary("boolean_and", DataType::Boolean, DataType::Boolean)
-        .unwrap();
-    assert_eq!(and.input_types(), &[DataType::Boolean, DataType::Boolean]);
-    assert_eq!(and.output_type(), DataType::Boolean);
-    assert_eq!(and.physical_name(), "boolean_and");
-
-    let or = registry
-        .bind_binary("boolean_or", DataType::Boolean, DataType::Boolean)
-        .unwrap();
-    assert_eq!(or.physical_name(), "boolean_or");
-
-    let not = registry.bind("boolean_not", &[DataType::Boolean]).unwrap();
-    assert_eq!(not.input_types(), &[DataType::Boolean]);
-    assert_eq!(not.output_type(), DataType::Boolean);
-    assert_eq!(not.physical_name(), "boolean_not");
-
-    // One-input NOT must bind; two-input AND/OR and wrong-arity shapes fail closed.
-    expect_bind_error(registry.bind("boolean_not", &[DataType::Boolean, DataType::Boolean]));
-    expect_bind_error(registry.bind("boolean_and", &[DataType::Boolean]));
-    expect_bind_error(registry.bind("boolean_and", &[DataType::Integer, DataType::Boolean]));
-    expect_bind_error(registry.bind_binary("boolean_not", DataType::Boolean, DataType::Boolean));
-}
-
-#[test]
-fn bound_boolean_expressions_evaluate_with_sql_semantics() {
-    let registry = FunctionRegistry::with_builtins();
-    let and = registry
-        .bind_binary("boolean_and", DataType::Boolean, DataType::Boolean)
-        .unwrap();
-    let left: ArrayImpl = BoolArray::from_slice(&[Some(true), None]).into();
-    let right: ArrayImpl = BoolArray::from_slice(&[Some(false), Some(false)]).into();
-    let output = and
+    let left: ArrayImpl = BoolArray::from_slice(&[Some(true), Some(false), None]).into();
+    let right: ArrayImpl = BoolArray::from_slice(&[Some(false), Some(true), Some(false)]).into();
+    let result = and
         .evaluate(&[ColumnViewImpl::array(&left), ColumnViewImpl::array(&right)])
         .unwrap();
     assert_eq!(
-        <&BoolArray>::try_from(&output)
+        <&BoolArray>::try_from(&result)
             .unwrap()
             .iter()
             .collect::<Vec<_>>(),
-        vec![Some(false), Some(false)]
+        vec![Some(false), Some(false), Some(false)]
     );
 
-    let not = registry.bind("boolean_not", &[DataType::Boolean]).unwrap();
-    let output = not.evaluate(&[ColumnViewImpl::array(&left)]).unwrap();
+    let not: Box<dyn Expression> = Box::new(build_boolean_expression(BooleanOperator::Not));
+    assert_eq!(not.name(), "boolean_not");
+    assert_eq!(not.arity(), 1);
+    assert_eq!(not.input_types(), &[PhysicalType::Bool]);
+    let result = not.evaluate(&[ColumnViewImpl::array(&left)]).unwrap();
     assert_eq!(
-        <&BoolArray>::try_from(&output)
+        <&BoolArray>::try_from(&result)
             .unwrap()
             .iter()
             .collect::<Vec<_>>(),
-        vec![Some(false), None]
+        vec![Some(false), Some(true), None]
     );
 }
 
-#[test]
-fn bound_arithmetic_operators_keep_distinct_semantics() {
-    let registry = FunctionRegistry::with_builtins();
-    for (name, physical_name, expected) in [
-        ("+", "i32_add", 13),
-        ("-", "numeric_subtract", 5),
-        ("*", "numeric_multiply", 36),
-        ("/", "numeric_divide", 2),
-    ] {
-        let expression = registry
-            .bind_binary(name, DataType::Integer, DataType::Integer)
-            .unwrap();
-        assert_eq!(expression.physical_name(), physical_name, "logical {name}");
-        let output = expression
-            .evaluate(&[
-                ColumnViewImpl::constant(ScalarRefImpl::Int32(9), 1),
-                ColumnViewImpl::constant(ScalarRefImpl::Int32(4), 1),
-            ])
-            .unwrap();
-        assert_eq!(
-            <&I32Array>::try_from(&output).unwrap().get(0),
-            Some(expected),
-            "logical {name}"
+fn checked_neg_batch(
+    _expression: &BatchExpression<1>,
+    inputs: &[ColumnViewImpl<'_>],
+) -> anyhow::Result<ArrayImpl> {
+    let input = ColumnView::<i32>::try_from(inputs[0].clone())?;
+    let mut output = <I32Array as Array>::Builder::with_capacity(input.len());
+    for row in 0..input.len() {
+        output.push(input.get(row).map(i32::wrapping_neg));
+    }
+    Ok(output.finish().into())
+}
+
+fn checked_add_batch(
+    _expression: &BatchExpression<2>,
+    inputs: &[ColumnViewImpl<'_>],
+) -> anyhow::Result<ArrayImpl> {
+    let left = ColumnView::<i32>::try_from(inputs[0].clone())?;
+    let right = ColumnView::<i32>::try_from(inputs[1].clone())?;
+    let mut output = <I32Array as Array>::Builder::with_capacity(left.len());
+    for row in 0..left.len() {
+        output.push(
+            left.get(row)
+                .zip(right.get(row))
+                .map(|(left, right)| left.wrapping_add(right)),
         );
     }
+    Ok(output.finish().into())
+}
+
+fn checked_clamp_batch(
+    _expression: &BatchExpression<3>,
+    inputs: &[ColumnViewImpl<'_>],
+) -> anyhow::Result<ArrayImpl> {
+    let value = ColumnView::<i32>::try_from(inputs[0].clone())?;
+    let lower = ColumnView::<i32>::try_from(inputs[1].clone())?;
+    let upper = ColumnView::<i32>::try_from(inputs[2].clone())?;
+    let mut output = <I32Array as Array>::Builder::with_capacity(value.len());
+    for row in 0..value.len() {
+        output.push(
+            value
+                .get(row)
+                .zip(lower.get(row))
+                .zip(upper.get(row))
+                .map(|((value, lower), upper)| value.clamp(lower, upper)),
+        );
+    }
+    Ok(output.finish().into())
 }
 
 #[test]
-fn binding_rejects_lossy_promotions_for_arithmetic_and_comparisons() {
-    let registry = FunctionRegistry::with_builtins();
-    let pairs = [
-        (DataType::BigInt, DataType::Double),
-        (DataType::Double, DataType::BigInt),
-        (DataType::BigInt, DataType::Real),
-        (DataType::Real, DataType::BigInt),
-    ];
-    for operator in ["+", "<"] {
-        for (left, right) in &pairs {
-            expect_bind_error(registry.bind_binary(operator, left.clone(), right.clone()));
-        }
-    }
+fn erased_unary_batch_delegates_metadata_and_rows() {
+    let expression: Box<dyn Expression> = Box::new(BatchExpression::new(
+        "checked_neg",
+        [PhysicalType::Int32],
+        PhysicalType::Int32,
+        checked_neg_batch,
+    ));
+    assert_eq!(expression.name(), "checked_neg");
+    assert_eq!(expression.arity(), 1);
+    assert_eq!(expression.input_types(), &[PhysicalType::Int32]);
+    assert_eq!(expression.output_type(), PhysicalType::Int32);
 
-    // Evaluation-safety control: the same registry still binds and evaluates a
-    // valid widened pair after the lossy rejections above.
-    let bound = registry
-        .bind_binary("<", DataType::Integer, DataType::BigInt)
+    let output = expression
+        .evaluate(&[ColumnViewImpl::constant(ScalarRefImpl::Int32(7), 2)])
         .unwrap();
-    let output = bound
+    assert_eq!(
+        <&I32Array>::try_from(&output)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![Some(-7), Some(-7)]
+    );
+}
+
+#[test]
+fn erased_binary_batch_delegates_metadata_and_rows() {
+    let expression: Box<dyn Expression> = Box::new(BatchExpression::new(
+        "checked_add",
+        [PhysicalType::Int32, PhysicalType::Int32],
+        PhysicalType::Int32,
+        checked_add_batch,
+    ));
+    assert_eq!(expression.name(), "checked_add");
+    assert_eq!(expression.arity(), 2);
+    assert_eq!(
+        expression.input_types(),
+        &[PhysicalType::Int32, PhysicalType::Int32]
+    );
+    assert_eq!(expression.output_type(), PhysicalType::Int32);
+
+    let output = expression
         .evaluate(&[
-            ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 1),
-            ColumnViewImpl::constant(ScalarRefImpl::Int64(3), 1),
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 2),
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 2),
         ])
         .unwrap();
-    assert_eq!(<&BoolArray>::try_from(&output).unwrap().get(0), Some(true));
+    assert_eq!(
+        <&I32Array>::try_from(&output)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![Some(3), Some(3)]
+    );
+}
+
+#[test]
+fn erased_ternary_batch_delegates_metadata_and_rows() {
+    let expression: Box<dyn Expression> = Box::new(BatchExpression::new(
+        "checked_clamp",
+        [
+            PhysicalType::Int32,
+            PhysicalType::Int32,
+            PhysicalType::Int32,
+        ],
+        PhysicalType::Int32,
+        checked_clamp_batch,
+    ));
+    assert_eq!(expression.name(), "checked_clamp");
+    assert_eq!(expression.arity(), 3);
+    assert_eq!(
+        expression.input_types(),
+        &[
+            PhysicalType::Int32,
+            PhysicalType::Int32,
+            PhysicalType::Int32
+        ]
+    );
+    assert_eq!(expression.output_type(), PhysicalType::Int32);
+
+    let output = expression
+        .evaluate(&[
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(25), 1),
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(10), 1),
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(20), 1),
+        ])
+        .unwrap();
+    assert_eq!(<&I32Array>::try_from(&output).unwrap().get(0), Some(20));
 }
