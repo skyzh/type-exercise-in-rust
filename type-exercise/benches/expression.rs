@@ -36,6 +36,14 @@ fn general_add_batch(inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl>
     Ok(handwritten_general_add(inputs))
 }
 
+fn assert_logical_eq(actual: ArrayImpl, expected: &ArrayImpl) {
+    assert_eq!(actual.physical_type(), expected.physical_type());
+    assert_eq!(actual.len(), expected.len());
+    for row in 0..actual.len() {
+        assert_eq!(actual.get(row), expected.get(row), "row {row}");
+    }
+}
+
 fn handwritten_add(
     inputs: &[ColumnViewImpl<'_>],
     handwritten: [HandwrittenColumn<'_>; 2],
@@ -89,8 +97,8 @@ fn benchmark_case(
     );
     let specialized = PrimitiveBinaryExpression::new("i32_add", I32Add);
     let expected = handwritten_add(&inputs, handwritten);
-    assert_eq!(general.evaluate(&inputs).unwrap(), expected);
-    assert_eq!(specialized.evaluate(&inputs).unwrap(), expected);
+    assert_logical_eq(general.evaluate(&inputs).unwrap(), &expected);
+    assert_logical_eq(specialized.evaluate(&inputs).unwrap(), &expected);
 
     let mut group = criterion.benchmark_group(name);
     group.bench_function("general", |bencher| {
@@ -113,8 +121,8 @@ fn benchmark_expressions(criterion: &mut Criterion) {
     let dense_left_values = <&I32Array>::try_from(&dense_left).unwrap().values();
     let dense_right_values = <&I32Array>::try_from(&dense_right).unwrap().values();
 
-    let dense_left_view = ColumnViewImpl::try_non_null_array(&dense_left).unwrap();
-    let dense_right_view = ColumnViewImpl::try_non_null_array(&dense_right).unwrap();
+    let dense_left_view = ColumnViewImpl::array(&dense_left);
+    let dense_right_view = ColumnViewImpl::array(&dense_right);
 
     benchmark_case(
         criterion,

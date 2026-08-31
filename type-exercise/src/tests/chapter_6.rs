@@ -1,8 +1,9 @@
 use std::cell::Cell;
 
 use crate::{
-    Array, ArrayImpl, ColumnViewImpl, DataType, I16Array, I32Array, I64Array, PhysicalType,
-    ScalarRefImpl, evaluate_unary, promote_numeric, validate_expression_inputs,
+    ArithmeticOperator, Array, ArrayImpl, ColumnViewImpl, DataType, I16Array, I32Array, I64Array,
+    PhysicalType, ScalarRefImpl, build_numeric_binary_expression, evaluate_unary, promote_numeric,
+    validate_expression_inputs,
 };
 
 #[test]
@@ -36,6 +37,39 @@ fn scalar_operations_reuse_exactly_one_loop_per_arity() {
             "{adapter} duplicated the row loop"
         );
     }
+
+    let multiply = facade
+        .split("fn evaluate_numeric_multiply")
+        .nth(1)
+        .unwrap()
+        .split("\nfn ")
+        .next()
+        .unwrap();
+    assert!(multiply.contains("evaluate_numeric_infallible"));
+    assert!(!multiply.contains("for row"));
+}
+
+#[test]
+fn mixed_nullable_multiply_delegates_to_the_generic_binary_loop() {
+    let expression = build_numeric_binary_expression(
+        "numeric_multiply",
+        ArithmeticOperator::Multiply,
+        PhysicalType::Int16,
+        PhysicalType::Int32,
+        PhysicalType::Int32,
+    );
+    let left: ArrayImpl = I16Array::from_slice(&[Some(3), None, Some(-4)]).into();
+    let right: ArrayImpl = I32Array::from_slice(&[Some(5), Some(6), None]).into();
+    let output = expression
+        .evaluate(&[ColumnViewImpl::array(&left), ColumnViewImpl::array(&right)])
+        .unwrap();
+    assert_eq!(
+        <&I32Array>::try_from(&output)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![Some(15), None, None]
+    );
 }
 
 #[test]

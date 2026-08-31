@@ -30,11 +30,12 @@ fn borrowed_static_future<'a>(
     evaluate_static(expression, inputs)
 }
 
-fn borrowed_erased_future<'a>(
-    expression: &'a dyn AsyncExpression,
-    inputs: &'a [ColumnViewImpl<'a>],
-) -> BatchFuture<'a> {
-    expression.evaluate_async(inputs)
+fn evaluate_reborrowed_async<'call, 'data: 'call>(
+    expression: &'call dyn AsyncExpression,
+    inputs: &'call [ColumnViewImpl<'data>],
+) -> BatchFuture<'call> {
+    let shortened: &'call [ColumnViewImpl<'call>] = inputs;
+    expression.evaluate_async(shortened)
 }
 
 #[test]
@@ -73,7 +74,7 @@ fn erased_future_matches_the_static_future() {
     let expression: Box<dyn AsyncExpression> = Box::new(AsyncExpressionAdapter::new(
         build_builtin_expression("i32_add").unwrap(),
     ));
-    let mut future = borrowed_erased_future(expression.as_ref(), &inputs);
+    let mut future = evaluate_reborrowed_async(expression.as_ref(), &inputs);
     assert_send(&future);
     assert_eq!(poll_ready(future.as_mut()).unwrap(), static_output);
 }
@@ -291,16 +292,17 @@ fn async_boundary_preserves_arity_type_and_length_errors() {
 
 #[test]
 fn future_lifetime_covers_the_expression_views_and_arrays() {
-    let values: ArrayImpl = I32Array::from_values(vec![5]).into();
+    let values: ArrayImpl = I32Array::from_slice(&[Some(5), None, Some(9)]).into();
+    let indices = [2, 0, 1];
     let inputs = [
-        ColumnViewImpl::array(&values),
-        ColumnViewImpl::constant(ScalarRefImpl::Int32(6), 1),
+        ColumnViewImpl::indexed(&indices, &values).unwrap(),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(6), 3),
     ];
     let expression = AsyncExpressionAdapter::new(build_builtin_expression("i32_add").unwrap());
 
-    let mut future = borrowed_erased_future(&expression, &inputs);
+    let mut future = evaluate_reborrowed_async(&expression, &inputs);
     assert_eq!(
         poll_ready(future.as_mut()).unwrap().get(0),
-        Some(ScalarRefImpl::Int32(11))
+        Some(ScalarRefImpl::Int32(15))
     );
 }

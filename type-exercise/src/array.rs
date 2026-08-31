@@ -86,7 +86,7 @@ where
     /// Iterate without exposing the concrete iterator type.
     ///
     /// ```compile_fail
-    /// use type_exercise::ArrayIterator;
+    /// use type_exercise_core::ArrayIterator;
     /// ```
     fn iter<'a>(&'a self) -> impl Iterator<Item = Option<Self::RefItem<'a>>> + 'a {
         ArrayIterator::new(self)

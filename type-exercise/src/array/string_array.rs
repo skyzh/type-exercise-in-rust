@@ -26,7 +26,7 @@ pub struct StringValueWriter<'a> {
 /// turn it into [`WriterUsed`].
 ///
 /// ```compile_fail
-/// # use type_exercise::{Writer, WriterUsed};
+/// # use type_exercise_core::{Writer, WriterUsed};
 /// fn skip_write(writer: Writer<'_>) -> WriterUsed<'_> {
 ///     writer
 /// }
@@ -38,7 +38,7 @@ pub struct Writer<'a> {
 /// Proof that one output row was written exactly once.
 ///
 /// ```compile_fail
-/// # use type_exercise::Writer;
+/// # use type_exercise_core::Writer;
 /// fn write_twice(writer: Writer<'_>) {
 ///     let writer = writer.write(|value| value.push_str("first"));
 ///     let _ = writer.write(|value| value.push_str("second"));

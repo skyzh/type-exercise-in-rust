@@ -11,8 +11,12 @@ use crate::{
 
 fn assert_send_sync<T: Send + Sync>() {}
 
-fn shorten_view<'short, 'long: 'short>(view: ColumnViewImpl<'long>) -> ColumnViewImpl<'short> {
-    view
+fn evaluate_reborrowed<'call, 'data: 'call>(
+    expression: &'call dyn Expression,
+    inputs: &'call [ColumnViewImpl<'data>],
+) -> anyhow::Result<ArrayImpl> {
+    let shortened: &'call [ColumnViewImpl<'call>] = inputs;
+    expression.evaluate(shortened)
 }
 
 #[test]
@@ -105,9 +109,20 @@ fn logical_factories_can_capture_thread_safe_shared_state() {
 }
 
 #[test]
-fn erased_column_views_can_shorten_their_borrow() {
-    let values: ArrayImpl = I32Array::from_slice(&[Some(7), None]).into();
-    let shortened = shorten_view(ColumnViewImpl::array(&values));
-    assert_eq!(shortened.len(), 2);
-    assert_eq!(shortened.physical_type(), values.physical_type());
+fn erased_column_views_are_covariant_at_the_expression_boundary() {
+    let values: ArrayImpl = I32Array::from_slice(&[Some(7), None, Some(11)]).into();
+    let indices = [2, 0, 1];
+    let inputs = [
+        ColumnViewImpl::indexed(&indices, &values).unwrap(),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(5), 3),
+    ];
+    let expression = build_builtin_expression("i32_add").unwrap();
+    let output = evaluate_reborrowed(expression.as_ref(), &inputs).unwrap();
+    assert_eq!(
+        <&I32Array>::try_from(&output)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![Some(16), Some(12), None]
+    );
 }

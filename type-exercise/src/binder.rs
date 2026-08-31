@@ -4,9 +4,9 @@ use std::fmt::{Display, Formatter};
 
 use crate::{
     ArithmeticOperator, ArrayImpl, AsyncExpression, BatchFuture, BooleanOperator, ColumnViewImpl,
-    ComparisonOperator, DataType, Expression, I32Add, Nullability, PhysicalType,
-    PrimitiveBinaryExpression, PrimitiveLoop, build_bool_comparison_expression,
-    build_boolean_expression, build_numeric_binary_expression, build_numeric_clamp_expression,
+    ComparisonOperator, DataType, Expression, I32Add, PhysicalType, PrimitiveBinaryExpression,
+    PrimitiveLoop, build_bool_comparison_expression, build_boolean_expression,
+    build_numeric_binary_expression, build_numeric_clamp_expression,
     build_numeric_comparison_expression, build_numeric_neg_expression,
     build_string_comparison_expression, build_string_contains_expression, promote_numeric,
 };
@@ -133,10 +133,6 @@ impl BoundExpression {
         self.expression.name()
     }
 
-    pub fn output_nullability(&self, inputs: &[Nullability]) -> Nullability {
-        self.expression.output_nullability(inputs)
-    }
-
     pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         self.expression.evaluate(inputs)
     }
@@ -205,6 +201,32 @@ impl FunctionRegistry {
         registry
     }
 
+    /// Register one reusable factory callable through shared registry access.
+    ///
+    /// A closure that mutates ordinary captured state is only [`FnMut`] and is rejected:
+    ///
+    /// ```compile_fail
+    /// use type_exercise_expr::{BindError, FunctionRegistry};
+    ///
+    /// let mut registry = FunctionRegistry::default();
+    /// let mut calls = 0;
+    /// registry.register("mutable", move |_inputs| {
+    ///     calls += 1;
+    ///     Err(BindError::UnknownFunction { name: calls.to_string() })
+    /// });
+    /// ```
+    ///
+    /// Consuming captured state makes a closure only [`FnOnce`] and is also rejected:
+    ///
+    /// ```compile_fail
+    /// use type_exercise_expr::{BindError, FunctionRegistry};
+    ///
+    /// let mut registry = FunctionRegistry::default();
+    /// let captured = String::from("once");
+    /// registry.register("once", move |_inputs| {
+    ///     Err(BindError::UnknownFunction { name: captured })
+    /// });
+    /// ```
     pub fn register(
         &mut self,
         name: impl Into<String>,

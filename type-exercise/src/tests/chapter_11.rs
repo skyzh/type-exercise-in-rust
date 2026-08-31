@@ -1,7 +1,10 @@
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use crate::{
     Array, ArrayImpl, BindError, BoolArray, BoundExpression, ColumnViewImpl, DataType, Expression,
-    FunctionRegistry, I32Add, I32Array, Nullability, PhysicalType, PrimitiveBinaryExpression,
-    PrimitiveLoop, ScalarRefImpl, StringArray, build_builtin_expression,
+    FunctionRegistry, I32Array, PhysicalType, PrimitiveLoop, ScalarRefImpl, StringArray,
+    build_builtin_expression,
 };
 
 fn i32_values(array: &ArrayImpl) -> Vec<Option<i32>> {
@@ -459,28 +462,35 @@ fn binding_rejects_lossy_promotions_for_arithmetic_and_comparisons() {
 }
 
 #[test]
-fn propagates_nullability_through_physical_and_bound_expressions() {
-    let expression = PrimitiveBinaryExpression::new("i32_add", I32Add);
-    assert_eq!(
-        expression.output_nullability(&[Nullability::NonNull, Nullability::NonNull]),
-        Nullability::NonNull
-    );
-    assert_eq!(
-        expression.output_nullability(&[Nullability::NonNull, Nullability::Nullable]),
-        Nullability::Nullable
-    );
+fn one_shared_fn_factory_can_be_bound_repeatedly() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let factory_calls = Arc::clone(&calls);
+    let mut registry = FunctionRegistry::default();
+    registry.register("counted_add", move |inputs| {
+        factory_calls.fetch_add(1, Ordering::SeqCst);
+        let [left, right] = inputs else {
+            return Err(BindError::InputArityMismatch {
+                name: "counted_add".to_owned(),
+                expected: 2,
+                actual: inputs.len(),
+            });
+        };
+        BoundExpression::new(
+            build_builtin_expression("i32_add").unwrap(),
+            [left.clone(), right.clone()],
+            DataType::Integer,
+        )
+    });
 
-    let bound = FunctionRegistry::with_builtins()
-        .bind_binary("+", DataType::Integer, DataType::Integer)
+    let first = registry
+        .bind("counted_add", &[DataType::Integer, DataType::Integer])
         .unwrap();
-    assert_eq!(
-        bound.output_nullability(&[Nullability::NonNull, Nullability::NonNull]),
-        Nullability::NonNull
-    );
-    assert_eq!(
-        bound.output_nullability(&[Nullability::Nullable, Nullability::NonNull]),
-        Nullability::Nullable
-    );
+    let second = registry
+        .bind("counted_add", &[DataType::Integer, DataType::Integer])
+        .unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    assert_eq!(first.physical_name(), "i32_add");
+    assert_eq!(second.physical_name(), "i32_add");
 }
 
 #[test]
@@ -491,7 +501,7 @@ fn keeps_binding_and_non_primitive_catalog_entries_working() {
     let integers: ArrayImpl = I32Array::from_values(vec![1, 2]).into();
     let (output, selected) = add
         .evaluate_with_loop(&[
-            ColumnViewImpl::try_non_null_array(&integers).unwrap(),
+            ColumnViewImpl::array(&integers),
             ColumnViewImpl::constant(ScalarRefImpl::Int32(5), 2),
         ])
         .unwrap();
