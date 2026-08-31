@@ -4,7 +4,7 @@
 //! evaluator.
 //!
 //! Day 5 selects standard `Add`/`Sub`/`Mul`, explicit `Wrapping<T>` for signed overflow,
-//! checked division, and infallible `TryFrom` promotions once per batch.
+//! checked division, infallible `TryFrom` promotions, and ordered comparison once per batch.
 //!
 //! Day 6 adds only scalar functions such as:
 //!

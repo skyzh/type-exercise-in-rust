@@ -14,7 +14,7 @@ and delegates one whole batch.
 
 ```console
 cargo x copy-test --chapter 9 --checkpoint 1
-cargo test -p type-exercise-starter-expr chapter_9 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_9 --locked
 ```
 
 Define the object-safe `Expression: Any + Send + Sync` trait with name, input physical types,
@@ -28,7 +28,7 @@ evaluation and the `Any + Send + Sync` boundary. Do not place `dyn Fn` inside th
 
 ```console
 cargo x copy-test --chapter 9 --checkpoint 2
-cargo test -p type-exercise-starter-expr chapter_9 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_9 --locked
 ```
 
 Add erased adapters for the complete typed evaluator families. Their job is deliberately narrow:
@@ -45,7 +45,7 @@ wrong kernel result.
 
 ```console
 cargo x copy-test --chapter 9 --checkpoint 3
-cargo test -p type-exercise-starter-expr chapter_9 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_9 --locked
 cargo check -p type-exercise-starter-core --locked
 ```
 

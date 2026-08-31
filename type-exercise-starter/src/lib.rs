@@ -6,12 +6,8 @@ pub use type_exercise_starter_core::*;
 // evaluator families, erasure, and the generic registry from Day 1 onward.
 
 // Day 4: enable the first scalar arithmetic implementation.
-// mod arithmetic;
-// pub use arithmetic::*;
-
-// Day 5: enable scalar numeric comparison; promotion selection is exported by the core package.
-// mod comparison;
-// pub use comparison::*;
+// mod numeric;
+// pub use numeric::*;
 
 // Day 8, checkpoint 1: enable the private module and implement scalar NOT/AND/OR.
 // mod boolean;
@@ -25,6 +21,3 @@ pub use type_exercise_starter_core::*;
 // Day 11: enable logical binding and the builtin catalog.
 // mod binder;
 // pub use binder::*;
-
-#[cfg(test)]
-mod tests;

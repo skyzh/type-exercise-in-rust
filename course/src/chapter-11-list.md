@@ -12,7 +12,7 @@ Start from completed Chapter 10:
 
 ```console
 cargo x copy-test --chapter 11
-cargo test -p type-exercise-starter-expr chapter_11 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_11 --locked
 ```
 
 Enable `src/binder.rs` and implement the public `FunctionRegistry`, `BoundExpression`, and binding
@@ -52,7 +52,7 @@ distinction even though evaluation borrows the same UTF-8 slices.
 Run the final course boundary:
 
 ```console
-cargo test -p type-exercise-starter-expr chapter_11 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_11 --locked
 cargo test -p type-exercise-starter-expr --lib --locked
 cargo check -p type-exercise-starter-core --locked
 ```

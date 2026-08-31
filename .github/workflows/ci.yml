@@ -25,10 +25,22 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Test current workspace and reference solution
         run: cargo test --workspace --locked
+      - name: Test canonical and cumulative supplied contracts
+        run: |
+          cargo test -p type-exercise-supplied-tests --locked
+          for day in $(seq -w 1 14); do
+            cargo test -p "type-exercise-checkpoint-${day}-supplied-tests" --locked
+          done
       - name: Check minimal starter
         run: cargo check -p type-exercise-starter-expr --lib --locked
       - name: Copy supplied tests into the starter
         run: |
+          for checkpoint in 1 2 3 4; do cargo x copy-test --chapter 1 --checkpoint "$checkpoint"; done
+          for checkpoint in 1 2 3; do cargo x copy-test --chapter 6 --checkpoint "$checkpoint"; done
+          for checkpoint in 1 2 3; do cargo x copy-test --chapter 7 --checkpoint "$checkpoint"; done
+          for checkpoint in 1 2; do cargo x copy-test --chapter 8 --checkpoint "$checkpoint"; done
+          for checkpoint in 1 2 3; do cargo x copy-test --chapter 9 --checkpoint "$checkpoint"; done
+          for checkpoint in 1 2 3; do cargo x copy-test --chapter 10 --checkpoint "$checkpoint"; done
           cargo x copy-test --chapter 1
           cargo x copy-test --chapter 2
           cargo x copy-test --chapter 3
@@ -43,6 +55,6 @@ jobs:
           cargo x copy-test --chapter 12
           cargo x copy-test --chapter 13
           cargo x copy-test --chapter 14
-          git diff --exit-code -- type-exercise-starter/src ":(exclude)type-exercise-starter/src/tests.rs" ":(exclude)type-exercise-starter/src/tests/**"
+          git diff --exit-code -- type-exercise-starter/src
       - name: Test course
         run: mdbook test course

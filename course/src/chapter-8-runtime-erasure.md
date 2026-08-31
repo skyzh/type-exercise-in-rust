@@ -16,7 +16,7 @@ Begin from completed Chapter 7:
 
 ```console
 cargo x copy-test --chapter 8 --checkpoint 1
-cargo test -p type-exercise-starter-expr chapter_8 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_8 --locked
 ```
 
 Enable only the private `src/boolean.rs` module in `src/lib.rs`, then implement these
@@ -42,7 +42,7 @@ Copy the completed stage:
 
 ```console
 cargo x copy-test --chapter 8 --checkpoint 2
-cargo test -p type-exercise-starter-expr chapter_8 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_8 --locked
 cargo test -p type-exercise-starter-expr --lib --locked
 ```
 

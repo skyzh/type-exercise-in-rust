@@ -20,11 +20,11 @@ test first:
 
 ```console
 cargo x copy-test --chapter 1
-cargo test -p type-exercise-starter-expr chapter_1 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_1 --locked
 ```
 
 The copy is cumulative and changes supplied tests only; it never parses or rewrites learner-owned
 source. Follow the chapter to the local Day/checkpoint comment, uncomment the named skeleton when
-needed, and implement it. You may read the copied file under `src/tests/`, but do not edit it or
-`src/tests.rs`. Work in the other files under `src/`, keep earlier tests green, and do not inspect
+needed, and implement it. You may read the copied file under `supplied-tests/src/`, but do not edit it or
+`supplied-tests/src/lib.rs`. Work in the other files under `src/`, keep earlier tests green, and do not inspect
 `../type-exercise/` or `../archived/` for solutions.

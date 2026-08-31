@@ -16,10 +16,9 @@
 //     pub fn get(&self, row: usize) -> Option<ScalarRefImpl<'a>>;
 // }
 //
-//! Day 7, checkpoint 1: make `ColumnViewImpl` carry physical `Nullability`. Keep `array`
-//! conservatively `Nullable`; add a checked `try_non_null_array` constructor that proves every
-//! row valid once. Constants with a value are `NonNull`; typed nulls and indexed views remain
-//! `Nullable`.
+//! Day 7, checkpoint 1: add the crate-private `RawI32Column` observation. Bind Int32 arrays to
+//! their values and validity buffers, value/typed-null constants to one value plus a validity bit,
+//! and detect Indexed views separately. Do not expose a public raw-column API.
 //
 //! Day 3, checkpoint 2: uncomment and implement the typed view here.
 // pub struct ColumnView<'a, S: Scalar> { /* checked borrowed state */ }

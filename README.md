@@ -27,7 +27,8 @@ The fourteen chapters build these outcomes:
   expression facade.
 - Promote supported numeric pairs for `+`, `-`, `*`, `/`, comparisons, and string `contains`.
 - Represent one-level Lists with checked offsets and independent outer and child nullability.
-- Select all-valid fixed-width loops once per batch while preserving a nullable/indexed fallback.
+- Select raw fixed-width loops once per batch, combine validity by storage word, and preserve an
+  Indexed gather fallback.
 - Build variable-width strings from bytes, offsets, validity, and a consumed writer.
 - Expose one ready future per batch through static, erased, and already-bound expression paths.
 
@@ -56,12 +57,12 @@ Copy the cumulative supplied contract when you are ready to start a chapter:
 
 ```console
 cargo x copy-test --chapter 1
-cargo test -p type-exercise-starter-expr chapter_1 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_1 --locked
 ```
 
 The first focused run should fail because the new behavior is missing. Read the copied destination
-under `type-exercise-starter/src/tests/`, implement the named API in other starter files, and rerun
-the same command until it passes. Never edit copied tests or `src/tests.rs`; keep all earlier copied
+under `type-exercise-starter/supplied-tests/src/`, implement the named API in other starter files, and rerun
+the same command until it passes. Never edit copied tests or `supplied-tests/src/lib.rs`; keep all earlier copied
 chapters green.
 
 ## Questions and feedback

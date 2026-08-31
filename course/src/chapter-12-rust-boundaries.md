@@ -11,7 +11,7 @@ exercise ownership and checked erasure without building a general nested-type en
 
 ```console
 cargo x copy-test --chapter 12
-cargo test -p type-exercise-starter-expr chapter_12 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_12 --locked
 ```
 
 Implement `ListScalar`, borrowed `ListScalarRef`, `ListArray`, and `ListArrayBuilder` in the core
@@ -47,7 +47,7 @@ recovering it as a different child type is rejected.
 Run the full boundary:
 
 ```console
-cargo test -p type-exercise-starter-expr chapter_12 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_12 --locked
 cargo test -p type-exercise-starter-expr --lib --locked
 cargo check -p type-exercise-starter-core --locked
 ```

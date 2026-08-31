@@ -7,3 +7,5 @@
 //! Checkpoint 2: build Boolean expressions by selecting AND, OR, or NOT once, then delegate to the
 //! matching strict or nullable-aware core evaluator. Keep the exhaustive truth rows in supplied
 //! tests. Do not add a null-policy enum or an operation match inside a row loop.
+//! Boolean equality selection also belongs here once logical binding arrives; `numeric.rs` owns
+//! numeric operations only.

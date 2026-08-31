@@ -39,7 +39,7 @@ Both commands should pass. Chapter tests do not exist in the starter until you c
 ## Follow the learner boundary
 
 - Work only in implementation files under `type-exercise-starter/src/`.
-- Do not edit `src/tests.rs` or copied files under `src/tests/`.
+- Do not edit `supplied-tests/src/lib.rs` or copied files under `supplied-tests/src/`.
 - Do not read, search, diff, or copy `type-exercise/`, `archived/`, Git history, or an online
   solution while implementing a chapter.
 - Use the chapter, copied destination test, compiler diagnostics, and official Rust documentation.
@@ -55,10 +55,11 @@ Run it without opening the source test. The command copies the cumulative tests 
 `N`, removes later managed tests, and regenerates the module list. Afterward, you may read the
 copied destination. Its first focused run should be red until you implement the chapter.
 
-Chapter commands target the facade package, `type-exercise-starter-expr`. When a chapter asks you
-to verify that reusable machinery is independent of concrete operations, it additionally runs
-`type-exercise-starter-core`. Both packages use the same starter source directory; the Cargo edge
-is always facade to core.
+Focused chapter commands target `type-exercise-starter-supplied-tests`. Implementation-only checks
+still target the facade package, `type-exercise-starter-expr`, or the reusable framework package,
+`type-exercise-starter-core`. Their sources live separately under `src/` and `core/src/`; the Cargo
+edge is always supplied tests to facade to core, with a direct supplied-tests-to-core edge for
+framework witnesses.
 
 ## Preview the course
 

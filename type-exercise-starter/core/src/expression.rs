@@ -15,9 +15,9 @@
 //! Checkpoint 3: keep those three loops generic while facade arithmetic supplies only scalar
 //! functions such as `neg_number` and `clamp_number`.
 //!
-//! Day 7: add `Nullability`, `PrimitiveLoop`, and `PrimitiveBinaryExpression`. Select the
-//! representation once. The all-valid fixed-width loops contain only loads, the preselected
-//! scalar callback, and output pushes; nullable, null, and indexed inputs use the general loop.
+//! Day 7: add `PrimitiveLoop` and `PrimitiveBinaryExpression`. Select raw Int32 arrays/constants
+//! once, compute values in four strict-total fixed-width loops, and combine validity by storage
+//! word. Indexed inputs use the general gather loop and report `PrimitiveLoop::Indexed`.
 //!
 //! Day 8: add nullable-aware unary/binary evaluators for SQL Boolean AND/OR. Registration chooses
 //! strict versus nullable-aware evaluation before entering a row loop; there is no null-policy

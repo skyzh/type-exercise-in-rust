@@ -30,7 +30,7 @@ Copy the cumulative supplied test before editing:
 
 ```console
 cargo x copy-test --chapter 3
-cargo test -p type-exercise-starter-expr chapter_3 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_3 --locked
 ```
 
 The first run should fail because `ColumnViewImpl` and `ColumnView` are not exported yet. Do not
@@ -124,7 +124,7 @@ pub use column::{ColumnView, ColumnViewImpl};
 Run the focused contract, then all learner-library tests copied so far:
 
 ```console
-cargo test -p type-exercise-starter-expr chapter_3 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_3 --locked
 cargo test -p type-exercise-starter-expr --lib --locked
 ```
 

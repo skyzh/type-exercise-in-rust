@@ -31,7 +31,7 @@ Copy the supplied Chapter 1 test and run it once before editing the starter:
 
 ```console
 cargo x copy-test --chapter 1 --checkpoint 1
-cargo test -p type-exercise-starter-expr chapter_1 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_1 --locked
 ```
 
 The test is cumulative course material; do not edit the copied file. Work only in the learner files named below.
@@ -83,7 +83,7 @@ Run the focused test again:
 
 ```console
 cargo x copy-test --chapter 1 --checkpoint 1
-cargo test -p type-exercise-starter-expr chapter_1 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_1 --locked
 ```
 
 ## Checkpoint 2: Add scalar type erasure
@@ -109,7 +109,7 @@ Run the same focused test. Its scalar-erasure checkpoint should now round-trip b
 
 ```console
 cargo x copy-test --chapter 1 --checkpoint 2
-cargo test -p type-exercise-starter-expr chapter_1 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_1 --locked
 ```
 
 ## Checkpoint 3: Implement primitive and string arrays
@@ -154,7 +154,7 @@ Preserve the row count and null position for normal, empty, and all-null inputs.
 
 ```console
 cargo x copy-test --chapter 1 --checkpoint 3
-cargo test -p type-exercise-starter-expr chapter_1 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_1 --locked
 ```
 
 When this checkpoint passes, the scalar relationship from Checkpoint 1 becomes observable: `I32Array::get` produces `Option<i32>`, while `StringArray::get` produces `Option<&str>` borrowing the array.
@@ -181,7 +181,7 @@ Run the focused test, then the starter library tests:
 
 ```console
 cargo x copy-test --chapter 1 --checkpoint 4
-cargo test -p type-exercise-starter-expr chapter_1 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_1 --locked
 cargo test -p type-exercise-starter-expr --lib --locked
 ```
 

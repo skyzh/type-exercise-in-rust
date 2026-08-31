@@ -14,7 +14,7 @@ adapter then supplies only an ordinary scalar function such as `neg_number(value
 
 ## What is in the starter
 
-Begin from your completed Chapter 5 workspace. In `src/arithmetic.rs`, selected arithmetic adapters
+Begin from your completed Chapter 5 workspace. In `src/numeric.rs`, selected arithmetic adapters
 still contain repeated batch mechanics. `validate_expression_inputs` is private. The file ends with
 comment shells for the Day 6 additions:
 
@@ -32,7 +32,7 @@ Chapter 6 has three cumulative supplied checkpoints. Copy the first one before e
 
 ```console
 cargo x copy-test --chapter 6 --checkpoint 1
-cargo test -p type-exercise-starter-expr chapter_6 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_6 --locked
 ```
 
 The focused run should fail because the Day 5 validator is still private. Do not edit the copied
@@ -41,7 +41,7 @@ completed Chapter 6 test.
 
 ## Checkpoint 1: share validation across arities
 
-Open `src/expression.rs`. `validate_expression_inputs` already checks a batch before either the
+Open `core/src/expression.rs`. `validate_expression_inputs` already checks a batch before either the
 unary or binary row loop allocates an output or calls a scalar function. Make that helper public
 without changing its order:
 
@@ -70,7 +70,7 @@ Run the same checkpoint again:
 
 ```console
 cargo x copy-test --chapter 6 --checkpoint 1
-cargo test -p type-exercise-starter-expr chapter_6 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_6 --locked
 ```
 
 Passing this checkpoint means the shared boundary works for an arbitrary expected-type slice.
@@ -101,7 +101,7 @@ Copy and run the cumulative second checkpoint:
 
 ```console
 cargo x copy-test --chapter 6 --checkpoint 2
-cargo test -p type-exercise-starter-expr chapter_6 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_6 --locked
 ```
 
 Passing now means the reusable ternary auto-vectorizer works. The full generated `clamp` selector
@@ -109,7 +109,7 @@ is still missing.
 
 ## Checkpoint 3: author scalar work and generate adapters
 
-Finish `src/arithmetic.rs` with the crate-private physical builders named by the starter:
+Finish `src/numeric.rs` with the crate-private physical builders named by the starter:
 `build_numeric_neg_expression` and `build_numeric_clamp_expression`. They receive already-selected
 physical families, just as Chapter 5's binary builder does. Chapter 11 will place logical name
 binding in front of them.
@@ -139,7 +139,7 @@ Copy the final checkpoint and run the completed contract:
 
 ```console
 cargo x copy-test --chapter 6 --checkpoint 3
-cargo test -p type-exercise-starter-expr chapter_6 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_6 --locked
 cargo test -p type-exercise-starter-expr --lib --locked
 ```
 
@@ -152,7 +152,7 @@ contracts in the same learner workspace.
 Inspect the facade after macro expansion:
 
 ```console
-cargo expand -p type-exercise-starter-expr --lib arithmetic
+cargo expand -p type-exercise-starter-expr --lib numeric
 ```
 
 Locate a concrete numeric adapter such as negation or addition. It should convert or select its

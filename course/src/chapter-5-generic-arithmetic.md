@@ -15,16 +15,16 @@ a small runtime match chooses one generic typed batch kernel before its row loop
 
 ## What is in the starter
 
-Begin from your completed Chapter 4 workspace. The fixed-arity batch shell in `src/arithmetic.rs`
+Begin from your completed Chapter 4 workspace. The fixed-arity batch shell in `src/numeric.rs`
 is working code; preserve its validation order and its whole-batch kernel boundary. The Day 5
 surface is still deliberately small:
 
 - `src/promotion.rs` contains comment shells for one promotion row, the promotion catalog, and its
   lookup function;
-- `src/expression.rs` contains the general binary batch-kernel and expression shells first owned by
+- `core/src/expression.rs` contains the general binary batch-kernel and expression shells first owned by
   this chapter;
-- `src/arithmetic.rs` ends with comments for the arithmetic selector;
-- `src/comparison.rs` contains the matching comparison selector;
+- `src/numeric.rs` ends with comments for the arithmetic selector;
+- `src/numeric.rs` contains the matching comparison selector;
 - `src/array/primitive_array.rs` has the Arrow-style value and validity buffers but not the
   all-valid constructor used by this chapter's batch fixture; and
 - `src/lib.rs` leaves the promotion module and the two operator enums unwired.
@@ -39,7 +39,7 @@ Copy the cumulative supplied test before editing:
 
 ```console
 cargo x copy-test --chapter 5
-cargo test -p type-exercise-starter-expr chapter_5 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_5 --locked
 ```
 
 The focused run should fail on the missing promotion items, operator selectors, and
@@ -116,14 +116,14 @@ impl<T> PrimitiveArray<T> {
 This constructor is not a second array format and does not change null handling. It is simply the
 direct counterpart to building a batch whose rows are all non-null.
 
-In `src/expression.rs`, implement `BinaryBatchKernel` and `BinaryExpression` before selecting the
+In `core/src/expression.rs`, implement `BinaryBatchKernel` and `BinaryExpression` before selecting the
 numeric adapters. Its public constructor stores the name, two physical input types, output type,
 and one whole-batch function pointer. Evaluation validates inputs before calling that pointer and
 rejects an output whose physical type disagrees with the stored metadata. Keep any extra
 row-error-context construction crate-private; the public constructor stays the four-argument API
 shown by the starter.
 
-Now extend `src/arithmetic.rs` with the public `ArithmeticOperator` variants `Add`, `Subtract`,
+Now extend `src/numeric.rs` with the public `ArithmeticOperator` variants `Add`, `Subtract`,
 `Multiply`, and `Divide`. Describe the five concrete numeric types with standard operator bounds,
 not another trait whose methods re-name arithmetic:
 
@@ -163,10 +163,10 @@ their infallible typed kernels, while division alone selects the fallible typed 
 admitted by the promotion table. This uses Rust's standard conversion vocabulary; do not add a
 parallel conversion trait.
 
-For now that adapter owns the complete vectorized evaluation. It converts each erased column to
-its typed view once, then converts `L` and `R` values to `O` with `TryFrom` and applies the selected
-standard operation. Day 6 will extract the repeated row mechanics into shared auto-vectorizers.
-Do not accept `ScalarRefImpl`, create
+The facade adapter selects only the monomorphized conversion and scalar operation. It passes that
+callback to the binary auto-vectorizer in `core/src/expression.rs`, which converts each erased
+column to its typed view once and owns the row traversal. Day 6 generalizes this same core-owned
+pattern across unary and ternary arities. Do not accept `ScalarRefImpl`, create
 a per-scalar erased operation object, re-run logical promotion, or match physical variants inside
 every row. The caller must obtain the logical output from `promote_numeric` first; an unsupported
 pair never reaches the physical builder.
@@ -202,7 +202,7 @@ batch kernel appends null and performs no comparison.
 Export `ComparisonOperator` beside `ArithmeticOperator`, then run the completed contract:
 
 ```console
-cargo test -p type-exercise-starter-expr chapter_5 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_5 --locked
 cargo test -p type-exercise-starter-expr --lib --locked
 ```
 
