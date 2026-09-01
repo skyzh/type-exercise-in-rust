@@ -248,7 +248,17 @@ fn raw_loops_are_branch_free_and_preserve_operand_order() {
     }
 
     let values: ArrayImpl = I32Array::from_slice(&[Some(10), None, Some(30)]).into();
+    let right_values: ArrayImpl = I32Array::from_values(vec![1, 2, 4]).into();
     let expression = PrimitiveBinaryExpression::new("subtract", WrappingSubtract);
+    let (output, selected) = expression
+        .evaluate_with_loop(&[
+            ColumnViewImpl::array(&values),
+            ColumnViewImpl::array(&right_values),
+        ])
+        .unwrap();
+    assert_eq!(selected, PrimitiveLoop::ArrayArray);
+    assert_eq!(i32_values(&output), vec![Some(9), None, Some(26)]);
+
     let (output, selected) = expression
         .evaluate_with_loop(&[
             ColumnViewImpl::array(&values),
@@ -266,6 +276,15 @@ fn raw_loops_are_branch_free_and_preserve_operand_order() {
         .unwrap();
     assert_eq!(selected, PrimitiveLoop::ConstantArray);
     assert_eq!(i32_values(&output), vec![Some(-7), None, Some(-27)]);
+
+    let (output, selected) = expression
+        .evaluate_with_loop(&[
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(11), 3),
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(4), 3),
+        ])
+        .unwrap();
+    assert_eq!(selected, PrimitiveLoop::ConstantConstant);
+    assert_eq!(i32_values(&output), vec![Some(7), Some(7), Some(7)]);
 }
 
 #[test]

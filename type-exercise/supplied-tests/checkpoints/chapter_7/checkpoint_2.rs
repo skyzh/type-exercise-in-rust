@@ -63,7 +63,10 @@ fn checkpoint_1_keeps_indexed_detection_separate() {
         .split("\n    }")
         .next()
         .expect("is_indexed boundary");
-    assert!(indexed_body.contains("matches!(self.kind, ColumnViewImplKind::Indexed { .. })"));
+    assert!(
+        indexed_body.contains("matches!(self.kind, ColumnViewImplKind::Indexed { .. })")
+            || indexed_body.contains("matches!(&self.kind, ColumnViewImplKind::Indexed { .. })")
+    );
 }
 
 #[test]
