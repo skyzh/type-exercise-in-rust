@@ -186,11 +186,11 @@ fn neg_number<O: Numeric>(value: O) -> O {
     O::from_arithmetic(Neg::neg(value.into_arithmetic()))
 }
 
-fn clamp_number<O: Numeric>(value: O, lower: O, upper: O) -> anyhow::Result<O> {
+fn clamp_number<O: Numeric>(value: O, lower: O, upper: O) -> Result<O, &'static str> {
     if lower.partial_cmp(&upper) != Some(Ordering::Less)
         && lower.partial_cmp(&upper) != Some(Ordering::Equal)
     {
-        anyhow::bail!("invalid clamp bounds");
+        Err("invalid clamp bounds")
     } else if value < lower {
         Ok(lower)
     } else if value > upper {
@@ -633,7 +633,7 @@ where
     for<'a> B::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> C::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
 {
-    try_evaluate_ternary::<A, B, C, O, _>(
+    try_evaluate_ternary::<A, B, C, O, _, _>(
         inputs[0].clone(),
         inputs[1].clone(),
         inputs[2].clone(),

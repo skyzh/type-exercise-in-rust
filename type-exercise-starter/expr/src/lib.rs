@@ -9,10 +9,11 @@ pub use type_exercise_starter_core::*;
 // mod numeric;
 // pub use numeric::*;
 
-// Day 8, checkpoint 1: enable the private module and implement scalar NOT/AND/OR.
+// Day 8, checkpoint 1: enable the private module, implement scalar NOT/AND/OR, and expose the
+// public Boolean expression surface.
 // mod boolean;
-// Checkpoint 2: expose the completed Boolean expression surface.
 // pub use boolean::*;
+// Checkpoint 2: add public metadata and verify array-backed and invalid batches.
 
 // Day 10: enable variable-width scalar operations after the core writer evaluator exists.
 // mod string;

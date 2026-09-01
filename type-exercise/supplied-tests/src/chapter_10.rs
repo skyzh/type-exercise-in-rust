@@ -1,7 +1,14 @@
 use crate::{
-    Array, ArrayImpl, ColumnViewImpl, PhysicalType, ScalarRefImpl, StringArray,
-    build_builtin_expression,
+    Array, ArrayImpl, ColumnViewImpl, PhysicalType, ScalarRefImpl, StringArray, Writer, WriterUsed,
+    build_builtin_expression, evaluate_writer_binary,
 };
+
+fn write_pair<'a>(left: &str, right: &str, writer: Writer<'a>) -> WriterUsed<'a> {
+    writer.write(|value| {
+        value.push_str(left);
+        value.push_str(right);
+    })
+}
 
 #[test]
 fn string_array_pins_bytes_offsets_and_validity() {
@@ -19,25 +26,21 @@ fn string_array_pins_bytes_offsets_and_validity() {
 }
 
 #[test]
-fn consumed_writer_is_the_only_non_null_publication_path() {
-    let array = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../core/src/array/string_array.rs"
-    ));
-    let core = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../core/src/expression.rs"
-    ));
-    let scalar = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../expr/src/string.rs"
-    ));
-    assert!(array.contains("pub struct Writer<'a>"));
-    assert!(array.contains("pub struct WriterUsed<'a>"));
-    assert!(array.contains("pub fn write(self"));
-    assert!(core.contains("Fn(&str, &str, crate::Writer<'a>) -> crate::WriterUsed<'a>"));
-    assert!(scalar.contains("writer.write(|value|"));
-    assert!(!scalar.contains("format!"));
+fn writer_callback_builds_visible_output_and_preserves_nulls() {
+    let left: ArrayImpl = StringArray::from_slice(&[Some("rust"), None]).into();
+    let output = evaluate_writer_binary(
+        ColumnViewImpl::array(&left),
+        ColumnViewImpl::constant(ScalarRefImpl::String("ace"), 2),
+        write_pair,
+    )
+    .unwrap();
+    assert_eq!(
+        <&StringArray>::try_from(&output)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![Some("rustace"), None]
+    );
 }
 
 #[test]

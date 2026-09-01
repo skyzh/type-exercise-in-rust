@@ -7,52 +7,36 @@ use crate::{
 };
 
 #[test]
-fn scalar_operations_reuse_exactly_one_loop_per_arity() {
-    let facade = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../expr/src/numeric.rs"
-    ));
-    let core = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../core/src/expression.rs"
-    ));
-    assert!(facade.contains("fn neg_number<O: Numeric>(value: O) -> O"));
-    assert!(facade.contains("fn clamp_number<O: Numeric>"));
-    assert!(core.contains("pub fn evaluate_unary"));
-    assert!(core.contains("pub fn auto_vectorize_binary"));
-    assert!(core.contains("pub fn try_evaluate_ternary"));
-    assert!(!facade.contains("for row in 0.."));
-
-    for adapter in [
-        "fn evaluate_numeric_add",
-        "fn evaluate_numeric_subtract",
-        "fn evaluate_numeric_multiply",
-        "fn evaluate_numeric_divide",
-        "fn evaluate_numeric_neg",
-        "fn evaluate_numeric_clamp",
-    ] {
-        let body = facade
-            .split(adapter)
-            .nth(1)
-            .unwrap()
-            .split("\nfn ")
-            .next()
-            .unwrap();
-        assert!(
-            !body.contains("for row"),
-            "{adapter} duplicated the row loop"
-        );
-    }
-
-    let multiply = facade
-        .split("fn evaluate_numeric_multiply")
-        .nth(1)
-        .unwrap()
-        .split("\nfn ")
-        .next()
+fn scalar_operations_preserve_public_results_and_context() {
+    let neg = build_numeric_neg_expression("numeric_neg", PhysicalType::Int64);
+    let output = neg
+        .evaluate(&[ColumnViewImpl::constant(ScalarRefImpl::Int64(i64::MIN), 1)])
         .unwrap();
-    assert!(multiply.contains("evaluate_numeric_infallible"));
-    assert!(!multiply.contains("for row"));
+    assert_eq!(
+        <&I64Array>::try_from(&output).unwrap().get(0),
+        Some(i64::MIN)
+    );
+
+    let clamp = build_numeric_clamp_expression(
+        "numeric_clamp",
+        [
+            PhysicalType::Int16,
+            PhysicalType::Int32,
+            PhysicalType::Int64,
+        ],
+        PhysicalType::Int64,
+    );
+    assert_eq!(
+        clamp
+            .evaluate(&[
+                ColumnViewImpl::constant(ScalarRefImpl::Int16(5), 1),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(10), 1),
+                ColumnViewImpl::constant(ScalarRefImpl::Int64(0), 1),
+            ])
+            .unwrap_err()
+            .to_string(),
+        "function `numeric_clamp` failed at row 0: invalid clamp bounds"
+    );
 }
 
 #[test]

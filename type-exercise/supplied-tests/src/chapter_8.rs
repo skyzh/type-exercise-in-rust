@@ -1,6 +1,6 @@
 use crate::{
-    Array, ArrayImpl, BoolArray, BooleanExpression, BooleanOperator, ColumnViewImpl, PhysicalType,
-    ScalarRefImpl, build_boolean_expression,
+    Array, ArrayImpl, BoolArray, BooleanOperator, ColumnViewImpl, PhysicalType, ScalarRefImpl,
+    build_boolean_expression,
 };
 
 #[derive(Clone, Copy)]
@@ -277,7 +277,7 @@ fn evaluation_matches_the_full_truth_table() {
 
 #[test]
 fn nullable_and_or_keep_their_sql_absorption_rules() {
-    let and = BooleanExpression::new(BooleanOperator::And);
+    let and = build_boolean_expression(BooleanOperator::And);
     let output = and
         .evaluate(&[
             ColumnViewImpl::null(PhysicalType::Bool, 1),
@@ -286,7 +286,7 @@ fn nullable_and_or_keep_their_sql_absorption_rules() {
         .unwrap();
     assert_eq!(<&BoolArray>::try_from(&output).unwrap().get(0), Some(false));
 
-    let or = BooleanExpression::new(BooleanOperator::Or);
+    let or = build_boolean_expression(BooleanOperator::Or);
     let output = or
         .evaluate(&[
             ColumnViewImpl::null(PhysicalType::Bool, 1),
@@ -298,7 +298,7 @@ fn nullable_and_or_keep_their_sql_absorption_rules() {
 
 #[test]
 fn strict_not_negates_non_null_rows_and_keeps_null_rows_null() {
-    let strict_not = BooleanExpression::new(BooleanOperator::Not);
+    let strict_not = build_boolean_expression(BooleanOperator::Not);
     let input: ArrayImpl = BoolArray::from_slice(&[Some(true), Some(false), None]).into();
     let output = strict_not
         .evaluate(&[ColumnViewImpl::array(&input)])
@@ -331,23 +331,35 @@ fn metadata_and_getters_pin_the_public_contract() {
     assert_eq!(and.input_types(), &[PhysicalType::Bool, PhysicalType::Bool]);
     assert_eq!(and.output_type(), PhysicalType::Bool);
 
-    let or = BooleanExpression::new(BooleanOperator::Or);
+    let or = build_boolean_expression(BooleanOperator::Or);
     assert_eq!(or.operator(), BooleanOperator::Or);
 }
 
 #[test]
-fn operation_selection_stays_outside_the_shared_row_loops() {
-    let source = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../expr/src/boolean.rs"
-    ));
-    assert!(!source.contains("NullEvaluationPolicy"));
-    assert!(source.contains("match self.operator"));
-    let core = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../core/src/expression.rs"
-    ));
-    assert!(!core.contains("BooleanOperator"));
+fn each_boolean_operator_preserves_its_public_result() {
+    let and = build_boolean_expression(BooleanOperator::And);
+    let output = and
+        .evaluate(&[
+            ColumnViewImpl::constant(ScalarRefImpl::Bool(true), 1),
+            ColumnViewImpl::constant(ScalarRefImpl::Bool(false), 1),
+        ])
+        .unwrap();
+    assert_eq!(<&BoolArray>::try_from(&output).unwrap().get(0), Some(false));
+
+    let or = build_boolean_expression(BooleanOperator::Or);
+    let output = or
+        .evaluate(&[
+            ColumnViewImpl::constant(ScalarRefImpl::Bool(true), 1),
+            ColumnViewImpl::constant(ScalarRefImpl::Bool(false), 1),
+        ])
+        .unwrap();
+    assert_eq!(<&BoolArray>::try_from(&output).unwrap().get(0), Some(true));
+
+    let not = build_boolean_expression(BooleanOperator::Not);
+    let output = not
+        .evaluate(&[ColumnViewImpl::constant(ScalarRefImpl::Bool(true), 1)])
+        .unwrap();
+    assert_eq!(<&BoolArray>::try_from(&output).unwrap().get(0), Some(false));
 }
 
 #[test]

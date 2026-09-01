@@ -182,18 +182,22 @@ fn delegates_length_errors_to_the_typed_boundary() {
 }
 
 #[test]
-fn i32_builtin_uses_the_shared_binary_auto_vectorizer() {
-    let binder = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../expr/src/binder.rs"
-    ));
-    assert!(binder.contains("PrimitiveBinaryExpression::new(\"i32_add\", I32Add)"));
-    let core = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../core/src/expression.rs"
-    ));
-    assert!(!core.contains("evaluate_i32_add_batch"));
-    assert!(core.contains("impl<F> PrimitiveBinaryExpression<F>"));
+fn i32_builtin_preserves_wrapping_and_null_semantics() {
+    let expression = build_builtin_expression("i32_add").unwrap();
+    let left: ArrayImpl = I32Array::from_slice(&[Some(i32::MAX), None, Some(7)]).into();
+    let output = expression
+        .evaluate(&[
+            ColumnViewImpl::array(&left),
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 3),
+        ])
+        .unwrap();
+    assert_eq!(
+        <&I32Array>::try_from(&output)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![Some(i32::MIN), None, Some(8)]
+    );
 }
 
 #[test]

@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{
     Array, ArrayBuilder, ArrayImpl, ColumnView, ColumnViewImpl, Scalar, ScalarRefImpl, TypeMismatch,
 };
@@ -239,7 +241,7 @@ where
 }
 
 /// Lift one fallible scalar function over two nullable columns.
-pub fn try_evaluate_binary<L, R, O, F>(
+pub fn try_evaluate_binary<L, R, O, F, E>(
     left: ColumnViewImpl<'_>,
     right: ColumnViewImpl<'_>,
     function_name: &str,
@@ -249,7 +251,8 @@ where
     L: Scalar + Copy,
     R: Scalar + Copy,
     O: Scalar + Copy,
-    F: Fn(L, R) -> anyhow::Result<O>,
+    F: Fn(L, R) -> Result<O, E>,
+    E: Display,
     for<'a> L: Scalar<RefType<'a> = L>,
     for<'a> R: Scalar<RefType<'a> = R>,
     for<'a> &'a L::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
@@ -308,7 +311,7 @@ where
 }
 
 /// Lift one fallible scalar function over three nullable columns.
-pub fn try_evaluate_ternary<A, B, C, O, F>(
+pub fn try_evaluate_ternary<A, B, C, O, F, E>(
     first: ColumnViewImpl<'_>,
     second: ColumnViewImpl<'_>,
     third: ColumnViewImpl<'_>,
@@ -320,7 +323,8 @@ where
     B: Scalar + Copy,
     C: Scalar + Copy,
     O: Scalar + Copy,
-    F: Fn(A, B, C) -> anyhow::Result<O>,
+    F: Fn(A, B, C) -> Result<O, E>,
+    E: Display,
     for<'a> A: Scalar<RefType<'a> = A>,
     for<'a> B: Scalar<RefType<'a> = B>,
     for<'a> C: Scalar<RefType<'a> = C>,

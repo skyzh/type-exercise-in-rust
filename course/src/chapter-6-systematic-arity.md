@@ -2,32 +2,35 @@
 
 # Chapter 6: Make Arity Systematic
 
-Chapter 5 chose one typed binary adapter before each batch. The operation itself is still tiny—add,
-subtract, multiply, or divide two scalar values—but the adapters repeat the same nullable row loop.
-That is the wrong ownership boundary: adding a scalar operation should not require copying batch
-machinery.
+Chapter 5 chose one typed binary adapter before each batch and already centralized both infallible
+and fallible binary traversal in the core package. The facade delegates instead of repeating a row
+loop. The remaining boundary is incomplete: validation is still private, and unary and ternary
+scalar callbacks do not yet have the same reusable core path.
 
-This chapter writes the reusable machinery once. You will publish the validator and implement one
-monomorphized auto-vectorizer for each taught arity: unary, binary, and ternary. A generated physical
-adapter then supplies only an ordinary scalar function such as `neg_number(value)` or
-`clamp_number(value, lower, upper)`. There is no erased `dyn Fn` and no operation-specific row loop.
+This chapter moves reusable row machinery into the core package. You will publish the validator and
+implement monomorphized evaluators for the taught unary, binary, and ternary callback shapes. A
+generated physical adapter then supplies only an ordinary scalar function such as `neg_number(value)`
+or `clamp_number(value, lower, upper)`. There is no erased `dyn Fn` and no operation-specific row
+loop; infallible and fallible callbacks may use separate shared core helpers because their return
+contracts differ.
 
 ## What is in the starter
 
 Begin from your completed Chapter 5 workspace. In `expr/src/numeric.rs`, selected arithmetic adapters
-still contain repeated batch mechanics. `validate_expression_inputs` is private. The file ends with
-comment shells for the Day 6 additions:
+already delegate to the core binary helpers. `validate_expression_inputs` is private. The file ends
+with comment shells for the Day 6 additions:
 
 - the public shared validator;
-- the three shared auto-vectorizers and their nullable/fallible thin adapters;
+- shared unary and ternary evaluators alongside the existing binary boundary;
 - scalar-only negation and clamp operations plus generated physical selectors;
 - the physical numeric `neg` and `clamp` builders; and
-- the core visibility change that publishes the shared validator through the facade's existing
-  core re-export.
+- the core visibility change that publishes the shared validator, plus removal of Chapter 5's
+  facade-local duplicate so the facade's existing core re-export exposes the shared function.
 
-You own those additions and the contextual invalid-bound error used by `clamp`. Remove repeated
-operation loops as you route them through the shared helpers. Logical function registration waits
-until Chapter 11, and a fourth arity is not part of this chapter.
+You own those additions and the contextual invalid-bound error used by `clamp`. Keep the new unary
+and ternary adapters free of operation-specific row loops as you route them through the shared
+helpers. Logical function registration waits until Chapter 11, and a fourth arity is not part of
+this chapter.
 
 Chapter 6 has three cumulative supplied checkpoints. Copy the first one before editing:
 
@@ -36,9 +39,9 @@ cargo x copy-test --chapter 6 --checkpoint 1
 cargo test -p type-exercise-starter-supplied-tests chapter_6 --locked
 ```
 
-The focused run should fail because the Day 5 validator is still private. Do not edit the copied
-test. Checkpoints 1 and 2 deliberately avoid importing later constructors; Checkpoint 3 copies the
-completed Chapter 6 test.
+The focused run should fail because the Day 5 core validator is private and the facade-local helper
+shadows its name. Do not edit the copied test. Checkpoints 1 and 2 deliberately avoid importing later
+constructors; Checkpoint 3 copies the completed Chapter 6 test.
 
 ## Checkpoint 1: share validation across arities
 
@@ -61,8 +64,9 @@ later wrong length return contextual `anyhow` messages with expected and actual 
 input index where applicable. This does not require a four-input expression. It proves that
 validation itself is not binary-specific.
 
-Make only the validator public in `core/src/expression.rs`. The core package already exports its
-expression module through `core/src/lib.rs`, and the facade already re-exports that core surface:
+Make the validator public in `core/src/expression.rs`. Then remove the duplicate validator from
+`expr/src/numeric.rs` and import the core function there instead. The core package already exports
+its expression module through `core/src/lib.rs`, and the facade already re-exports that core surface:
 
 ```rust,ignore
 pub fn validate_expression_inputs(/* existing arguments */) -> anyhow::Result<usize> {
@@ -80,12 +84,13 @@ cargo test -p type-exercise-starter-supplied-tests chapter_6 --locked
 Passing this checkpoint means the shared boundary works for an arbitrary expected-type slice.
 The ternary API is still absent.
 
-## Checkpoint 2: write one reusable loop per arity
+## Checkpoint 2: move each callback shape into a shared core loop
 
-Implement the shared unary, binary, and ternary evaluators. Each is generic over concrete scalar
-families and the callback type, so Rust monomorphizes the call. Each helper validates and recovers
-typed borrowed columns once, then owns the only row loop for that arity. Start the ternary path with
-the checkpoint's `(i16, i32, i64) -> i64` witness.
+Implement shared unary and ternary evaluators and preserve the reusable binary boundary from Chapter
+5. Each helper is generic over concrete scalar families and the callback type, so Rust
+monomorphizes the call. Each helper validates and recovers typed borrowed columns once, then owns its
+reusable row loop in the core package. Start the ternary path with the checkpoint's `(i16, i32,
+i64) -> i64` witness.
 
 The selected generated adapter follows the boundary you already built:
 
@@ -96,10 +101,12 @@ The selected generated adapter follows the boundary you already built:
 4. call the supplied scalar function only when all three values are present; and
 5. append the result, a strict null, or return an error with the function, row, and cause.
 
-Return the ordinary cause `invalid clamp bounds` when the lower and upper values are reversed or
-unordered. The supplied witness uses it in a small mixed-family clamp with `i16`, `i32`, and `i64`
-inputs and an `i64` output. It also verifies that a null in any input skips the operation and that
-invalid bounds preserve the function name and failing row.
+Return the cheap concrete cause `Err("invalid clamp bounds")` when the lower and upper values are
+reversed or unordered. Keep the fallible ternary helper generic over that error type: successful rows
+return `Ok(value)` without dynamic error construction, and the outer row loop creates the contextual
+`anyhow` error only after it observes a failure. The supplied witness uses this boundary in a small
+mixed-family clamp with `i16`, `i32`, and `i64` inputs and an `i64` output. It also verifies that a null
+in any input skips the operation and that invalid bounds preserve the function name and failing row.
 
 Copy and run the cumulative second checkpoint:
 
@@ -127,7 +134,8 @@ Clamp is the observable three-input path. A generated adapter promotes `A`, `B`,
 with infallible `TryFrom`, then passes the values to scalar-only `clamp_number`. Bounds are valid
 only when `lower.partial_cmp(&upper)` is
 `Less` or `Equal`. A lower bound greater than the upper bound, or an unordered floating-point
-comparison involving `NaN`, returns the same contextual invalid-bound error.
+comparison involving `NaN`, returns the same static invalid-bound cause; the shared outer loop adds
+the function name and row only on that failure.
 
 Choose the generated adapter from the exact `(value, lower, upper, output)` physical tuple once,
 before evaluation begins. Do not materialize promoted arrays, match erased scalar variants inside
@@ -167,10 +175,10 @@ remain the completion gate.
 
 ## Read the shared boundary
 
-Unary, binary, and ternary expressions share one auto-vectorizer per arity. The helpers own
-validation, typed view recovery, null handling, row context, and output construction. Generated
-physical adapters own promotion and select the scalar function; scalar functions own only one
-value-level operation.
+Unary, binary, and ternary expressions share core auto-vectorizers by arity and callback/null policy.
+The helpers own validation, typed view recovery, null handling, row context, and output construction.
+Generated physical adapters own promotion and select the scalar function; scalar functions own only
+one value-level operation.
 
 Before continuing, make sure you can explain these boundaries in your own words:
 

@@ -19,9 +19,9 @@
 //! once, compute values in four strict-total fixed-width loops, and combine validity by storage
 //! word. Indexed inputs use the general gather loop and report `PrimitiveLoop::Indexed`.
 //!
-//! Day 8: add nullable-aware unary/binary evaluators for SQL Boolean AND/OR. Registration chooses
-//! strict versus nullable-aware evaluation before entering a row loop; there is no null-policy
-//! enum and no operator match in the loop.
+//! Day 8, checkpoint 1: publish the existing nullable-aware unary/binary evaluators for SQL
+//! Boolean AND/OR. Registration chooses strict versus nullable-aware evaluation before entering a
+//! row loop; there is no null-policy enum and no operator match in the loop.
 //!
 //! Day 9: add the object-safe `Expression: Any + Send + Sync` boundary, fixed-width erased
 //! adapters, and the generic registry. The builtin catalog is registered by the facade.

@@ -76,7 +76,7 @@ fn checkpoint_2_strict_unary_vectorization_skips_null_rows() {
 fn checkpoint_2_runs_one_direct_mixed_ternary_evaluator() {
     let values: ArrayImpl = I16Array::from_slice(&[Some(5), None, Some(25)]).into();
     let uppers: ArrayImpl = I64Array::from_values(vec![20, 0, 20]).into();
-    let output = try_evaluate_ternary::<i16, i32, i64, i64, _>(
+    let output = try_evaluate_ternary::<i16, i32, i64, i64, _, _>(
         ColumnViewImpl::array(&values),
         ColumnViewImpl::constant(ScalarRefImpl::Int32(10), 3),
         ColumnViewImpl::array(&uppers),
@@ -85,7 +85,7 @@ fn checkpoint_2_runs_one_direct_mixed_ternary_evaluator() {
             let value = i64::from(value);
             let lower = i64::from(lower);
             if lower > upper {
-                anyhow::bail!("invalid clamp bounds");
+                return Err("invalid clamp bounds");
             }
             Ok(value.clamp(lower, upper))
         },
@@ -98,5 +98,26 @@ fn checkpoint_2_runs_one_direct_mixed_ternary_evaluator() {
             .iter()
             .collect::<Vec<_>>(),
         vec![Some(10), None, Some(20)]
+    );
+
+    let invalid_uppers: ArrayImpl = I64Array::from_values(vec![20, 0]).into();
+    assert_eq!(
+        try_evaluate_ternary::<i16, i32, i64, i64, _, _>(
+            ColumnViewImpl::constant(ScalarRefImpl::Int16(5), 2),
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(10), 2),
+            ColumnViewImpl::array(&invalid_uppers),
+            "mixed_clamp",
+            |value, lower, upper| {
+                let value = i64::from(value);
+                let lower = i64::from(lower);
+                if lower > upper {
+                    return Err("invalid clamp bounds");
+                }
+                Ok(value.clamp(lower, upper))
+            },
+        )
+        .unwrap_err()
+        .to_string(),
+        "function `mixed_clamp` failed at row 1: invalid clamp bounds"
     );
 }
