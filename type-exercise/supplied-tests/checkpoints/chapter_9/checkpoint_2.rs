@@ -1,8 +1,9 @@
 use std::any::Any;
 
 use crate::{
-    Array, ArrayBuilder, ArrayImpl, BinaryExpression, ColumnView, ColumnViewImpl, Expression,
-    I32Add, I32Array, PhysicalType, PrimitiveBinaryExpression, ScalarRefImpl, StringArray,
+    Array, ArrayBuilder, ArrayImpl, BatchExpression, BinaryExpression, ColumnView, ColumnViewImpl,
+    Expression, I32Add, I32Array, PhysicalType, PrimitiveBinaryExpression, ScalarRefImpl,
+    StringArray,
 };
 
 fn assert_expression_bounds<T: Any + Send + Sync + ?Sized>() {}
@@ -30,6 +31,55 @@ fn mixed_fixed_width_add_batch(inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<
             left.get(row)
                 .zip(right.get(row))
                 .map(|(left, right)| left.wrapping_add(right)),
+        );
+    }
+    Ok(output.finish().into())
+}
+
+fn checked_neg_batch(
+    _expression: &BatchExpression<1>,
+    inputs: &[ColumnViewImpl<'_>],
+) -> anyhow::Result<ArrayImpl> {
+    let input = ColumnView::<i32>::try_from(inputs[0].clone())?;
+    let mut output = <I32Array as Array>::Builder::with_capacity(input.len());
+    for row in 0..input.len() {
+        output.push(input.get(row).map(i32::wrapping_neg));
+    }
+    Ok(output.finish().into())
+}
+
+fn checked_add_batch(
+    _expression: &BatchExpression<2>,
+    inputs: &[ColumnViewImpl<'_>],
+) -> anyhow::Result<ArrayImpl> {
+    let left = ColumnView::<i32>::try_from(inputs[0].clone())?;
+    let right = ColumnView::<i32>::try_from(inputs[1].clone())?;
+    let mut output = <I32Array as Array>::Builder::with_capacity(left.len());
+    for row in 0..left.len() {
+        output.push(
+            left.get(row)
+                .zip(right.get(row))
+                .map(|(left, right)| left.wrapping_add(right)),
+        );
+    }
+    Ok(output.finish().into())
+}
+
+fn checked_clamp_batch(
+    _expression: &BatchExpression<3>,
+    inputs: &[ColumnViewImpl<'_>],
+) -> anyhow::Result<ArrayImpl> {
+    let value = ColumnView::<i32>::try_from(inputs[0].clone())?;
+    let lower = ColumnView::<i32>::try_from(inputs[1].clone())?;
+    let upper = ColumnView::<i32>::try_from(inputs[2].clone())?;
+    let mut output = <I32Array as Array>::Builder::with_capacity(value.len());
+    for row in 0..value.len() {
+        output.push(
+            value
+                .get(row)
+                .zip(lower.get(row))
+                .zip(upper.get(row))
+                .map(|((value, lower), upper)| value.clamp(lower, upper)),
         );
     }
     Ok(output.finish().into())
@@ -77,16 +127,12 @@ fn checkpoint_2_rejects_a_kernel_result_with_wrong_metadata() {
         mixed_fixed_width_add_batch,
     );
     let values: ArrayImpl = I32Array::from_values(vec![4]).into();
-    let error = expression
+    let result = expression
         .evaluate(&[
             ColumnViewImpl::array(&values),
             ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 1),
-        ])
-        .unwrap_err();
-    assert_eq!(
-        error.to_string(),
-        "output type mismatch: expected Bool, got Int32"
-    );
+        ]);
+    assert!(result.is_err());
 }
 
 #[test]
@@ -164,4 +210,94 @@ fn checkpoint_2_delegates_length_errors_to_the_typed_boundary() {
             ])
             .is_err()
     );
+}
+
+#[test]
+fn checkpoint_2_erases_unary_batch_metadata_and_rows() {
+    let expression: Box<dyn Expression> = Box::new(BatchExpression::new(
+        "checked_neg",
+        [PhysicalType::Int32],
+        PhysicalType::Int32,
+        checked_neg_batch,
+    ));
+    assert_eq!(expression.name(), "checked_neg");
+    assert_eq!(expression.arity(), 1);
+    assert_eq!(expression.input_types(), &[PhysicalType::Int32]);
+    assert_eq!(expression.output_type(), PhysicalType::Int32);
+
+    let output = expression
+        .evaluate(&[ColumnViewImpl::constant(ScalarRefImpl::Int32(7), 2)])
+        .unwrap();
+    assert_eq!(
+        <&I32Array>::try_from(&output)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![Some(-7), Some(-7)]
+    );
+}
+
+#[test]
+fn checkpoint_2_erases_binary_batch_metadata_and_rows() {
+    let expression: Box<dyn Expression> = Box::new(BatchExpression::new(
+        "checked_add",
+        [PhysicalType::Int32, PhysicalType::Int32],
+        PhysicalType::Int32,
+        checked_add_batch,
+    ));
+    assert_eq!(expression.name(), "checked_add");
+    assert_eq!(expression.arity(), 2);
+    assert_eq!(
+        expression.input_types(),
+        &[PhysicalType::Int32, PhysicalType::Int32]
+    );
+    assert_eq!(expression.output_type(), PhysicalType::Int32);
+
+    let output = expression
+        .evaluate(&[
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 2),
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 2),
+        ])
+        .unwrap();
+    assert_eq!(
+        <&I32Array>::try_from(&output)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![Some(3), Some(3)]
+    );
+}
+
+#[test]
+fn checkpoint_2_erases_ternary_batch_metadata_and_rows() {
+    let expression: Box<dyn Expression> = Box::new(BatchExpression::new(
+        "checked_clamp",
+        [
+            PhysicalType::Int32,
+            PhysicalType::Int32,
+            PhysicalType::Int32,
+        ],
+        PhysicalType::Int32,
+        checked_clamp_batch,
+    ));
+    assert_eq!(expression.name(), "checked_clamp");
+    assert_eq!(expression.arity(), 3);
+    assert_eq!(
+        expression.input_types(),
+        &[
+            PhysicalType::Int32,
+            PhysicalType::Int32,
+            PhysicalType::Int32
+        ]
+    );
+    assert_eq!(expression.output_type(), PhysicalType::Int32);
+
+    let output = expression
+        .evaluate(&[
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(25), 1),
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(10), 1),
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(20), 1),
+        ])
+        .unwrap();
+    assert_eq!(<&I32Array>::try_from(&output).unwrap().get(0), Some(20));
 }

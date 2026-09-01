@@ -21,8 +21,11 @@ Define the object-safe `Expression: Any + Send + Sync` trait with name, input ph
 output type, and `evaluate`. Store the complete input signature as a slice; deriving
 arity from `input_types().len()` keeps unary, binary, and ternary metadata consistent.
 
-Adapt one existing typed builtin to `Box<dyn Expression>`. The checkpoint proves both successful
-evaluation and the `Any + Send + Sync` boundary. Do not place `dyn Fn` inside the row loop.
+Day 8 already leaves evaluation-only `Expression` implementations on the existing typed shells.
+Publish truthful metadata for each of those implementations when you extend the trait so the
+predecessor still compiles. Adapt only `i32_add` to `Box<dyn Expression>` at this checkpoint; the
+other erased families arrive next. The two focused tests pass here, for 63 cumulative tests.
+Do not place `dyn Fn` inside the row loop.
 
 ## Checkpoint 2: preserve typed validation through erasure
 
@@ -37,9 +40,10 @@ Add erased adapters for the complete typed evaluator families. Their job is deli
 2. pass borrowed erased column views to the selected typed kernel; and
 3. verify that the returned physical family matches the declared output.
 
-Do not repeat arity, type, length, strict-null, or row-context logic in the adapter. The six-stage
-test proves that errors and nulls still originate at the typed boundary, including a deliberately
-wrong kernel result.
+Do not repeat arity, type, length, strict-null, or row-context logic in the adapter. The ten
+focused tests cover unary, binary, and ternary shells and prove that errors and nulls still
+originate at the typed boundary, including a deliberately wrong kernel result. This checkpoint
+reaches 71 cumulative tests without requiring the catalog or Boolean erasure from checkpoint 3.
 
 ## Checkpoint 3: assemble the fixed builtin catalog
 
@@ -49,7 +53,7 @@ cargo test -p type-exercise-starter-supplied-tests chapter_9 --locked
 cargo check -p type-exercise-starter-core --locked
 ```
 
-Finish the unary, binary, and ternary erased shells and build the finite builtin catalog used by
+Build the finite builtin catalog, add Boolean delegation, and confirm safe `Send + Sync` sharing for
 the course. Each catalog entry stores one preselected batch kernel. It may describe arithmetic,
 comparison, or Boolean work, but it does not inspect an operation for every row.
 
