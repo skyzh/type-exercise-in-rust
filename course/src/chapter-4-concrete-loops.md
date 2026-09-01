@@ -14,13 +14,14 @@ dispatched object call for every scalar row.
 
 ## What is in the starter
 
-Begin from your completed Chapter 3 workspace. `src/column.rs` already provides
+Begin from your completed Chapter 3 workspace. `core/src/column.rs` already provides
 `ColumnViewImpl<'a>` and the checked `ColumnView<'a, S>` conversion. The Day 4 files contain only
 comment shells:
 
-- `src/expression.rs` names the first typed binary scalar function and evaluator;
-- `src/arithmetic.rs` names the fixed-arity batch shell and its vectorized kernel pointer; and
-- `src/lib.rs` keeps both modules and their exports commented out.
+- `core/src/expression.rs` names the first typed binary scalar function, evaluator, fixed-arity
+  batch shell, and vectorized kernel pointer;
+- `expr/src/numeric.rs` names the concrete `I32Add` scalar operation; and
+- `core/src/lib.rs` and `expr/src/lib.rs` keep their respective modules and exports commented out.
 
 You own two additions in this chapter:
 
@@ -36,7 +37,7 @@ Copy the cumulative supplied test before editing:
 
 ```console
 cargo x copy-test --chapter 4
-cargo test -p type-exercise-starter-expr chapter_4 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_4 --locked
 ```
 
 The first focused run should fail because the Day 4 modules and public items do not exist yet. Do
@@ -44,7 +45,7 @@ not edit the copied test.
 
 ## Checkpoint 1: keep one row operation small
 
-Open `src/expression.rs` and define `BinaryScalarFunction` with three associated scalar families:
+Open `core/src/expression.rs` and define `BinaryScalarFunction` with three associated scalar families:
 `Left`, `Right`, and `Output`. Its method receives the borrowed scalar-reference type for each
 input and returns one owned output value.
 
@@ -64,7 +65,7 @@ pub trait BinaryScalarFunction {
 }
 ```
 
-Implement `I32Add` first. Use `wrapping_add` explicitly. Ordinary signed addition can panic on
+In `expr/src/numeric.rs`, implement `I32Add` first. Use `wrapping_add` explicitly. Ordinary signed addition can panic on
 overflow in a debug build and wrap in a release build; a database expression must not change its
 result with the compilation profile.
 
@@ -87,8 +88,8 @@ whole-batch boundary.
 
 Use `anyhow::Result<ArrayImpl>` for batch failures. Add ordinary context that identifies the input
 position for type or length failures and preserves the underlying cause. Enable `expression` in
-`src/lib.rs` and export the checkpoint's public function, trait, and `I32Add`; there is no course
-specific runtime error enum to maintain.
+`core/src/lib.rs` and export the checkpoint's public function and trait. Enable `numeric` in
+`expr/src/lib.rs` and export `I32Add`; there is no course-specific runtime error enum to maintain.
 
 The copied Chapter 4 test also imports the Checkpoint 2 shells, so it cannot be green yet. Use an
 honest library boundary here:
@@ -104,7 +105,7 @@ length rejection.
 
 ## Checkpoint 2: erase one complete batch operation
 
-Now open `src/arithmetic.rs`. Define `BatchExpression<const N: usize>` with a static function name,
+Now return to `core/src/expression.rs`. Define `BatchExpression<const N: usize>` with a static function name,
 an `[PhysicalType; N]` input contract, one output type, and a function pointer for a complete
 batch. Name that pointer type `BatchKernel<N>`. Its signature receives the expression metadata and
 the borrowed `&[ColumnViewImpl<'_>]`, and returns `anyhow::Result<ArrayImpl>`.
@@ -143,13 +144,13 @@ not return a partially built array.
 The kernel borrows every input view and returns a new owned array. Do not materialize an input
 representation just to simplify the loop.
 
-Enable `arithmetic` in `src/lib.rs` and export `BatchExpression` and `BatchKernel`. Keep the later
-`Expression` trait and runtime catalog commented out.
+Export `BatchExpression` and `BatchKernel` through the already enabled `expression` module in
+`core/src/lib.rs`. Keep the later `Expression` trait and runtime catalog commented out.
 
 Run the focused contract, then the cumulative learner-library suite:
 
 ```console
-cargo test -p type-exercise-starter-expr chapter_4 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_4 --locked
 cargo test -p type-exercise-starter-expr --lib --locked
 ```
 

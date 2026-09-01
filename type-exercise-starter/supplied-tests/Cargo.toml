@@ -1,0 +1,12 @@
+[package]
+name = "type-exercise-starter-supplied-tests"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow = "1"
+bitvec = "1"
+type-exercise-starter-expr = { path = "../expr" }
+type-exercise-starter-core = { path = "../core" }

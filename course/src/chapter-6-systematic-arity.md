@@ -14,7 +14,7 @@ adapter then supplies only an ordinary scalar function such as `neg_number(value
 
 ## What is in the starter
 
-Begin from your completed Chapter 5 workspace. In `src/arithmetic.rs`, selected arithmetic adapters
+Begin from your completed Chapter 5 workspace. In `expr/src/numeric.rs`, selected arithmetic adapters
 still contain repeated batch mechanics. `validate_expression_inputs` is private. The file ends with
 comment shells for the Day 6 additions:
 
@@ -22,7 +22,8 @@ comment shells for the Day 6 additions:
 - the three shared auto-vectorizers and their nullable/fallible thin adapters;
 - scalar-only negation and clamp operations plus generated physical selectors;
 - the physical numeric `neg` and `clamp` builders; and
-- the exact re-export to add in `src/lib.rs`.
+- the core visibility change that publishes the shared validator through the facade's existing
+  core re-export.
 
 You own those additions and the contextual invalid-bound error used by `clamp`. Remove repeated
 operation loops as you route them through the shared helpers. Logical function registration waits
@@ -32,7 +33,7 @@ Chapter 6 has three cumulative supplied checkpoints. Copy the first one before e
 
 ```console
 cargo x copy-test --chapter 6 --checkpoint 1
-cargo test -p type-exercise-starter-expr chapter_6 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_6 --locked
 ```
 
 The focused run should fail because the Day 5 validator is still private. Do not edit the copied
@@ -41,7 +42,7 @@ completed Chapter 6 test.
 
 ## Checkpoint 1: share validation across arities
 
-Open `src/expression.rs`. `validate_expression_inputs` already checks a batch before either the
+Open `core/src/expression.rs`. `validate_expression_inputs` already checks a batch before either the
 unary or binary row loop allocates an output or calls a scalar function. Make that helper public
 without changing its order:
 
@@ -60,17 +61,20 @@ later wrong length return contextual `anyhow` messages with expected and actual 
 input index where applicable. This does not require a four-input expression. It proves that
 validation itself is not binary-specific.
 
-Publish only the validator from `src/lib.rs`:
+Make only the validator public in `core/src/expression.rs`. The core package already exports its
+expression module through `core/src/lib.rs`, and the facade already re-exports that core surface:
 
 ```rust,ignore
-pub use type_exercise_starter_core::validate_expression_inputs;
+pub fn validate_expression_inputs(/* existing arguments */) -> anyhow::Result<usize> {
+    // existing validation order
+}
 ```
 
 Run the same checkpoint again:
 
 ```console
 cargo x copy-test --chapter 6 --checkpoint 1
-cargo test -p type-exercise-starter-expr chapter_6 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_6 --locked
 ```
 
 Passing this checkpoint means the shared boundary works for an arbitrary expected-type slice.
@@ -101,7 +105,7 @@ Copy and run the cumulative second checkpoint:
 
 ```console
 cargo x copy-test --chapter 6 --checkpoint 2
-cargo test -p type-exercise-starter-expr chapter_6 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_6 --locked
 ```
 
 Passing now means the reusable ternary auto-vectorizer works. The full generated `clamp` selector
@@ -109,7 +113,7 @@ is still missing.
 
 ## Checkpoint 3: author scalar work and generate adapters
 
-Finish `src/arithmetic.rs` with the crate-private physical builders named by the starter:
+Finish `expr/src/numeric.rs` with the crate-private physical builders named by the starter:
 `build_numeric_neg_expression` and `build_numeric_clamp_expression`. They receive already-selected
 physical families, just as Chapter 5's binary builder does. Chapter 11 will place logical name
 binding in front of them.
@@ -139,7 +143,7 @@ Copy the final checkpoint and run the completed contract:
 
 ```console
 cargo x copy-test --chapter 6 --checkpoint 3
-cargo test -p type-exercise-starter-expr chapter_6 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_6 --locked
 cargo test -p type-exercise-starter-expr --lib --locked
 ```
 
@@ -152,7 +156,7 @@ contracts in the same learner workspace.
 Inspect the facade after macro expansion:
 
 ```console
-cargo expand -p type-exercise-starter-expr --lib arithmetic
+cargo expand -p type-exercise-starter-expr --lib numeric
 ```
 
 Locate a concrete numeric adapter such as negation or addition. It should convert or select its

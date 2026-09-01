@@ -96,16 +96,20 @@ fn chapter_checkpoint_path(root: &Path, chapter: usize, checkpoint: usize) -> Re
         bail!("no tests are available for Chapter {chapter} checkpoint {checkpoint}");
     }
     let path = if checkpoint == checkpoint_count {
-        root.join(format!("type-exercise/src/tests/chapter_{chapter}.rs"))
+        root.join(format!(
+            "type-exercise/supplied-tests/src/chapter_{chapter}.rs"
+        ))
     } else {
-        root.join(format!("supplied-tests/chapter_{chapter}"))
-            .join(format!("checkpoint_{checkpoint}.rs"))
+        root.join(format!(
+            "type-exercise/supplied-tests/checkpoints/chapter_{chapter}"
+        ))
+        .join(format!("checkpoint_{checkpoint}.rs"))
     };
     Ok(path)
 }
 
 fn copy_test(root: &Path, chapter: usize, checkpoint: Option<usize>) -> Result<CopyReport> {
-    let source_dir = root.join("type-exercise/src/tests");
+    let source_dir = root.join("type-exercise/supplied-tests/src");
     let available = available_chapters(&source_dir)?;
     let last_chapter = available
         .last()
@@ -136,7 +140,7 @@ fn copy_test(root: &Path, chapter: usize, checkpoint: Option<usize>) -> Result<C
         })
         .collect::<Result<Vec<_>>>()?;
 
-    let target_dir = root.join("type-exercise-starter/src/tests");
+    let target_dir = root.join("type-exercise-starter/supplied-tests/src");
     fs::create_dir_all(&target_dir).context("failed to create the starter test directory")?;
     let mut changed_files = 0;
     for (name, bytes) in &sources {
@@ -165,11 +169,14 @@ fn copy_test(root: &Path, chapter: usize, checkpoint: Option<usize>) -> Result<C
         test_module,
         "//! This file is rewritten by `cargo x copy-test`."
     )?;
+    writeln!(test_module, "pub use type_exercise_starter_core as core;")?;
+    writeln!(test_module, "pub use type_exercise_starter_expr::*;")?;
     for number in 1..=chapter {
+        writeln!(test_module, "#[cfg(test)]")?;
         writeln!(test_module, "mod chapter_{number};")?;
     }
     changed_files += usize::from(write_if_changed(
-        &root.join("type-exercise-starter/src/tests.rs"),
+        &root.join("type-exercise-starter/supplied-tests/src/lib.rs"),
         test_module.as_bytes(),
     )?);
 
@@ -184,10 +191,12 @@ fn copy_test(root: &Path, chapter: usize, checkpoint: Option<usize>) -> Result<C
 
     if let Some(checkpoint) = checkpoint {
         println!(
-            "copied cumulative Chapter {chapter} checkpoint {checkpoint} tests into type-exercise-starter-expr"
+            "copied cumulative Chapter {chapter} checkpoint {checkpoint} tests into type-exercise-starter-supplied-tests"
         );
     } else {
-        println!("copied cumulative Chapters 1-{chapter} tests into type-exercise-starter-expr");
+        println!(
+            "copied cumulative Chapters 1-{chapter} tests into type-exercise-starter-supplied-tests"
+        );
     }
     Ok(CopyReport { changed_files })
 }
@@ -215,15 +224,20 @@ mod tests {
 
     fn fixture() -> TempDir {
         let root = tempfile::tempdir().unwrap();
-        let source = root.path().join("type-exercise/src/tests");
+        let source = root.path().join("type-exercise/supplied-tests/src");
         fs::create_dir_all(&source).unwrap();
-        fs::create_dir_all(root.path().join("supplied-tests/chapter_1")).unwrap();
-        fs::create_dir_all(root.path().join("type-exercise-starter/src")).unwrap();
+        fs::create_dir_all(
+            root.path()
+                .join("type-exercise/supplied-tests/checkpoints/chapter_1"),
+        )
+        .unwrap();
+        fs::create_dir_all(root.path().join("type-exercise-starter/supplied-tests")).unwrap();
+        fs::create_dir_all(root.path().join("type-exercise-starter/expr/src")).unwrap();
         fs::write(source.join("chapter_1.rs"), b"fn four() {}\n").unwrap();
         for checkpoint in 1..=3 {
             fs::write(
                 root.path()
-                    .join("supplied-tests/chapter_1")
+                    .join("type-exercise/supplied-tests/checkpoints/chapter_1")
                     .join(format!("checkpoint_{checkpoint}.rs")),
                 format!("fn checkpoint_{checkpoint}() {{}}\n"),
             )
@@ -245,11 +259,16 @@ mod tests {
                     .contains(&format!("no tests are available for chapter {chapter}"))
             );
         }
-        assert!(!root.path().join("type-exercise-starter/src/tests").exists());
         assert!(
             !root
                 .path()
-                .join("type-exercise-starter/src/tests.rs")
+                .join("type-exercise-starter/supplied-tests/src")
+                .exists()
+        );
+        assert!(
+            !root
+                .path()
+                .join("type-exercise-starter/supplied-tests/src/lib.rs")
                 .exists()
         );
     }
@@ -260,11 +279,11 @@ mod tests {
         copy_test(root.path(), 3, None).unwrap();
 
         for chapter in 1..=3 {
-            let source = root
-                .path()
-                .join(format!("type-exercise/src/tests/chapter_{chapter}.rs"));
+            let source = root.path().join(format!(
+                "type-exercise/supplied-tests/src/chapter_{chapter}.rs"
+            ));
             let target = root.path().join(format!(
-                "type-exercise-starter/src/tests/chapter_{chapter}.rs"
+                "type-exercise-starter/supplied-tests/src/chapter_{chapter}.rs"
             ));
             assert_eq!(fs::read(target).unwrap(), fs::read(source).unwrap());
         }
@@ -273,14 +292,22 @@ mod tests {
         assert!(
             !root
                 .path()
-                .join("type-exercise-starter/src/tests/chapter_3.rs")
+                .join("type-exercise-starter/supplied-tests/src/chapter_3.rs")
                 .exists()
         );
         assert_eq!(
-            fs::read_to_string(root.path().join("type-exercise-starter/src/tests.rs")).unwrap(),
+            fs::read_to_string(
+                root.path()
+                    .join("type-exercise-starter/supplied-tests/src/lib.rs")
+            )
+            .unwrap(),
             "//! DO NOT MODIFY -- copied course test modules\n\
              //! This file is rewritten by `cargo x copy-test`.\n\
+             pub use type_exercise_starter_core as core;\n\
+             pub use type_exercise_starter_expr::*;\n\
+             #[cfg(test)]\n\
              mod chapter_1;\n\
+             #[cfg(test)]\n\
              mod chapter_2;\n"
         );
     }
@@ -293,26 +320,32 @@ mod tests {
         assert_eq!(
             fs::read(
                 root.path()
-                    .join("type-exercise-starter/src/tests/chapter_1.rs")
+                    .join("type-exercise-starter/supplied-tests/src/chapter_1.rs")
             )
             .unwrap(),
-            fs::read(root.path().join("type-exercise/src/tests/chapter_1.rs")).unwrap()
+            fs::read(
+                root.path()
+                    .join("type-exercise/supplied-tests/src/chapter_1.rs")
+            )
+            .unwrap()
         );
     }
 
     #[test]
     fn repairs_only_supplied_test_drift() {
         let root = fixture();
-        let target = root.path().join("type-exercise-starter/src/tests");
+        let target = root.path().join("type-exercise-starter/supplied-tests/src");
         fs::create_dir_all(&target).unwrap();
         fs::write(target.join("chapter_1.rs"), b"// drifted\n").unwrap();
         fs::write(
-            root.path().join("type-exercise-starter/src/tests.rs"),
+            root.path()
+                .join("type-exercise-starter/supplied-tests/src/lib.rs"),
             b"mod stale;\n",
         )
         .unwrap();
         fs::write(
-            root.path().join("type-exercise-starter/src/learner.rs"),
+            root.path()
+                .join("type-exercise-starter/expr/src/learner.rs"),
             b"// learner-owned\n",
         )
         .unwrap();
@@ -321,14 +354,26 @@ mod tests {
         assert_eq!(report.changed_files, 3);
         assert_eq!(
             fs::read(target.join("chapter_1.rs")).unwrap(),
-            fs::read(root.path().join("type-exercise/src/tests/chapter_1.rs")).unwrap()
+            fs::read(
+                root.path()
+                    .join("type-exercise/supplied-tests/src/chapter_1.rs")
+            )
+            .unwrap()
         );
         assert_eq!(
             fs::read(target.join("chapter_2.rs")).unwrap(),
-            fs::read(root.path().join("type-exercise/src/tests/chapter_2.rs")).unwrap()
+            fs::read(
+                root.path()
+                    .join("type-exercise/supplied-tests/src/chapter_2.rs")
+            )
+            .unwrap()
         );
         assert_eq!(
-            fs::read(root.path().join("type-exercise-starter/src/learner.rs")).unwrap(),
+            fs::read(
+                root.path()
+                    .join("type-exercise-starter/expr/src/learner.rs")
+            )
+            .unwrap(),
             b"// learner-owned\n"
         );
     }
@@ -336,6 +381,9 @@ mod tests {
     #[test]
     fn workspace_copy_target_is_available() {
         let root = workspace_root().unwrap();
-        assert!(root.join("type-exercise/src/tests/chapter_1.rs").is_file());
+        assert!(
+            root.join("type-exercise/supplied-tests/src/chapter_1.rs")
+                .is_file()
+        );
     }
 }

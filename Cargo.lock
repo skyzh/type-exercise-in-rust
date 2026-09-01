@@ -716,6 +716,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "type-exercise-checkpoint-01-supplied-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-checkpoint-01-core",
+ "type-exercise-checkpoint-01-expr",
+]
+
+[[package]]
 name = "type-exercise-checkpoint-02-core"
 version = "0.1.0"
 dependencies = [
@@ -730,6 +740,16 @@ dependencies = [
  "anyhow",
  "bitvec",
  "type-exercise-checkpoint-02-core",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-02-supplied-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-checkpoint-02-core",
+ "type-exercise-checkpoint-02-expr",
 ]
 
 [[package]]
@@ -750,6 +770,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "type-exercise-checkpoint-03-supplied-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-checkpoint-03-core",
+ "type-exercise-checkpoint-03-expr",
+]
+
+[[package]]
 name = "type-exercise-checkpoint-04-core"
 version = "0.1.0"
 dependencies = [
@@ -764,6 +794,16 @@ dependencies = [
  "anyhow",
  "bitvec",
  "type-exercise-checkpoint-04-core",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-04-supplied-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-checkpoint-04-core",
+ "type-exercise-checkpoint-04-expr",
 ]
 
 [[package]]
@@ -784,6 +824,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "type-exercise-checkpoint-05-supplied-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-checkpoint-05-core",
+ "type-exercise-checkpoint-05-expr",
+]
+
+[[package]]
 name = "type-exercise-checkpoint-06-core"
 version = "0.1.0"
 dependencies = [
@@ -798,6 +848,16 @@ dependencies = [
  "anyhow",
  "bitvec",
  "type-exercise-checkpoint-06-core",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-06-supplied-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-checkpoint-06-core",
+ "type-exercise-checkpoint-06-expr",
 ]
 
 [[package]]
@@ -818,6 +878,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "type-exercise-checkpoint-07-supplied-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-checkpoint-07-core",
+ "type-exercise-checkpoint-07-expr",
+]
+
+[[package]]
 name = "type-exercise-checkpoint-08-core"
 version = "0.1.0"
 dependencies = [
@@ -832,6 +902,16 @@ dependencies = [
  "anyhow",
  "bitvec",
  "type-exercise-checkpoint-08-core",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-08-supplied-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-checkpoint-08-core",
+ "type-exercise-checkpoint-08-expr",
 ]
 
 [[package]]
@@ -852,6 +932,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "type-exercise-checkpoint-09-supplied-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-checkpoint-09-core",
+ "type-exercise-checkpoint-09-expr",
+]
+
+[[package]]
 name = "type-exercise-checkpoint-10-core"
 version = "0.1.0"
 dependencies = [
@@ -866,6 +956,16 @@ dependencies = [
  "anyhow",
  "bitvec",
  "type-exercise-checkpoint-10-core",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-10-supplied-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-checkpoint-10-core",
+ "type-exercise-checkpoint-10-expr",
 ]
 
 [[package]]
@@ -886,6 +986,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "type-exercise-checkpoint-11-supplied-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-checkpoint-11-core",
+ "type-exercise-checkpoint-11-expr",
+]
+
+[[package]]
 name = "type-exercise-checkpoint-12-core"
 version = "0.1.0"
 dependencies = [
@@ -900,6 +1010,16 @@ dependencies = [
  "anyhow",
  "bitvec",
  "type-exercise-checkpoint-12-core",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-12-supplied-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-checkpoint-12-core",
+ "type-exercise-checkpoint-12-expr",
 ]
 
 [[package]]
@@ -920,6 +1040,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "type-exercise-checkpoint-13-supplied-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-checkpoint-13-core",
+ "type-exercise-checkpoint-13-expr",
+]
+
+[[package]]
 name = "type-exercise-checkpoint-14-core"
 version = "0.1.0"
 dependencies = [
@@ -934,6 +1064,16 @@ dependencies = [
  "anyhow",
  "bitvec",
  "type-exercise-checkpoint-14-core",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-14-supplied-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-checkpoint-14-core",
+ "type-exercise-checkpoint-14-expr",
 ]
 
 [[package]]
@@ -969,6 +1109,26 @@ dependencies = [
  "anyhow",
  "bitvec",
  "type-exercise-starter-core",
+]
+
+[[package]]
+name = "type-exercise-starter-supplied-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-starter-core",
+ "type-exercise-starter-expr",
+]
+
+[[package]]
+name = "type-exercise-supplied-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+ "type-exercise-core",
+ "type-exercise-expr",
 ]
 
 [[package]]

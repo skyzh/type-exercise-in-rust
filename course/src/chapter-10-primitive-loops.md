@@ -14,7 +14,7 @@ settled. A consumed writer typestate makes one successful callback correspond to
 
 ```console
 cargo x copy-test --chapter 10 --checkpoint 1
-cargo test -p type-exercise-starter-expr chapter_10 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_10 --locked
 ```
 
 Review the Chapter 1 `StringArray` representation:
@@ -32,7 +32,7 @@ two offsets are equal—from a null row with the same byte span but a false vali
 
 ```console
 cargo x copy-test --chapter 10 --checkpoint 2
-cargo test -p type-exercise-starter-expr chapter_10 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_10 --locked
 ```
 
 Add `Writer<'a>` and `WriterUsed<'a>` around a borrowed `StringArrayBuilder`. The public operation
@@ -57,11 +57,11 @@ public callback has no path that returns an arbitrary builder.
 
 ```console
 cargo x copy-test --chapter 10 --checkpoint 3
-cargo test -p type-exercise-starter-expr chapter_10 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_10 --locked
 cargo check -p type-exercise-starter-core --locked
 ```
 
-Enable `src/string.rs` and implement the borrowed concatenation scalar operation. It receives two
+Enable `expr/src/string.rs` and implement the borrowed concatenation scalar operation. It receives two
 `&str` values plus a `Writer`, writes each input directly into the builder's bytes, publishes one
 offset and validity bit, and returns `WriterUsed`. Do not allocate a temporary `String` with
 `format!`, and do not write an operation-specific batch loop.

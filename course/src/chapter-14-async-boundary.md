@@ -10,7 +10,7 @@ make scalar functions async, yield between rows, or change validation and error 
 
 ```console
 cargo x copy-test --chapter 14
-cargo test -p type-exercise-starter-expr chapter_14 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_14 --locked
 ```
 
 Add three layers in the core expression framework.
@@ -46,7 +46,7 @@ one-time logical step; the async method does not resolve a name or choose a kern
 Run the completed course:
 
 ```console
-cargo test -p type-exercise-starter-expr chapter_14 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_14 --locked
 cargo test -p type-exercise-starter-expr --doc --locked
 cargo test -p type-exercise-starter-expr --lib --locked
 cargo check -p type-exercise-starter-core --locked

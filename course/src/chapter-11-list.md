@@ -12,10 +12,10 @@ Start from completed Chapter 10:
 
 ```console
 cargo x copy-test --chapter 11
-cargo test -p type-exercise-starter-expr chapter_11 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_11 --locked
 ```
 
-Enable `src/binder.rs` and implement the public `FunctionRegistry`, `BoundExpression`, and binding
+Enable `expr/src/binder.rs` and implement the public `FunctionRegistry`, `BoundExpression`, and binding
 errors. A registry entry is a factory over a complete logical input slice, not a binary-only
 closure. The factory either rejects the signature or returns one erased physical expression whose
 metadata agrees with the requested logical call.
@@ -52,15 +52,15 @@ distinction even though evaluation borrows the same UTF-8 slices.
 Run the final course boundary:
 
 ```console
-cargo test -p type-exercise-starter-expr chapter_11 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_11 --locked
 cargo test -p type-exercise-starter-expr --lib --locked
 cargo check -p type-exercise-starter-core --locked
 ```
 
 The 19 focused tests cover successful numeric, Boolean, comparison, and string calls; unknown
 names; unsupported and lossy signatures; inconsistent factory metadata; arbitrary arity slices;
-custom registration; checked runtime errors; and nullability propagation through both physical
-and bound expressions.
+custom registration; checked runtime errors; and metadata validation through both physical and
+bound expressions.
 
 The dependency direction remains important. The facade owns concrete operations and the builtin
 registry. Core owns only the generic registry and erased expression vocabulary needed to store a

@@ -10,7 +10,7 @@ explicit so the compiler can preserve borrowing and thread-safety across generic
 
 ```console
 cargo x copy-test --chapter 13
-cargo test -p type-exercise-starter-expr chapter_13 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_13 --locked
 ```
 
 You will strengthen three connected surfaces.
@@ -37,7 +37,7 @@ variant actually contains.
 Run the full contract:
 
 ```console
-cargo test -p type-exercise-starter-expr chapter_13 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_13 --locked
 cargo test -p type-exercise-starter-expr --doc --locked
 cargo test -p type-exercise-starter-expr --lib --locked
 cargo check -p type-exercise-starter-core --locked

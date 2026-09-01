@@ -26,24 +26,24 @@ The goal is not to hide the type system behind a general framework. It is to kee
 
 ## What is in the starter
 
-Begin from your completed Chapter 1 workspace. `src/variant_catalog.rs` contains exactly the
+Begin from your completed Chapter 1 workspace. `core/src/variant_catalog.rs` contains exactly the
 Int32 and String rows. On Day 1, those rows drive only `PHYSICAL_FAMILY_CATALOG`; scalar and array
-erasure remains handwritten in `src/scalar.rs` and `src/array.rs`. Day 2 first replaces that
-Int32/String erasure with catalog callbacks, then extends the inventory. `src/physical_type.rs`,
-`src/scalar.rs`, and `src/array.rs` expose those two physical families, and
-`src/array/primitive_array.rs` has the working `I32Array` layout you implemented.
+erasure remains handwritten in `core/src/scalar.rs` and `core/src/array.rs`. Day 2 first replaces that
+Int32/String erasure with catalog callbacks, then extends the inventory. `core/src/physical_type.rs`,
+`core/src/scalar.rs`, and `core/src/array.rs` expose those two physical families, and
+`core/src/array/primitive_array.rs` has the working `I32Array` layout you implemented.
 
 The Day 2 starter does not predeclare the rest of the solution. Comments in the active files mark
-where the primitive variants and aliases belong. `src/data_type.rs`, `src/decimal.rs`, and
-`src/array/decimal_array.rs` are still docstrings rather than executable declarations, and their
-modules remain commented in `src/core.rs` and `src/array.rs`. You will make those files executable
+where the primitive variants and aliases belong. `core/src/data_type.rs`, `core/src/decimal.rs`, and
+`core/src/array/decimal_array.rs` are still docstrings rather than executable declarations, and their
+modules remain commented in `core/src/lib.rs` and `core/src/array.rs`. You will make those files executable
 only when their checkpoints introduce the concepts.
 
 Copy the cumulative supplied test before editing:
 
 ```console
 cargo x copy-test --chapter 2
-cargo test -p type-exercise-starter-expr chapter_2 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_2 --locked
 ```
 
 The Chapter 2 test is one final contract, not four progressive test files. Its first run should
@@ -59,7 +59,7 @@ cargo check -p type-exercise-starter-expr --lib --locked
 
 ## Checkpoint 1: Generalize the primitive array family
 
-Open `src/array/primitive_array.rs`. Chapter 1 implemented `Array` and `ArrayBuilder` directly for
+Open `core/src/array/primitive_array.rs`. Chapter 1 implemented `Array` and `ArrayBuilder` directly for
 the `I32Array` aliases. The storage does not depend on `i32`: every copyable primitive family uses
 one contiguous `Vec<T>` plus one packed validity bitmap. What changes from family to family is the
 Rust scalar type and the public alias name.
@@ -85,7 +85,7 @@ zero are stored as their original floating-point bit patterns; do not add an equ
 requirement just to make the generic implementation convenient.
 
 The six aliases are ordinary Rust declarations, not generated execution code. Re-export them from
-`src/array.rs`; their scalar and erased-enum relationships become complete when Checkpoint 2 adds
+`core/src/array.rs`; their scalar and erased-enum relationships become complete when Checkpoint 2 adds
 the remaining physical catalog rows.
 
 ```console
@@ -94,7 +94,7 @@ cargo check -p type-exercise-starter-expr --lib --locked
 
 ## Checkpoint 2: Make the catalog own the repeated relationships
 
-Now open `src/variant_catalog.rs`. Each row names six facts that otherwise have to stay synchronized:
+Now open `core/src/variant_catalog.rs`. Each row names six facts that otherwise have to stay synchronized:
 
 ```text
 storage kind, erased variant, array, builder, owned scalar, borrowed scalar
@@ -104,12 +104,12 @@ Extend the inventory with the static Day 2 families: Int16, Int64, Bool, Float32
 Int32 remains in place, and String remains the one `borrowed` row because its array yields `&str`
 rather than copying an owned `String`.
 
-Add catalog callbacks in `src/scalar.rs` and `src/array.rs` that replace the handwritten
+Add catalog callbacks in `core/src/scalar.rs` and `core/src/array.rs` that replace the handwritten
 Int32/String erasure. Then use those callbacks to generate the new erased scalar and array
 variants, scalar-family relationships, physical-type dispatch, and variant-specific checked
 conversions without five hand-written copies. They do not generate the primitive aliases or
 duplicate the generic `Array` implementation from Checkpoint 1. Add the
-matching variants to `PhysicalType` and `PhysicalFamily` in `src/physical_type.rs`, and keep
+matching variants to `PhysicalType` and `PhysicalFamily` in `core/src/physical_type.rs`, and keep
 `PHYSICAL_FAMILY_CATALOG` in the same public order. The supplied test treats that public list as an
 audit surface: an omitted, duplicated, or misnamed family is a failure even if some generated code
 still compiles.
@@ -139,7 +139,7 @@ memory? A planner asks a different question. SQL `CHAR(7)` and `VARCHAR` have di
 meaning, but this course stores both in the String physical family. That distinction belongs in a
 planner-visible `DataType`, not in `StringArray`.
 
-Replace the docstring in `src/data_type.rs` with `DataType` and its methods. Add the primitive
+Replace the docstring in `core/src/data_type.rs` with `DataType` and its methods. Add the primitive
 logical variants and the two string variants, then map them explicitly:
 
 | Logical `DataType` | Physical storage |
@@ -155,10 +155,15 @@ logical variants and the two string variants, then map them explicitly:
 Implement `physical_type`, `is_string`, and `is_numeric`. `Boolean` is not numeric. The `width` in
 `Char { width }` remains logical metadata even though it does not change the physical array.
 
-Do not add a nullable logical variant or List. Keep one primitive array representation with its validity bitmap. Nullability is a physical property beside `PhysicalType`, expressed as `Nullability::{NonNull, Nullable}`. Day 7 will make `ColumnViewImpl` carry that property and make expressions derive their output property with `Expression::output_nullability`; `BoundExpression` only delegates it. An ordinary `ColumnViewImpl::array` remains conservatively `Nullable`. A checked `try_non_null_array` can establish `NonNull` once, after which the selected dense loop reads the same array's `values()` and leaves its bitmap structurally present but unused. This does not require a second Arrow array type or a cached null count. List arrives with its own scalar and array relationships on Day 12.
+Do not add a nullable logical variant or List. Keep one primitive array representation with its
+values and packed validity bitmap. Day 7 will borrow those two buffers through a crate-private raw
+view, run strict total `i32` operations over values, and combine validity separately by storage
+word. Constants use the same raw route through one copied value plus a validity bit; Indexed views
+keep the general gather loop. This requires neither a second Arrow array type nor a public
+all-valid proof. List arrives with its own scalar and array relationships on Day 12.
 
 Checkpoint 4 adds the Decimal variants and checked constructor to this same file. After that work,
-uncomment the `data_type` and `decimal` modules and exports in `src/core.rs`; do not enable any
+uncomment the `data_type` and `decimal` modules and exports in `core/src/lib.rs`; do not enable any
 later-day module.
 
 ## Checkpoint 4: Keep Decimal metadata with the physical value
@@ -169,7 +174,7 @@ primitive relationship unchanged.
 
 The starter already includes `anyhow`; do not change its manifest or the workspace lockfile here.
 Implement `DecimalType` and `Decimal` in
-`src/decimal.rs` with `anyhow::Result`. This chapter needs readable checked failures, not a public
+`core/src/decimal.rs` with `anyhow::Result`. This chapter needs readable checked failures, not a public
 Decimal-specific error taxonomy. `DecimalType` owns the
 precision and scale and accepts only:
 
@@ -184,7 +189,7 @@ The scale is an unsigned `u8`, so it is nonnegative by construction. A `Decimal`
 `10^precision`. Use an overflow-safe absolute value so `i128::MIN` returns an ordinary error
 instead of panicking.
 
-Next implement `DecimalArray` and `DecimalArrayBuilder` in `src/array/decimal_array.rs`. `DecimalArray` is a logical metadata wrapper around `PrimitiveArray<i128>`:
+Next implement `DecimalArray` and `DecimalArrayBuilder` in `core/src/array/decimal_array.rs`. `DecimalArray` is a logical metadata wrapper around `PrimitiveArray<i128>`:
 
 | Stored state | Role |
 | --- | --- |
@@ -203,7 +208,7 @@ Now complete the Decimal path through the runtime types:
 - add `PhysicalType::Decimal(DecimalType)` and the descriptor-free `PhysicalFamily::Decimal` audit
   tag;
 - add the `decimal` row to `for_each_physical_family!` and to `PHYSICAL_FAMILY_CATALOG`;
-- enable and re-export `decimal_array` from `src/array.rs`; and
+- enable and re-export `decimal_array` from `core/src/array.rs`; and
 - make `ScalarImpl`, `ScalarRefImpl`, and `ArrayImpl` report the exact descriptor from `physical_type()`.
 
 Do not add a `try_decimal(expected)` convenience method. A caller that requires one precision and scale first compares the erased value's `physical_type()` with `PhysicalType::Decimal(expected)`. Only after equality does it use the existing checked conversion—`Decimal::try_from`, `<&DecimalArray>::try_from`, or owned `DecimalArray::try_from`—when it actually needs a typed value. A descriptor mismatch is a physical-type mismatch at the caller; converting the wrong erased family returns an ordinary `anyhow` failure such as `expected a Decimal value, got Int32`. Code that only carries an erased value forward does not need to force a Decimal conversion.
@@ -217,7 +222,7 @@ would have to preserve.
 Run the final contract and the starter library tests:
 
 ```console
-cargo test -p type-exercise-starter-expr chapter_2 --locked
+cargo test -p type-exercise-starter-supplied-tests chapter_2 --locked
 cargo test -p type-exercise-starter-expr --lib --locked
 ```
 

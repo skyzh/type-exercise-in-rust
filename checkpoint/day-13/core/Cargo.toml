@@ -8,6 +8,3 @@ publish.workspace = true
 [dependencies]
 anyhow = "1"
 bitvec = "1"
-
-[lib]
-path = "../src/core.rs"
