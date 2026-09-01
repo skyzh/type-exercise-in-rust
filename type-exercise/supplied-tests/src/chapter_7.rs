@@ -3,8 +3,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::{
     ArithmeticOperator, Array, ArrayImpl, BinaryScalarFunction, ColumnViewImpl, I32Add, I32Array,
-    PhysicalType, PrimitiveBinaryExpression, PrimitiveLoop, ScalarRefImpl, StringArray,
-    auto_vectorize_binary, build_numeric_binary_expression,
+    PhysicalType, PrimitiveBinaryExpression, ScalarRefImpl, StringArray, auto_vectorize_binary,
+    build_numeric_binary_expression,
 };
 
 fn i32_values(array: &ArrayImpl) -> Vec<Option<i32>> {
@@ -21,14 +21,13 @@ fn generic_add(inputs: &[ColumnViewImpl<'_>; 2]) -> ArrayImpl {
 }
 
 #[test]
-fn selects_all_raw_shapes_including_nullable_arrays_and_typed_nulls() {
+fn evaluates_dense_shapes_including_nullable_arrays_and_typed_nulls() {
     let expression = PrimitiveBinaryExpression::new("i32_add", I32Add);
     let left: ArrayImpl = I32Array::from_slice(&[Some(10), None, Some(30)]).into();
     let right: ArrayImpl = I32Array::from_slice(&[Some(1), Some(2), None]).into();
     let cases = [
         (
             [ColumnViewImpl::array(&left), ColumnViewImpl::array(&right)],
-            PrimitiveLoop::ArrayArray,
             vec![Some(11), None, None],
         ),
         (
@@ -36,7 +35,6 @@ fn selects_all_raw_shapes_including_nullable_arrays_and_typed_nulls() {
                 ColumnViewImpl::array(&left),
                 ColumnViewImpl::constant(ScalarRefImpl::Int32(5), 3),
             ],
-            PrimitiveLoop::ArrayConstant,
             vec![Some(15), None, Some(35)],
         ),
         (
@@ -44,7 +42,6 @@ fn selects_all_raw_shapes_including_nullable_arrays_and_typed_nulls() {
                 ColumnViewImpl::constant(ScalarRefImpl::Int32(5), 3),
                 ColumnViewImpl::array(&right),
             ],
-            PrimitiveLoop::ConstantArray,
             vec![Some(6), Some(7), None],
         ),
         (
@@ -52,7 +49,6 @@ fn selects_all_raw_shapes_including_nullable_arrays_and_typed_nulls() {
                 ColumnViewImpl::constant(ScalarRefImpl::Int32(5), 3),
                 ColumnViewImpl::constant(ScalarRefImpl::Int32(7), 3),
             ],
-            PrimitiveLoop::ConstantConstant,
             vec![Some(12), Some(12), Some(12)],
         ),
         (
@@ -60,15 +56,13 @@ fn selects_all_raw_shapes_including_nullable_arrays_and_typed_nulls() {
                 ColumnViewImpl::array(&left),
                 ColumnViewImpl::null(PhysicalType::Int32, 3),
             ],
-            PrimitiveLoop::ArrayConstant,
             vec![None, None, None],
         ),
     ];
 
-    for (inputs, expected_loop, expected_values) in cases {
+    for (inputs, expected_values) in cases {
         let generic = generic_add(&inputs);
-        let (output, selected) = expression.evaluate_with_loop(&inputs).unwrap();
-        assert_eq!(selected, expected_loop);
+        let output = expression.evaluate(&inputs).unwrap();
         assert_eq!(i32_values(&output), expected_values);
         assert_eq!(i32_values(&output), i32_values(&generic));
     }
@@ -85,10 +79,9 @@ fn combines_nullable_validity_by_storage_word() {
     let left: ArrayImpl = I32Array::from_slice(&left_values).into();
     let right: ArrayImpl = I32Array::from_slice(&right_values).into();
 
-    let (output, selected) = PrimitiveBinaryExpression::new("i32_add", I32Add)
-        .evaluate_with_loop(&[ColumnViewImpl::array(&left), ColumnViewImpl::array(&right)])
+    let output = PrimitiveBinaryExpression::new("i32_add", I32Add)
+        .evaluate(&[ColumnViewImpl::array(&left), ColumnViewImpl::array(&right)])
         .unwrap();
-    assert_eq!(selected, PrimitiveLoop::ArrayArray);
     let expected = left_values
         .iter()
         .zip(&right_values)
@@ -125,29 +118,27 @@ fn constant_constant_invokes_the_scalar_once_or_not_at_all() {
             calls: Arc::clone(&calls),
         },
     );
-    let (output, selected) = expression
-        .evaluate_with_loop(&[
+    let output = expression
+        .evaluate(&[
             ColumnViewImpl::constant(ScalarRefImpl::Int32(3), 65),
             ColumnViewImpl::constant(ScalarRefImpl::Int32(4), 65),
         ])
         .unwrap();
-    assert_eq!(selected, PrimitiveLoop::ConstantConstant);
     assert_eq!(calls.load(Ordering::SeqCst), 1);
     assert_eq!(i32_values(&output), vec![Some(7); 65]);
 
-    let (output, selected) = expression
-        .evaluate_with_loop(&[
+    let output = expression
+        .evaluate(&[
             ColumnViewImpl::constant(ScalarRefImpl::Int32(3), 0),
             ColumnViewImpl::constant(ScalarRefImpl::Int32(4), 0),
         ])
         .unwrap();
-    assert_eq!(selected, PrimitiveLoop::ConstantConstant);
     assert_eq!(calls.load(Ordering::SeqCst), 1);
     assert!(i32_values(&output).is_empty());
 }
 
 #[test]
-fn indexed_inputs_use_only_the_gather_fallback() {
+fn indexed_inputs_preserve_order_and_nulls() {
     let dictionary_values: ArrayImpl = I32Array::from_slice(&[Some(4), Some(8), None]).into();
     let keys = [1, 2, 0];
     let right: ArrayImpl = I32Array::from_values(vec![1, 2, 3]).into();
@@ -156,10 +147,9 @@ fn indexed_inputs_use_only_the_gather_fallback() {
         ColumnViewImpl::array(&right),
     ];
     let generic = generic_add(&inputs);
-    let (output, selected) = PrimitiveBinaryExpression::new("i32_add", I32Add)
-        .evaluate_with_loop(&inputs)
+    let output = PrimitiveBinaryExpression::new("i32_add", I32Add)
+        .evaluate(&inputs)
         .unwrap();
-    assert_eq!(selected, PrimitiveLoop::Indexed);
     assert_eq!(i32_values(&output), vec![Some(9), None, Some(7)]);
     assert_eq!(i32_values(&output), i32_values(&generic));
 }
@@ -208,44 +198,40 @@ impl BinaryScalarFunction for WrappingSubtract {
 }
 
 #[test]
-fn raw_loops_preserve_operand_order() {
+fn primitive_expression_preserves_operand_order() {
     let values: ArrayImpl = I32Array::from_slice(&[Some(10), None, Some(30)]).into();
     let right_values: ArrayImpl = I32Array::from_values(vec![1, 2, 4]).into();
     let expression = PrimitiveBinaryExpression::new("subtract", WrappingSubtract);
-    let (output, selected) = expression
-        .evaluate_with_loop(&[
+    let output = expression
+        .evaluate(&[
             ColumnViewImpl::array(&values),
             ColumnViewImpl::array(&right_values),
         ])
         .unwrap();
-    assert_eq!(selected, PrimitiveLoop::ArrayArray);
     assert_eq!(i32_values(&output), vec![Some(9), None, Some(26)]);
 
-    let (output, selected) = expression
-        .evaluate_with_loop(&[
+    let output = expression
+        .evaluate(&[
             ColumnViewImpl::array(&values),
             ColumnViewImpl::constant(ScalarRefImpl::Int32(3), 3),
         ])
         .unwrap();
-    assert_eq!(selected, PrimitiveLoop::ArrayConstant);
     assert_eq!(i32_values(&output), vec![Some(7), None, Some(27)]);
 
-    let (output, selected) = expression
-        .evaluate_with_loop(&[
+    let output = expression
+        .evaluate(&[
             ColumnViewImpl::constant(ScalarRefImpl::Int32(3), 3),
             ColumnViewImpl::array(&values),
         ])
         .unwrap();
-    assert_eq!(selected, PrimitiveLoop::ConstantArray);
     assert_eq!(i32_values(&output), vec![Some(-7), None, Some(-27)]);
 
-    let (output, selected) = expression
-        .evaluate_with_loop(&[
+    let output = expression
+        .evaluate(&[
             ColumnViewImpl::constant(ScalarRefImpl::Int32(11), 3),
             ColumnViewImpl::constant(ScalarRefImpl::Int32(4), 3),
         ])
         .unwrap();
-    assert_eq!(selected, PrimitiveLoop::ConstantConstant);
     assert_eq!(i32_values(&output), vec![Some(7), Some(7), Some(7)]);
 }
 
