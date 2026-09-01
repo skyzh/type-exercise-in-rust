@@ -138,43 +138,43 @@ impl Numeric for f64 {
 }
 
 trait CheckedDivide: Sized {
-    fn checked_divide(self, rhs: Self) -> anyhow::Result<Self>;
+    fn checked_divide(self, rhs: Self) -> Result<Self, &'static str>;
 }
 
 impl CheckedDivide for i16 {
-    fn checked_divide(self, rhs: Self) -> anyhow::Result<Self> {
+    fn checked_divide(self, rhs: Self) -> Result<Self, &'static str> {
         if rhs == 0 {
-            anyhow::bail!("division by zero");
+            return Err("division by zero");
         }
         self.checked_div(rhs)
-            .ok_or_else(|| anyhow::anyhow!("signed integer division overflow"))
+            .ok_or("signed integer division overflow")
     }
 }
 
 impl CheckedDivide for i32 {
-    fn checked_divide(self, rhs: Self) -> anyhow::Result<Self> {
+    fn checked_divide(self, rhs: Self) -> Result<Self, &'static str> {
         if rhs == 0 {
-            anyhow::bail!("division by zero");
+            return Err("division by zero");
         }
         self.checked_div(rhs)
-            .ok_or_else(|| anyhow::anyhow!("signed integer division overflow"))
+            .ok_or("signed integer division overflow")
     }
 }
 
 impl CheckedDivide for i64 {
-    fn checked_divide(self, rhs: Self) -> anyhow::Result<Self> {
+    fn checked_divide(self, rhs: Self) -> Result<Self, &'static str> {
         if rhs == 0 {
-            anyhow::bail!("division by zero");
+            return Err("division by zero");
         }
         self.checked_div(rhs)
-            .ok_or_else(|| anyhow::anyhow!("signed integer division overflow"))
+            .ok_or("signed integer division overflow")
     }
 }
 
 impl CheckedDivide for f32 {
-    fn checked_divide(self, rhs: Self) -> anyhow::Result<Self> {
+    fn checked_divide(self, rhs: Self) -> Result<Self, &'static str> {
         if rhs == 0.0 {
-            anyhow::bail!("division by zero")
+            Err("division by zero")
         } else {
             Ok(self / rhs)
         }
@@ -182,9 +182,9 @@ impl CheckedDivide for f32 {
 }
 
 impl CheckedDivide for f64 {
-    fn checked_divide(self, rhs: Self) -> anyhow::Result<Self> {
+    fn checked_divide(self, rhs: Self) -> Result<Self, &'static str> {
         if rhs == 0.0 {
-            anyhow::bail!("division by zero")
+            Err("division by zero")
         } else {
             Ok(self / rhs)
         }
@@ -311,11 +311,15 @@ where
     for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
 {
-    try_auto_vectorize_binary::<L, R, O, _>(inputs[0].clone(), inputs[1].clone(), |left, right| {
-        let left = lossless_try_from::<O, L>(left);
-        let right = lossless_try_from::<O, R>(right);
-        left.checked_divide(right)
-    })
+    try_auto_vectorize_binary::<L, R, O, _, _>(
+        inputs[0].clone(),
+        inputs[1].clone(),
+        |left, right| {
+            let left = lossless_try_from::<O, L>(left);
+            let right = lossless_try_from::<O, R>(right);
+            left.checked_divide(right)
+        },
+    )
 }
 
 fn numeric_binary_kernel<L, R, O>(operator: ArithmeticOperator) -> NumericBinaryBatchKernel

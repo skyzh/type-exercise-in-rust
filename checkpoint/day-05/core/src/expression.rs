@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{
     Array, ArrayBuilder, ArrayImpl, ColumnView, ColumnViewImpl, Scalar, ScalarRefImpl, TypeMismatch,
 };
@@ -202,7 +204,7 @@ where
 
 /// Lift one fallible typed function over two nullable columns.
 #[doc(hidden)]
-pub fn try_auto_vectorize_binary<L, R, O, F>(
+pub fn try_auto_vectorize_binary<L, R, O, F, E>(
     left: ColumnViewImpl<'_>,
     right: ColumnViewImpl<'_>,
     function: F,
@@ -211,7 +213,8 @@ where
     L: Scalar + Copy,
     R: Scalar + Copy,
     O: Scalar + Copy,
-    F: Fn(L, R) -> anyhow::Result<O>,
+    F: Fn(L, R) -> Result<O, E>,
+    E: Display,
     for<'a> L: Scalar<RefType<'a> = L>,
     for<'a> R: Scalar<RefType<'a> = R>,
     for<'a> &'a L::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,

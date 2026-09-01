@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::fmt::Display;
 use std::future::Future;
 use std::pin::Pin;
 
@@ -308,7 +309,7 @@ where
 }
 
 /// Lift one fallible scalar function over two nullable columns.
-pub fn try_evaluate_binary<L, R, O, F>(
+pub fn try_evaluate_binary<L, R, O, F, E>(
     left: ColumnViewImpl<'_>,
     right: ColumnViewImpl<'_>,
     function_name: &str,
@@ -318,7 +319,8 @@ where
     L: Scalar + Copy,
     R: Scalar + Copy,
     O: Scalar + Copy,
-    F: Fn(L, R) -> anyhow::Result<O>,
+    F: Fn(L, R) -> Result<O, E>,
+    E: Display,
     for<'a> L: Scalar<RefType<'a> = L>,
     for<'a> R: Scalar<RefType<'a> = R>,
     for<'a> &'a L::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
