@@ -25,6 +25,7 @@ cargo test -p type-exercise-starter-supplied-tests chapter_7 --locked
 The representation observation and traversal belong in the core package. The concrete `I32Add`
 operation remains in the expression facade. You will add:
 
+- a public `PrimitiveBinaryExpression` boundary whose ordinary `evaluate` method returns results;
 - a crate-private raw view over an `i32` array's values and validity;
 - a raw value/validity representation for value and typed-null constants;
 - explicit detection of Indexed inputs;
@@ -34,9 +35,21 @@ operation remains in the expression facade. You will add:
 No raw representation becomes public. The existing public view constructors and error messages
 stay unchanged.
 
-## Checkpoint 1: bind the physical representation
+## Checkpoint 1: establish the public evaluation boundary
 
-Add a crate-private observation with these two shapes:
+Add `PrimitiveBinaryExpression<F>` for a strict, total
+`BinaryScalarFunction<Left = i32, Right = i32, Output = i32>`. Validate arity, physical types, and
+lengths once. For this checkpoint, its public `evaluate` method can delegate every input shape to
+the Chapter 6 `evaluate_binary` traversal. That baseline is already correct for arrays, constants,
+typed nulls, and Indexed inputs; the next checkpoint changes how dense inputs are traversed.
+
+Run the first checkpoint again. Before the new public type exists, both tests fail to compile. Once
+it evaluates dense, typed-null, and Indexed inputs through ordinary public results, the cumulative
+suite has 48 passing tests. The tests do not inspect private fields or source text.
+
+## Checkpoint 2: bind the physical representation
+
+Now add a crate-private observation with these two shapes:
 
 ```rust,ignore
 enum RawI32Column<'a> {
@@ -57,12 +70,6 @@ constant carries `valid = true`; a typed-null `i32` constant uses a harmless raw
 `valid = false`. Non-`i32` and Indexed inputs return `None`. Keep a separate crate-private
 `is_indexed` observation so the evaluator can route Indexed inputs before matching raw shapes.
 
-Run the first checkpoint again. Its two structural tests pin the exact private representation and
-ensure Indexed detection remains separate. This checkpoint adds no public nullability proof or
-second array type.
-
-## Checkpoint 2: compute values and validity separately
-
 Copy the second stage:
 
 ```console
@@ -70,11 +77,10 @@ cargo x copy-test --chapter 7 --checkpoint 2
 cargo test -p type-exercise-starter-supplied-tests chapter_7 --locked
 ```
 
-Implement `PrimitiveBinaryExpression<F>` for a strict, total
-`BinaryScalarFunction<Left = i32, Right = i32, Output = i32>`. Validate arity, physical types, and
-lengths once. Route Indexed inputs to `evaluate_binary` and report `PrimitiveLoop::Indexed`.
-Otherwise match the two raw inputs once and choose array/array, array/constant, constant/array, or
-constant/constant.
+Route Indexed inputs to `evaluate_binary`. Otherwise match the two raw inputs once and choose
+array/array, array/constant, constant/array, or constant/constant. Keep the raw representation
+crate-private; the existing loop diagnostic may report which route was selected, but supplied
+tests use only the public `evaluate` result.
 
 Each raw helper computes only values and is source-equivalent to this traversal:
 
@@ -92,8 +98,11 @@ After values are computed, combine the two validity sources by `BitVec` storage 
 the final word to the exact row count. A valid constant behaves like virtual all-ones; a typed-null
 constant behaves like virtual all-zeros. Build the output through `I32Array::from_raw_parts`.
 
-The four cumulative tests prove all raw shapes, nullable arrays across multiple storage words, the
-independent validity result, and explicit Indexed fallback.
+The first two tests retain the public evaluation boundary. Two new public-behavior tests exercise
+nullable arrays across multiple storage words and require constant/constant evaluation to call the
+scalar function once for a non-empty batch and zero times for an empty batch. After the dense path
+is connected, the cumulative suite has 50 passing tests. Inspect the private raw binding and loop
+selection in the implementation rather than trying to expose them through a test API.
 
 ## Checkpoint 3: prove the safety boundaries
 
@@ -105,10 +114,10 @@ cargo test -p type-exercise-starter-supplied-tests chapter_7 --locked
 cargo check -p type-exercise-starter-core --locked
 ```
 
-The seven focused tests now cover all raw shapes, word-wise validity, one-call constant filling,
-Indexed gathering, non-commutative operand order, unchanged arity/type/length errors, and the
-fallible safety boundary. An invalid zero divisor must remain unobserved by checked division, while
-the same zero under a valid bit still reports the existing row error.
+The seven focused tests now cover dense and Indexed results, word-wise validity, one-call constant
+filling, non-commutative operand order, unchanged arity/type/length errors, and the fallible safety
+boundary. An invalid zero divisor must remain unobserved by checked division, while the same zero
+under a valid bit still reports the existing row error. The cumulative suite has 53 passing tests.
 
 Install `cargo-expand` if needed, then inspect the selected implementation:
 

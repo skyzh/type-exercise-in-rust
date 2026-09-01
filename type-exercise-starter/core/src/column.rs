@@ -16,7 +16,7 @@
 //     pub fn get(&self, row: usize) -> Option<ScalarRefImpl<'a>>;
 // }
 //
-//! Day 7, checkpoint 1: add the crate-private `RawI32Column` observation. Bind Int32 arrays to
+//! Day 7, checkpoint 2: add the crate-private `RawI32Column` observation. Bind Int32 arrays to
 //! their values and validity buffers, value/typed-null constants to one value plus a validity bit,
 //! and detect Indexed views separately. Do not expose a public raw-column API.
 //

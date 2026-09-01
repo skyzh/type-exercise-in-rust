@@ -15,9 +15,12 @@
 //! Checkpoint 3: keep those three loops generic while facade arithmetic supplies only scalar
 //! functions such as `neg_number` and `clamp_number`.
 //!
-//! Day 7: add `PrimitiveLoop` and `PrimitiveBinaryExpression`. Select raw Int32 arrays/constants
-//! once, compute values in four strict-total fixed-width loops, and combine validity by storage
-//! word. Indexed inputs use the general gather loop and report `PrimitiveLoop::Indexed`.
+//! Day 7, checkpoint 1: add `PrimitiveBinaryExpression` as a public evaluation boundary. Start by
+//! delegating every input shape to the Day 6 generic binary traversal.
+//! Day 7, checkpoint 2: select raw Int32 arrays/constants once, compute values in four strict-total
+//! fixed-width loops, and combine validity by storage word. Indexed inputs keep the general gather
+//! loop. The existing `PrimitiveLoop` diagnostic may report the route, but supplied tests observe
+//! only `PrimitiveBinaryExpression::evaluate` results.
 //!
 //! Day 8, checkpoint 1: publish the existing nullable-aware unary/binary evaluators for SQL
 //! Boolean AND/OR. Registration chooses strict versus nullable-aware evaluation before entering a

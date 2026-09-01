@@ -15,7 +15,7 @@ mod string_array;
 pub use primitive_array::{I32Array, I32ArrayBuilder, PrimitiveArray, PrimitiveArrayBuilder};
 // Day 2, checkpoint 1: extend the primitive re-export with I16, I64, Bool, F32, and F64 arrays
 // and builders.
-// Day 7, checkpoint 1: keep this single primitive representation; the private raw binding borrows
+// Day 7, checkpoint 2: keep this single primitive representation; the private raw binding borrows
 // its values and validity through `ColumnViewImpl`.
 pub use string_array::{StringArray, StringArrayBuilder};
 // Day 10, checkpoint 2: extend this re-export with `Writer` and `WriterUsed`.
