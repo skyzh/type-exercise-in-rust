@@ -10,7 +10,7 @@ The reusable core already supports both contracts. This chapter keeps the choice
 three small scalar functions define SQL truth, and the expression builder selects the matching
 core evaluator once per batch.
 
-## Checkpoint 1: own the truth table as scalar code
+## Checkpoint 1: expose the truth table through an expression
 
 Begin from completed Chapter 7:
 
@@ -19,8 +19,8 @@ cargo x copy-test --chapter 8 --checkpoint 1
 cargo test -p type-exercise-starter-supplied-tests chapter_8 --locked
 ```
 
-Enable only the private `expr/src/boolean.rs` module in `expr/src/lib.rs`, then implement these
-crate-visible scalar functions:
+Enable the private `expr/src/boolean.rs` module in `expr/src/lib.rs`, then implement the three
+crate-visible scalar helpers:
 
 ```rust,ignore
 pub(crate) fn not(value: bool) -> bool;
@@ -32,11 +32,14 @@ Keep the functions concise. `NOT` flips a present Boolean. `AND` returns false a
 side is false, true only for two true inputs, and null otherwise. `OR` returns true as soon as
 either side is true, false only for two false inputs, and null otherwise.
 
-The supplied test owns the exhaustive 21 rows. Do not export a production truth-table constant or
-`BooleanTruthRow` merely to make the test convenient; production code owns behavior, and tests own
-enumerated examples.
+Define public `BooleanOperator::{And, Or, Not}`, `BooleanExpression`, and
+`build_boolean_expression`, and export that expression boundary from `expr/src/lib.rs`. The
+supplied test sends the exhaustive 21 truth rows through the public builder, `ColumnViewImpl`, and
+`evaluate`; it never imports the private helpers or depends on their names, file, or signatures.
+Do not export a production truth-table constant or `BooleanTruthRow` merely to make the test
+convenient: production code owns behavior, while tests own enumerated examples.
 
-## Checkpoint 2: select operation and null semantics once
+## Checkpoint 2: complete the batch contract
 
 Copy the completed stage:
 
@@ -46,15 +49,16 @@ cargo test -p type-exercise-starter-supplied-tests chapter_8 --locked
 cargo test -p type-exercise-starter-expr --lib --locked
 ```
 
-Add `BooleanOperator::{And, Or, Not}` and `build_boolean_expression`. The builder selects one
-function before row evaluation:
+Complete the public expression for array-backed inputs, metadata, arity/type/length validation,
+and integration with the shared core evaluators. The builder selects one function before row
+evaluation:
 
 - `Not` delegates to the strict unary evaluator;
 - `And` delegates to the nullable-aware binary evaluator with the `and` scalar function; and
 - `Or` delegates to the same evaluator with `or`.
 
-Now uncomment the `pub use boolean::*` line in `expr/src/lib.rs` so the completed expression surface is
-available to later chapters. The scalar helpers remain crate-visible implementation details.
+The scalar helpers remain crate-visible implementation details. Later chapters depend only on the
+public expression surface exported at Checkpoint 1.
 
 Keep operator selection outside the shared loops. A null-policy enum tested per row would make
 the core depend on Boolean semantics and would put dispatch back into the hot path. The selected
