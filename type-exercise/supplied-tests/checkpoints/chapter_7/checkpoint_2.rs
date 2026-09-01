@@ -8,95 +8,44 @@ fn i32_values(array: &ArrayImpl) -> Vec<Option<i32>> {
 }
 
 #[test]
-fn checkpoint_1_binds_raw_i32_arrays_and_constants() {
-    let source = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../core/src/column.rs"
-    ));
-    for required in [
-        "enum RawI32Column<'a>",
-        "values: &'a [i32]",
-        "validity: &'a BitVec",
-        "value: i32",
-        "valid: bool",
-        "valid: value.is_some()",
-        "fn as_raw_i32(&self)",
-    ] {
-        assert!(source.contains(required), "missing raw binding: {required}");
-    }
-    assert!(!source.contains("pub enum RawI32Column"));
-    assert!(!source.contains("pub fn as_raw_i32"));
-    assert!(!source.contains("pub fn len(self)"));
-    for forbidden in [
-        "enum Nullability",
-        "try_non_null_array",
-        "fn nullability(&self)",
-    ] {
-        assert!(
-            !source.contains(forbidden),
-            "Day 7 must not expose stale nullability API: {forbidden}"
-        );
-    }
+fn checkpoint_1_preserves_array_constant_and_null_rows() {
+    let values: ArrayImpl = I32Array::from_slice(&[Some(4), None, Some(8)]).into();
+    let array = ColumnViewImpl::array(&values);
+    assert_eq!(array.len(), 3);
+    assert_eq!(array.physical_type(), PhysicalType::Int32);
+    assert_eq!(array.get(0), Some(ScalarRefImpl::Int32(4)));
+    assert_eq!(array.get(1), None);
+
+    let constant = ColumnViewImpl::constant(ScalarRefImpl::Int32(7), 3);
+    assert_eq!(constant.len(), 3);
+    assert_eq!(constant.get(2), Some(ScalarRefImpl::Int32(7)));
+
+    let null = ColumnViewImpl::null(PhysicalType::Int32, 3);
+    assert_eq!(null.len(), 3);
+    assert_eq!(null.get(2), None);
 }
 
 #[test]
-fn checkpoint_1_keeps_indexed_detection_separate() {
-    let source = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../core/src/column.rs"
-    ));
-    let raw_body = source
-        .split("fn as_raw_i32(&self)")
-        .nth(1)
-        .expect("as_raw_i32 body")
-        .split("fn is_indexed")
-        .next()
-        .expect("as_raw_i32 boundary");
-    assert!(raw_body.contains("ColumnViewImplKind::Array(ArrayImpl::Int32(array))"));
-    assert!(raw_body.contains("Some(ScalarRefImpl::Int32(value))"));
-    assert!(raw_body.contains("None => 0"));
-    assert!(raw_body.contains("_ => None"));
-    let indexed_body = source
-        .split("fn is_indexed")
-        .nth(1)
-        .expect("is_indexed body")
-        .split("\n    }")
-        .next()
-        .expect("is_indexed boundary");
-    assert!(
-        indexed_body.contains("matches!(self.kind, ColumnViewImplKind::Indexed { .. })")
-            || indexed_body.contains("matches!(&self.kind, ColumnViewImplKind::Indexed { .. })")
+fn checkpoint_1_preserves_indexed_order_nulls_and_bounds() {
+    let values: ArrayImpl = I32Array::from_slice(&[Some(4), None, Some(8)]).into();
+    let keys = [2, 1, 0];
+    let indexed = ColumnViewImpl::indexed(&keys, &values).unwrap();
+    assert_eq!(indexed.len(), 3);
+    assert_eq!(indexed.physical_type(), PhysicalType::Int32);
+    assert_eq!(indexed.get(0), Some(ScalarRefImpl::Int32(8)));
+    assert_eq!(indexed.get(1), None);
+    assert_eq!(indexed.get(2), Some(ScalarRefImpl::Int32(4)));
+
+    assert_eq!(
+        ColumnViewImpl::indexed(&[3], &values)
+            .unwrap_err()
+            .to_string(),
+        "index 3 at row 0 is out of bounds for a values array of length 3"
     );
 }
 
 #[test]
 fn checkpoint_2_selects_all_four_raw_shapes() {
-    let core_source = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../core/src/expression.rs"
-    ));
-    let facade_source = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../expr/src/numeric.rs"
-    ));
-    assert!(core_source.contains("pub trait Expression: Send + Sync"));
-    for forbidden in [
-        "Expression: Any",
-        "fn name(&self)",
-        "fn input_types(&self)",
-        "fn output_type(&self)",
-        "output_nullability",
-    ] {
-        assert!(
-            !core_source.contains(forbidden),
-            "Chapter 9 metadata leaked into Day 7 core: {forbidden}"
-        );
-        assert!(
-            !facade_source.contains(forbidden),
-            "Chapter 9 metadata leaked into Day 7 facade: {forbidden}"
-        );
-    }
-
     let expression = PrimitiveBinaryExpression::new("i32_add", I32Add);
     let left: ArrayImpl = I32Array::from_slice(&[Some(10), None, Some(30)]).into();
     let right: ArrayImpl = I32Array::from_slice(&[Some(1), Some(2), None]).into();

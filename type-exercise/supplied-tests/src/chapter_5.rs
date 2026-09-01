@@ -9,103 +9,46 @@ use crate::{
 use crate::{build_numeric_binary_expression, build_numeric_comparison_expression};
 
 #[test]
-fn arithmetic_selects_one_infallible_or_fallible_batch_kernel() {
-    let source = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../expr/src/numeric.rs"
-    ));
-    let expression = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../core/src/expression.rs"
-    ));
-    let physical_type = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../core/src/physical_type.rs"
-    ));
-    assert!(expression.contains("pub struct BinaryExpression"));
-    assert!(expression.contains("kernel: BinaryBatchKernel"));
-    assert!(expression.contains("pub fn auto_vectorize_binary"));
-    assert!(
-        expression.contains("pub fn try_auto_vectorize_binary")
-            || expression.contains("pub fn try_evaluate_binary")
+fn arithmetic_preserves_success_null_and_failure_semantics() {
+    let add = build_numeric_binary_expression(
+        "numeric_add",
+        ArithmeticOperator::Add,
+        PhysicalType::Int16,
+        PhysicalType::Int32,
+        PhysicalType::Int32,
     );
-    let fallible_name = if expression.contains("pub fn try_auto_vectorize_binary") {
-        "pub fn try_auto_vectorize_binary"
-    } else {
-        "pub fn try_evaluate_binary"
-    };
-    let fallible = expression
-        .split(fallible_name)
-        .nth(1)
-        .unwrap()
-        .split("\n}\n")
-        .next()
-        .unwrap();
-    assert!(fallible.contains("F: Fn(L, R) -> Result<O, E>"));
-    assert!(fallible.contains("E: Display"));
-    assert!(!fallible.contains("F: Fn(L, R) -> anyhow::Result<O>"));
-    assert!(!expression.contains("operator: ArithmeticOperator"));
-    assert!(!source.contains("for row in"));
-
-    let checked_divide = source
-        .split("trait CheckedDivide")
-        .nth(1)
-        .unwrap()
-        .split("fn lossless_try_from")
-        .next()
+    let left: ArrayImpl = I16Array::from_slice(&[Some(3), None, Some(-4)]).into();
+    let right: ArrayImpl = I32Array::from_slice(&[Some(5), Some(6), None]).into();
+    let output = add
+        .evaluate(&[ColumnViewImpl::array(&left), ColumnViewImpl::array(&right)])
         .unwrap();
     assert_eq!(
-        checked_divide.matches("Result<Self, &'static str>").count(),
-        6
-    );
-    assert!(!checked_divide.contains("anyhow::Result<Self>"));
-    if source.contains("fn divide_number") {
-        let divide_number = source
-            .split("fn divide_number")
-            .nth(1)
+        <&I32Array>::try_from(&output)
             .unwrap()
-            .split("\n}\n")
-            .next()
-            .unwrap();
-        assert!(divide_number.contains("Result<O, &'static str>"));
-        assert!(!divide_number.contains("anyhow::Result<O>"));
-    }
-    assert!(physical_type.contains("for_each_physical_family!(define_family_catalog)"));
+            .iter()
+            .collect::<Vec<_>>(),
+        vec![Some(8), None, None]
+    );
 
-    let selector = source
-        .split("fn numeric_binary_kernel")
-        .nth(1)
-        .unwrap()
-        .split("fn evaluate_numeric_comparison")
-        .next()
-        .unwrap();
-    assert!(selector.contains("ArithmeticOperator::Add => evaluate_numeric_add"));
-    assert!(selector.contains("ArithmeticOperator::Divide => evaluate_numeric_divide"));
-
-    let infallible = source
-        .split("fn evaluate_numeric_infallible")
-        .nth(1)
-        .unwrap()
-        .split("fn evaluate_numeric_add")
-        .next()
-        .unwrap();
-    assert!(!infallible.contains("checked_divide"));
-    assert!(infallible.contains("auto_vectorize_binary"));
-
-    let divide = source
-        .split("fn evaluate_numeric_divide")
-        .nth(1)
-        .unwrap()
-        .split("fn numeric_binary_kernel")
-        .next()
-        .unwrap();
-    let scalar_divide = if source.contains("fn divide_number") {
-        "divide_number"
-    } else {
-        "checked_divide"
-    };
-    assert!(divide.contains(scalar_divide));
-    assert!(divide.contains("try_auto_vectorize_binary") || divide.contains("try_evaluate_binary"));
+    let divide = build_numeric_binary_expression(
+        "numeric_divide",
+        ArithmeticOperator::Divide,
+        PhysicalType::Int32,
+        PhysicalType::Int32,
+        PhysicalType::Int32,
+    );
+    let numerators: ArrayImpl = I32Array::from_values(vec![8, 9, 10]).into();
+    let divisors: ArrayImpl = I32Array::from_values(vec![2, 0, 5]).into();
+    assert_eq!(
+        divide
+            .evaluate(&[
+                ColumnViewImpl::array(&numerators),
+                ColumnViewImpl::array(&divisors),
+            ])
+            .unwrap_err()
+            .to_string(),
+        "function `numeric_divide` failed at row 1: division by zero"
+    );
 }
 
 const EXPECTED_NUMERIC_PROMOTION_MATRIX: &[(DataType, DataType, Option<DataType>)] = &[

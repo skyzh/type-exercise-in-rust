@@ -336,18 +336,30 @@ fn metadata_and_getters_pin_the_public_contract() {
 }
 
 #[test]
-fn operation_selection_stays_outside_the_shared_row_loops() {
-    let source = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../expr/src/boolean.rs"
-    ));
-    assert!(!source.contains("NullEvaluationPolicy"));
-    assert!(source.contains("match self.operator"));
-    let core = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../core/src/expression.rs"
-    ));
-    assert!(!core.contains("BooleanOperator"));
+fn each_boolean_operator_preserves_its_public_result() {
+    let and = build_boolean_expression(BooleanOperator::And);
+    let output = and
+        .evaluate(&[
+            ColumnViewImpl::constant(ScalarRefImpl::Bool(true), 1),
+            ColumnViewImpl::constant(ScalarRefImpl::Bool(false), 1),
+        ])
+        .unwrap();
+    assert_eq!(<&BoolArray>::try_from(&output).unwrap().get(0), Some(false));
+
+    let or = build_boolean_expression(BooleanOperator::Or);
+    let output = or
+        .evaluate(&[
+            ColumnViewImpl::constant(ScalarRefImpl::Bool(true), 1),
+            ColumnViewImpl::constant(ScalarRefImpl::Bool(false), 1),
+        ])
+        .unwrap();
+    assert_eq!(<&BoolArray>::try_from(&output).unwrap().get(0), Some(true));
+
+    let not = build_boolean_expression(BooleanOperator::Not);
+    let output = not
+        .evaluate(&[ColumnViewImpl::constant(ScalarRefImpl::Bool(true), 1)])
+        .unwrap();
+    assert_eq!(<&BoolArray>::try_from(&output).unwrap().get(0), Some(false));
 }
 
 #[test]

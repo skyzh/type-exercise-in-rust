@@ -2,10 +2,10 @@
 
 # Chapter 6: Make Arity Systematic
 
-Chapter 5 chose one typed binary adapter before each batch. The operation itself is still tiny—add,
-subtract, multiply, or divide two scalar values—but the adapters repeat the same nullable row loop.
-That is the wrong ownership boundary: adding a scalar operation should not require copying batch
-machinery.
+Chapter 5 chose one typed binary adapter before each batch and already centralized both infallible
+and fallible binary traversal in the core package. The facade delegates instead of repeating a row
+loop. The remaining boundary is incomplete: validation is still private, and unary and ternary
+scalar callbacks do not yet have the same reusable core path.
 
 This chapter moves reusable row machinery into the core package. You will publish the validator and
 implement monomorphized evaluators for the taught unary, binary, and ternary callback shapes. A
@@ -17,19 +17,20 @@ contracts differ.
 ## What is in the starter
 
 Begin from your completed Chapter 5 workspace. In `expr/src/numeric.rs`, selected arithmetic adapters
-still contain repeated batch mechanics. `validate_expression_inputs` is private. The file ends with
-comment shells for the Day 6 additions:
+already delegate to the core binary helpers. `validate_expression_inputs` is private. The file ends
+with comment shells for the Day 6 additions:
 
 - the public shared validator;
-- the three shared auto-vectorizers and their nullable/fallible thin adapters;
+- shared unary and ternary evaluators alongside the existing binary boundary;
 - scalar-only negation and clamp operations plus generated physical selectors;
 - the physical numeric `neg` and `clamp` builders; and
 - the core visibility change that publishes the shared validator, plus removal of Chapter 5's
   facade-local duplicate so the facade's existing core re-export exposes the shared function.
 
-You own those additions and the contextual invalid-bound error used by `clamp`. Remove repeated
-operation loops as you route them through the shared helpers. Logical function registration waits
-until Chapter 11, and a fourth arity is not part of this chapter.
+You own those additions and the contextual invalid-bound error used by `clamp`. Keep the new unary
+and ternary adapters free of operation-specific row loops as you route them through the shared
+helpers. Logical function registration waits until Chapter 11, and a fourth arity is not part of
+this chapter.
 
 Chapter 6 has three cumulative supplied checkpoints. Copy the first one before editing:
 
@@ -85,10 +86,11 @@ The ternary API is still absent.
 
 ## Checkpoint 2: move each callback shape into a shared core loop
 
-Implement the shared unary, binary, and ternary evaluators. Each is generic over concrete scalar
-families and the callback type, so Rust monomorphizes the call. Each helper validates and recovers
-typed borrowed columns once, then owns its reusable row loop in the core package. Start the ternary
-path with the checkpoint's `(i16, i32, i64) -> i64` witness.
+Implement shared unary and ternary evaluators and preserve the reusable binary boundary from Chapter
+5. Each helper is generic over concrete scalar families and the callback type, so Rust
+monomorphizes the call. Each helper validates and recovers typed borrowed columns once, then owns its
+reusable row loop in the core package. Start the ternary path with the checkpoint's `(i16, i32,
+i64) -> i64` witness.
 
 The selected generated adapter follows the boundary you already built:
 
