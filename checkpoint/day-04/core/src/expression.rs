@@ -151,12 +151,8 @@ mod tests {
         let strings: ArrayImpl = StringArray::from_slice(&[Some("wrong")]).into();
         let valid = ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1);
 
-        let left_error = evaluate_binary(
-            &I32Add,
-            ColumnViewImpl::array(&strings),
-            valid.clone(),
-        )
-        .unwrap_err();
+        let left_error =
+            evaluate_binary(&I32Add, ColumnViewImpl::array(&strings), valid.clone()).unwrap_err();
         assert_eq!(
             left_error.to_string(),
             "input 0 type mismatch: expected Int32, got String"
@@ -168,8 +164,8 @@ mod tests {
         assert_eq!(left_cause.actual, PhysicalType::String);
         assert_eq!(left_error.chain().count(), 2);
 
-        let right_error = evaluate_binary(&I32Add, valid, ColumnViewImpl::array(&strings))
-            .unwrap_err();
+        let right_error =
+            evaluate_binary(&I32Add, valid, ColumnViewImpl::array(&strings)).unwrap_err();
         assert_eq!(
             right_error.to_string(),
             "input 1 type mismatch: expected Int32, got String"
