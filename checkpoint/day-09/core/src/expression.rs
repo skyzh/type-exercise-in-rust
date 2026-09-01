@@ -697,7 +697,15 @@ impl<const N: usize> BatchExpression<N> {
 
     pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         validate_expression_inputs(inputs, &self.input_types)?;
-        (self.kernel)(self, inputs)
+        let output = (self.kernel)(self, inputs)?;
+        if output.physical_type() != self.output_type {
+            anyhow::bail!(
+                "output type mismatch: expected {:?}, got {:?}",
+                self.output_type,
+                output.physical_type()
+            );
+        }
+        Ok(output)
     }
 }
 

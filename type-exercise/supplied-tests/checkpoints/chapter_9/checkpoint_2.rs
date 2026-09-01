@@ -1,4 +1,4 @@
-use std::any::Any;
+use std::any::{Any, TypeId};
 
 use crate::{
     Array, ArrayBuilder, ArrayImpl, BatchExpression, BinaryExpression, ColumnView, ColumnViewImpl,
@@ -34,6 +34,20 @@ fn mixed_fixed_width_add_batch(inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<
         );
     }
     Ok(output.finish().into())
+}
+
+fn mismatched_batch_output(
+    _expression: &BatchExpression<2>,
+    inputs: &[ColumnViewImpl<'_>],
+) -> anyhow::Result<ArrayImpl> {
+    mixed_fixed_width_add_batch(inputs)
+}
+
+fn panic_if_generic_kernel_is_called(
+    _expression: &BatchExpression<2>,
+    _inputs: &[ColumnViewImpl<'_>],
+) -> anyhow::Result<ArrayImpl> {
+    panic!("invalid inputs must be rejected before the batch kernel")
 }
 
 fn checked_neg_batch(
@@ -116,6 +130,12 @@ fn checkpoint_1_evaluates_one_typed_expression_through_a_trait_object() {
 #[test]
 fn checkpoint_1_erased_expression_boundary_is_any_send_and_sync() {
     assert_expression_bounds::<dyn Expression>();
+    let expression: Box<dyn Expression> =
+        Box::new(PrimitiveBinaryExpression::new("any_probe", I32Add));
+    assert_eq!(
+        expression.as_ref().type_id(),
+        TypeId::of::<PrimitiveBinaryExpression<I32Add>>()
+    );
 }
 
 #[test]
@@ -132,6 +152,18 @@ fn checkpoint_2_rejects_a_kernel_result_with_wrong_metadata() {
             ColumnViewImpl::array(&values),
             ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 1),
         ]);
+    assert!(result.is_err());
+
+    let expression = BatchExpression::new(
+        "mismatched_batch_output",
+        [PhysicalType::Int32, PhysicalType::Int32],
+        PhysicalType::Bool,
+        mismatched_batch_output,
+    );
+    let result = expression.evaluate(&[
+        ColumnViewImpl::array(&values),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 1),
+    ]);
     assert!(result.is_err());
 }
 
@@ -159,25 +191,29 @@ fn checkpoint_2_preserves_strict_nulls_through_erasure() {
 }
 
 #[test]
-fn checkpoint_2_rejects_arity_before_indexing_inputs() {
-    let expression: Box<dyn Expression> = Box::new(BinaryExpression::new(
-        "mixed_fixed_width_add",
+fn checkpoint_2_generic_adapter_validates_before_calling_its_kernel() {
+    let expression = BatchExpression::new(
+        "validation_probe",
         [PhysicalType::Int32, PhysicalType::Int32],
         PhysicalType::Int32,
-        mixed_fixed_width_add_batch,
-    ));
+        panic_if_generic_kernel_is_called,
+    );
     assert!(expression.evaluate(&[]).is_err());
+
+    let strings: ArrayImpl = StringArray::from_slice(&[Some("wrong")]).into();
     assert!(
         expression
-            .evaluate(&[ColumnViewImpl::null(PhysicalType::Int32, 1)])
+            .evaluate(&[
+                ColumnViewImpl::array(&strings),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
+            ])
             .is_err()
     );
     assert!(
         expression
             .evaluate(&[
                 ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
-                ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 1),
-                ColumnViewImpl::null(PhysicalType::Int32, 1),
+                ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 2),
             ])
             .is_err()
     );
