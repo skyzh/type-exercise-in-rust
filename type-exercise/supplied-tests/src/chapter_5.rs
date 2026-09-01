@@ -18,6 +18,10 @@ fn arithmetic_selects_one_infallible_or_fallible_batch_kernel() {
         env!("CARGO_MANIFEST_DIR"),
         "/../core/src/expression.rs"
     ));
+    let physical_type = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../core/src/physical_type.rs"
+    ));
     assert!(expression.contains("pub struct BinaryExpression"));
     assert!(expression.contains("kernel: BinaryBatchKernel"));
     assert!(expression.contains("pub fn auto_vectorize_binary"));
@@ -25,8 +29,48 @@ fn arithmetic_selects_one_infallible_or_fallible_batch_kernel() {
         expression.contains("pub fn try_auto_vectorize_binary")
             || expression.contains("pub fn try_evaluate_binary")
     );
+    let fallible_name = if expression.contains("pub fn try_auto_vectorize_binary") {
+        "pub fn try_auto_vectorize_binary"
+    } else {
+        "pub fn try_evaluate_binary"
+    };
+    let fallible = expression
+        .split(fallible_name)
+        .nth(1)
+        .unwrap()
+        .split("\n}\n")
+        .next()
+        .unwrap();
+    assert!(fallible.contains("F: Fn(L, R) -> Result<O, E>"));
+    assert!(fallible.contains("E: Display"));
+    assert!(!fallible.contains("F: Fn(L, R) -> anyhow::Result<O>"));
     assert!(!expression.contains("operator: ArithmeticOperator"));
     assert!(!source.contains("for row in"));
+
+    let checked_divide = source
+        .split("trait CheckedDivide")
+        .nth(1)
+        .unwrap()
+        .split("fn lossless_try_from")
+        .next()
+        .unwrap();
+    assert_eq!(
+        checked_divide.matches("Result<Self, &'static str>").count(),
+        6
+    );
+    assert!(!checked_divide.contains("anyhow::Result<Self>"));
+    if source.contains("fn divide_number") {
+        let divide_number = source
+            .split("fn divide_number")
+            .nth(1)
+            .unwrap()
+            .split("\n}\n")
+            .next()
+            .unwrap();
+        assert!(divide_number.contains("Result<O, &'static str>"));
+        assert!(!divide_number.contains("anyhow::Result<O>"));
+    }
+    assert!(physical_type.contains("for_each_physical_family!(define_family_catalog)"));
 
     let selector = source
         .split("fn numeric_binary_kernel")
@@ -322,21 +366,29 @@ fn signed_arithmetic_wraps_and_division_reports_a_batch_error() {
     );
     let numerators: ArrayImpl = I32Array::from_values(vec![8, 9, 10]).into();
     let divisors: ArrayImpl = I32Array::from_values(vec![2, 0, 5]).into();
+    let division_by_zero = divide
+        .evaluate(&[
+            ColumnViewImpl::array(&numerators),
+            ColumnViewImpl::array(&divisors),
+        ])
+        .unwrap_err();
     assert!(
-        divide
-            .evaluate(&[
-                ColumnViewImpl::array(&numerators),
-                ColumnViewImpl::array(&divisors)
-            ])
-            .is_err()
+        division_by_zero
+            .to_string()
+            .contains("row 1: division by zero"),
+        "{division_by_zero:#}"
     );
+    let overflow = divide
+        .evaluate(&[
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(i32::MIN), 1),
+            ColumnViewImpl::constant(ScalarRefImpl::Int32(-1), 1),
+        ])
+        .unwrap_err();
     assert!(
-        divide
-            .evaluate(&[
-                ColumnViewImpl::constant(ScalarRefImpl::Int32(i32::MIN), 1),
-                ColumnViewImpl::constant(ScalarRefImpl::Int32(-1), 1),
-            ])
-            .is_err()
+        overflow
+            .to_string()
+            .contains("row 0: signed integer division overflow"),
+        "{overflow:#}"
     );
 }
 

@@ -150,10 +150,13 @@ be a separate product-semantic decision rather than part of this generic refacto
 implementations use the standard traits directly and retain ordinary IEEE results.
 
 Division stays the one small custom fallible operation because stable `std` has no single checked
-division trait covering both the course's integers and floats. Integer division returns an
-ordinary error with the cause `division by zero` for zero or `signed integer division overflow`
-for `MIN / -1`. Treat both `0.0` and `-0.0` floating-point divisors as division by zero; other
-results such as infinity or NaN remain values.
+division trait covering both the course's integers and floats. Keep its per-row signal cheap:
+`checked_divide` returns `Result<T, &'static str>`, not a dynamically allocated error. A successful
+row creates no error text or context. Only when the outer batch loop sees the first failure does it
+format the row and function context into the public `anyhow::Error`. Integer division reports
+`division by zero` for zero or `signed integer division overflow` for `MIN / -1`. Treat both `0.0`
+and `-0.0` floating-point divisors as division by zero; other results such as infinity or NaN
+remain values.
 
 The important Rust boundary is where all three generic types become concrete. The physical
 builder matches the validated `(operator, left, right, output)` choice once and stores only the
