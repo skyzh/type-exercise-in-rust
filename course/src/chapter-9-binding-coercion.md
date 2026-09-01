@@ -18,7 +18,7 @@ cargo test -p type-exercise-starter-supplied-tests chapter_9 --locked
 ```
 
 Define the object-safe `Expression: Any + Send + Sync` trait with name, input physical types,
-output type, nullability, and `evaluate`. Store the complete input signature as a slice; deriving
+output type, and `evaluate`. Store the complete input signature as a slice; deriving
 arity from `input_types().len()` keeps unary, binary, and ternary metadata consistent.
 
 Adapt one existing typed builtin to `Box<dyn Expression>`. The checkpoint proves both successful

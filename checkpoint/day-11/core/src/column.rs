@@ -1,17 +1,15 @@
 use anyhow::{Result, anyhow};
 use bitvec::vec::BitVec;
 
-use crate::{Array, ArrayImpl, Nullability, PhysicalType, Scalar, ScalarRefImpl, TypeMismatch};
+use crate::{Array, ArrayImpl, PhysicalType, Scalar, ScalarRefImpl, TypeMismatch};
 
 /// A borrowed column whose scalar and array types are known only at runtime.
 ///
-/// The public wrapper keeps its representation enum private, so callers must use the checked
-/// constructors instead of creating an unvalidated indexed view. It also carries nullability once
-/// for the whole batch instead of repeating that metadata in every representation variant.
+/// The public wrapper keeps construction checked while the private kind prevents
+/// callers from bypassing those checks.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ColumnViewImpl<'a> {
     kind: ColumnViewImplKind<'a>,
-    nullability: Nullability,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -54,17 +52,7 @@ impl<'a> ColumnViewImpl<'a> {
     pub fn array(array: &'a ArrayImpl) -> Self {
         Self {
             kind: ColumnViewImplKind::Array(array),
-            nullability: Nullability::Nullable,
         }
-    }
-
-    pub fn try_non_null_array(array: &'a ArrayImpl) -> Option<Self> {
-        (0..array.len())
-            .all(|row| array.get(row).is_some())
-            .then_some(Self {
-                kind: ColumnViewImplKind::Array(array),
-                nullability: Nullability::NonNull,
-            })
     }
 
     pub fn constant(value: ScalarRefImpl<'a>, len: usize) -> Self {
@@ -74,7 +62,6 @@ impl<'a> ColumnViewImpl<'a> {
                 physical_type: value.physical_type(),
                 len,
             },
-            nullability: Nullability::NonNull,
         }
     }
 
@@ -85,7 +72,6 @@ impl<'a> ColumnViewImpl<'a> {
                 physical_type,
                 len,
             },
-            nullability: Nullability::Nullable,
         }
     }
 
@@ -104,7 +90,6 @@ impl<'a> ColumnViewImpl<'a> {
 
         Ok(Self {
             kind: ColumnViewImplKind::Indexed { indices, values },
-            nullability: Nullability::Nullable,
         })
     }
 
@@ -126,10 +111,6 @@ impl<'a> ColumnViewImpl<'a> {
             ColumnViewImplKind::Constant { physical_type, .. } => physical_type.clone(),
             ColumnViewImplKind::Indexed { values, .. } => values.physical_type(),
         }
-    }
-
-    pub fn nullability(&self) -> Nullability {
-        self.nullability
     }
 
     /// Return one erased scalar after the caller has checked the row bound.

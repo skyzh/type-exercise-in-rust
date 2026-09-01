@@ -29,9 +29,8 @@
 //! Day 11: bind the Day 8 three-valued Boolean expressions here.
 // fn bind_boolean(/* name, operator, and inputs */) -> Result<BoundExpression, BindError>;
 //
-//! Day 11: delegate output nullability and forward a preselected primitive loop here.
+//! Day 11: forward a preselected primitive loop here.
 // impl BoundExpression {
-//     /* pub fn output_nullability(&self, inputs: &[Nullability]) -> Nullability */
 //     pub fn evaluate_with_loop(
 //         &self,
 //         inputs: &[ColumnViewImpl<'_>],

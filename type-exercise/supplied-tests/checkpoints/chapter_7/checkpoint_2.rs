@@ -50,6 +50,32 @@ fn checkpoint_1_keeps_indexed_detection_separate() {
 
 #[test]
 fn checkpoint_2_selects_all_four_raw_shapes() {
+    let core_source = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../core/src/expression.rs"
+    ));
+    let facade_source = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../expr/src/numeric.rs"
+    ));
+    assert!(core_source.contains("pub trait Expression: Send + Sync"));
+    for forbidden in [
+        "Expression: Any",
+        "fn name(&self)",
+        "fn input_types(&self)",
+        "fn output_type(&self)",
+        "output_nullability",
+    ] {
+        assert!(
+            !core_source.contains(forbidden),
+            "Chapter 9 metadata leaked into Day 7 core: {forbidden}"
+        );
+        assert!(
+            !facade_source.contains(forbidden),
+            "Chapter 9 metadata leaked into Day 7 facade: {forbidden}"
+        );
+    }
+
     let expression = PrimitiveBinaryExpression::new("i32_add", I32Add);
     let left: ArrayImpl = I32Array::from_slice(&[Some(10), None, Some(30)]).into();
     let right: ArrayImpl = I32Array::from_slice(&[Some(1), Some(2), None]).into();

@@ -20,6 +20,16 @@ fn checkpoint_1_binds_raw_i32_arrays_and_constants() {
     }
     assert!(!source.contains("pub enum RawI32Column"));
     assert!(!source.contains("pub fn as_raw_i32"));
+    for forbidden in [
+        "enum Nullability",
+        "try_non_null_array",
+        "fn nullability(&self)",
+    ] {
+        assert!(
+            !source.contains(forbidden),
+            "Day 7 must not expose stale nullability API: {forbidden}"
+        );
+    }
 }
 
 #[test]

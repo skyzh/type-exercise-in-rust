@@ -23,7 +23,7 @@ You own two additions in this chapter:
 1. a representation-erased borrowed view with checked constructors; and
 2. a typed borrowed view that checks one physical family before row access.
 
-Later relationships in the starter remain comments. Do not implement Day 7 nullability proofs or
+Later relationships in the starter remain comments. Do not implement Day 7 raw specialization or
 Day 12 List views here.
 
 Copy the cumulative supplied test before editing:

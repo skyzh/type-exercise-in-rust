@@ -25,10 +25,10 @@
 // pub fn build_builtin_expression(name: &str) -> Option<Box<dyn Expression>>;
 // pub const BUILTIN_EXPRESSION_NAMES: &[&str];
 //
-//! Day 7, checkpoint 1: add one representative batch loop choice here. Select it only from checked physical `Nullability` metadata while keeping one primitive array representation.
-//     /* fn output_nullability(&self, inputs: &[Nullability]) -> Nullability */
+//! Day 7, checkpoint 2: add one representative batch loop choice here. Select it once from
+//! private raw values/validity, with Indexed inputs using the existing general fallback.
 // pub enum PrimitiveLoop { /* supported dense loops plus general fallback */ }
-// pub struct PrimitiveBinaryExpression<F> { /* typed i32 function plus runtime metadata */ }
+// pub struct PrimitiveBinaryExpression<F> { /* typed i32 function plus checked input types */ }
 // impl<F> PrimitiveBinaryExpression<F> {
 //     pub fn new(name: &'static str, function: F) -> Self;
 // }

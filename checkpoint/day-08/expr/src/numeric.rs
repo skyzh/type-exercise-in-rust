@@ -231,15 +231,6 @@ impl NumericComparisonExpression {
 }
 
 impl Expression for NumericComparisonExpression {
-    fn name(&self) -> &'static str {
-        self.name
-    }
-    fn input_types(&self) -> &[PhysicalType] {
-        &self.input_types
-    }
-    fn output_type(&self) -> PhysicalType {
-        PhysicalType::Bool
-    }
     fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         self.evaluate(inputs)
     }
@@ -259,15 +250,6 @@ impl NumericNegExpression {
 }
 
 impl Expression for NumericNegExpression {
-    fn name(&self) -> &'static str {
-        self.name
-    }
-    fn input_types(&self) -> &[PhysicalType] {
-        &self.input_types
-    }
-    fn output_type(&self) -> PhysicalType {
-        self.input_types[0].clone()
-    }
     fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         self.evaluate(inputs)
     }
@@ -296,15 +278,6 @@ impl NumericClampExpression {
 }
 
 impl Expression for NumericClampExpression {
-    fn name(&self) -> &'static str {
-        self.name
-    }
-    fn input_types(&self) -> &[PhysicalType] {
-        &self.input_types
-    }
-    fn output_type(&self) -> PhysicalType {
-        self.output_type.clone()
-    }
     fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         self.evaluate(inputs)
     }

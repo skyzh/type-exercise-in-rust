@@ -4,7 +4,7 @@ use std::fmt::{Display, Formatter};
 
 use crate::{
     ArithmeticOperator, ArrayImpl, BooleanOperator, ColumnViewImpl, ComparisonOperator, DataType,
-    Expression, I32Add, Nullability, PhysicalType, PrimitiveBinaryExpression, PrimitiveLoop,
+    Expression, I32Add, PhysicalType, PrimitiveBinaryExpression, PrimitiveLoop,
     build_bool_comparison_expression, build_boolean_expression, build_numeric_binary_expression,
     build_numeric_clamp_expression, build_numeric_comparison_expression,
     build_numeric_neg_expression, build_string_comparison_expression,
@@ -131,10 +131,6 @@ impl BoundExpression {
 
     pub fn physical_name(&self) -> &'static str {
         self.expression.name()
-    }
-
-    pub fn output_nullability(&self, inputs: &[Nullability]) -> Nullability {
-        self.expression.output_nullability(inputs)
     }
 
     pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {

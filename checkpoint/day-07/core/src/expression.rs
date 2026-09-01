@@ -1,6 +1,3 @@
-use std::any::Any;
-
-use crate::Nullability;
 use bitvec::vec::BitVec;
 
 use crate::column::RawI32Column;
@@ -9,23 +6,7 @@ use crate::{
     TypeMismatch,
 };
 
-pub trait Expression: Any + Send + Sync {
-    fn name(&self) -> &'static str;
-    fn input_types(&self) -> &[crate::PhysicalType];
-    fn arity(&self) -> usize {
-        self.input_types().len()
-    }
-    fn output_type(&self) -> crate::PhysicalType;
-    fn output_nullability(&self, inputs: &[Nullability]) -> Nullability {
-        if inputs
-            .iter()
-            .all(|nullability| *nullability == Nullability::NonNull)
-        {
-            Nullability::NonNull
-        } else {
-            Nullability::Nullable
-        }
-    }
+pub trait Expression: Send + Sync {
     fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl>;
     fn evaluate_with_loop(
         &self,
@@ -106,7 +87,6 @@ where
 }
 
 pub struct PrimitiveBinaryExpression<F> {
-    name: &'static str,
     input_types: [crate::PhysicalType; 2],
     function: F,
 }
@@ -197,38 +177,10 @@ impl<F> PrimitiveBinaryExpression<F>
 where
     F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32>,
 {
-    pub fn new(name: &'static str, function: F) -> Self {
+    pub fn new(_name: &'static str, function: F) -> Self {
         Self {
-            name,
             input_types: [crate::PhysicalType::Int32, crate::PhysicalType::Int32],
             function,
-        }
-    }
-
-    pub fn name(&self) -> &'static str {
-        self.name
-    }
-
-    pub fn input_types(&self) -> &[crate::PhysicalType] {
-        &self.input_types
-    }
-
-    pub fn arity(&self) -> usize {
-        self.input_types.len()
-    }
-
-    pub fn output_type(&self) -> crate::PhysicalType {
-        crate::PhysicalType::Int32
-    }
-
-    pub fn output_nullability(&self, inputs: &[Nullability]) -> Nullability {
-        if inputs
-            .iter()
-            .all(|nullability| *nullability == Nullability::NonNull)
-        {
-            Nullability::NonNull
-        } else {
-            Nullability::Nullable
         }
     }
 
@@ -389,10 +341,10 @@ impl BinaryExpression {
         &self,
         inputs: &[ColumnViewImpl<'_>],
     ) -> anyhow::Result<(ArrayImpl, PrimitiveLoop)> {
-        if inputs.len() != self.arity() {
+        if inputs.len() != self.input_types.len() {
             anyhow::bail!(
                 "input arity mismatch: expected {}, got {}",
-                self.arity(),
+                self.input_types.len(),
                 inputs.len()
             );
         }
@@ -431,52 +383,9 @@ impl BinaryExpression {
         }
         Ok((output, selected_loop))
     }
-
-    pub fn name(&self) -> &'static str {
-        self.name
-    }
-
-    pub fn input_types(&self) -> &[crate::PhysicalType] {
-        &self.input_types
-    }
-
-    pub fn arity(&self) -> usize {
-        self.input_types.len()
-    }
-
-    pub fn output_type(&self) -> crate::PhysicalType {
-        self.output_type.clone()
-    }
-
-    pub fn output_nullability(&self, inputs: &[Nullability]) -> Nullability {
-        if inputs
-            .iter()
-            .all(|nullability| *nullability == Nullability::NonNull)
-        {
-            Nullability::NonNull
-        } else {
-            Nullability::Nullable
-        }
-    }
 }
 
 impl Expression for BinaryExpression {
-    fn name(&self) -> &'static str {
-        self.name()
-    }
-
-    fn input_types(&self) -> &[crate::PhysicalType] {
-        self.input_types()
-    }
-
-    fn output_type(&self) -> crate::PhysicalType {
-        self.output_type()
-    }
-
-    fn output_nullability(&self, inputs: &[Nullability]) -> Nullability {
-        self.output_nullability(inputs)
-    }
-
     fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         self.evaluate(inputs)
     }

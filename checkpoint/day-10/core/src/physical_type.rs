@@ -17,13 +17,6 @@ pub enum PhysicalType {
     // Day 12 adds `List(Box<PhysicalType>)`.
 }
 
-/// Whether a physical column may contain null rows.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum Nullability {
-    NonNull,
-    Nullable,
-}
-
 /// A descriptor-free family tag used only for catalog completeness.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum PhysicalFamily {

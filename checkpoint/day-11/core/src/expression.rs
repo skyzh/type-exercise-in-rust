@@ -4,8 +4,8 @@ use bitvec::vec::BitVec;
 
 use crate::column::RawI32Column;
 use crate::{
-    Array, ArrayBuilder, ArrayImpl, ColumnView, ColumnViewImpl, I32Array, Nullability,
-    PhysicalType, Scalar, ScalarRefImpl, TypeMismatch,
+    Array, ArrayBuilder, ArrayImpl, ColumnView, ColumnViewImpl, I32Array, PhysicalType, Scalar,
+    ScalarRefImpl, TypeMismatch,
 };
 
 /// A runtime-erased expression with discoverable physical metadata.
@@ -16,16 +16,6 @@ pub trait Expression: Any + Send + Sync {
         self.input_types().len()
     }
     fn output_type(&self) -> PhysicalType;
-    fn output_nullability(&self, inputs: &[Nullability]) -> Nullability {
-        if inputs
-            .iter()
-            .all(|nullability| *nullability == Nullability::NonNull)
-        {
-            Nullability::NonNull
-        } else {
-            Nullability::Nullable
-        }
-    }
     fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl>;
     fn evaluate_with_loop(
         &self,
@@ -499,10 +489,6 @@ where
             input_types: [PhysicalType::Int32, PhysicalType::Int32],
             function,
         }
-    }
-
-    pub fn output_nullability(&self, inputs: &[Nullability]) -> Nullability {
-        <Self as Expression>::output_nullability(self, inputs)
     }
 
     pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {

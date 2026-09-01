@@ -59,8 +59,8 @@ cargo check -p type-exercise-starter-core --locked
 
 The 19 focused tests cover successful numeric, Boolean, comparison, and string calls; unknown
 names; unsupported and lossy signatures; inconsistent factory metadata; arbitrary arity slices;
-custom registration; checked runtime errors; and nullability propagation through both physical
-and bound expressions.
+custom registration; checked runtime errors; and metadata validation through both physical and
+bound expressions.
 
 The dependency direction remains important. The facade owns concrete operations and the builtin
 registry. Core owns only the generic registry and erased expression vocabulary needed to store a

@@ -213,6 +213,20 @@ fn raw_loops_are_branch_free_and_preserve_operand_order() {
         env!("CARGO_MANIFEST_DIR"),
         "/../core/src/expression.rs"
     ));
+    let column_source = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../core/src/column.rs"
+    ));
+    for forbidden in [
+        "enum Nullability",
+        "try_non_null_array",
+        "fn nullability(&self)",
+    ] {
+        assert!(
+            !column_source.contains(forbidden),
+            "stale public column API: {forbidden}"
+        );
+    }
     for helper in [
         "fn raw_array_array",
         "fn raw_array_constant",
