@@ -74,9 +74,17 @@ fn checkpoint_2_strict_unary_vectorization_skips_null_rows() {
 
 #[test]
 fn checkpoint_2_runs_one_direct_mixed_ternary_evaluator() {
+    let core = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../core/src/expression.rs"
+    ));
+    assert!(core.contains("pub fn try_evaluate_ternary<A, B, C, O, F, E>"));
+    assert!(core.contains("F: Fn(A, B, C) -> Result<O, E>"));
+    assert!(core.contains("E: Display"));
+
     let values: ArrayImpl = I16Array::from_slice(&[Some(5), None, Some(25)]).into();
     let uppers: ArrayImpl = I64Array::from_values(vec![20, 0, 20]).into();
-    let output = try_evaluate_ternary::<i16, i32, i64, i64, _>(
+    let output = try_evaluate_ternary::<i16, i32, i64, i64, _, _>(
         ColumnViewImpl::array(&values),
         ColumnViewImpl::constant(ScalarRefImpl::Int32(10), 3),
         ColumnViewImpl::array(&uppers),
@@ -85,7 +93,7 @@ fn checkpoint_2_runs_one_direct_mixed_ternary_evaluator() {
             let value = i64::from(value);
             let lower = i64::from(lower);
             if lower > upper {
-                anyhow::bail!("invalid clamp bounds");
+                return Err("invalid clamp bounds");
             }
             Ok(value.clamp(lower, upper))
         },

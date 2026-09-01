@@ -379,7 +379,7 @@ where
 }
 
 /// Lift one fallible scalar function over three nullable columns.
-pub fn try_evaluate_ternary<A, B, C, O, F>(
+pub fn try_evaluate_ternary<A, B, C, O, F, E>(
     first: ColumnViewImpl<'_>,
     second: ColumnViewImpl<'_>,
     third: ColumnViewImpl<'_>,
@@ -391,7 +391,8 @@ where
     B: Scalar + Copy,
     C: Scalar + Copy,
     O: Scalar + Copy,
-    F: Fn(A, B, C) -> anyhow::Result<O>,
+    F: Fn(A, B, C) -> Result<O, E>,
+    E: Display,
     for<'a> A: Scalar<RefType<'a> = A>,
     for<'a> B: Scalar<RefType<'a> = B>,
     for<'a> C: Scalar<RefType<'a> = C>,

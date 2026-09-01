@@ -7,7 +7,7 @@ use crate::{
 };
 
 #[test]
-fn scalar_operations_reuse_exactly_one_loop_per_arity() {
+fn scalar_operations_delegate_to_shared_arity_loops() {
     let facade = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../expr/src/numeric.rs"
@@ -20,7 +20,12 @@ fn scalar_operations_reuse_exactly_one_loop_per_arity() {
     assert!(facade.contains("fn clamp_number<O: Numeric>"));
     assert!(core.contains("pub fn evaluate_unary"));
     assert!(core.contains("pub fn auto_vectorize_binary"));
-    assert!(core.contains("pub fn try_evaluate_ternary"));
+    assert!(core.contains("pub fn try_evaluate_ternary<A, B, C, O, F, E>"));
+    assert!(core.contains("F: Fn(A, B, C) -> Result<O, E>"));
+    assert!(core.contains("E: Display"));
+    assert!(facade.contains(
+        "fn clamp_number<O: Numeric>(value: O, lower: O, upper: O) -> Result<O, &'static str>"
+    ));
     assert!(!facade.contains("for row in 0.."));
 
     for adapter in [
