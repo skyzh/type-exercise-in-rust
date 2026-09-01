@@ -13,7 +13,7 @@ pub use type_exercise_starter_core::*;
 // public Boolean expression surface.
 // mod boolean;
 // pub use boolean::*;
-// Checkpoint 2: complete array evaluation, metadata, validation, and core integration.
+// Checkpoint 2: add public metadata and verify array-backed and invalid batches.
 
 // Day 10: enable variable-width scalar operations after the core writer evaluator exists.
 // mod string;
