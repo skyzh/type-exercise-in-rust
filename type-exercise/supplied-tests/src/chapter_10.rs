@@ -28,7 +28,10 @@ fn consumed_writer_is_the_only_non_null_publication_path() {
         env!("CARGO_MANIFEST_DIR"),
         "/../core/src/expression.rs"
     ));
-    let scalar = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../src/string.rs"));
+    let scalar = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../expr/src/string.rs"
+    ));
     assert!(array.contains("pub struct Writer<'a>"));
     assert!(array.contains("pub struct WriterUsed<'a>"));
     assert!(array.contains("pub fn write(self"));

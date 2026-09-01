@@ -183,7 +183,10 @@ fn delegates_length_errors_to_the_typed_boundary() {
 
 #[test]
 fn i32_builtin_uses_the_shared_binary_auto_vectorizer() {
-    let binder = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../src/binder.rs"));
+    let binder = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../expr/src/binder.rs"
+    ));
     assert!(binder.contains("PrimitiveBinaryExpression::new(\"i32_add\", I32Add)"));
     let core = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),

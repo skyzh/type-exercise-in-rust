@@ -1,6 +1,6 @@
 //! Learner-owned core expression checkpoints.
 //!
-//! This file is compiled by the nested `type-exercise-starter-core` package. It owns every row
+//! This file is compiled by the sibling `type-exercise-starter-core` package. It owns every row
 //! traversal. Facade operation modules supply scalar callbacks and never write batch loops.
 //!
 //! Day 4: define `BinaryScalarFunction`, `evaluate_binary`, and the first fixed-width

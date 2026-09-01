@@ -232,7 +232,7 @@ mod tests {
         )
         .unwrap();
         fs::create_dir_all(root.path().join("type-exercise-starter/supplied-tests")).unwrap();
-        fs::create_dir_all(root.path().join("type-exercise-starter/src")).unwrap();
+        fs::create_dir_all(root.path().join("type-exercise-starter/expr/src")).unwrap();
         fs::write(source.join("chapter_1.rs"), b"fn four() {}\n").unwrap();
         for checkpoint in 1..=3 {
             fs::write(
@@ -344,7 +344,8 @@ mod tests {
         )
         .unwrap();
         fs::write(
-            root.path().join("type-exercise-starter/src/learner.rs"),
+            root.path()
+                .join("type-exercise-starter/expr/src/learner.rs"),
             b"// learner-owned\n",
         )
         .unwrap();
@@ -368,7 +369,11 @@ mod tests {
             .unwrap()
         );
         assert_eq!(
-            fs::read(root.path().join("type-exercise-starter/src/learner.rs")).unwrap(),
+            fs::read(
+                root.path()
+                    .join("type-exercise-starter/expr/src/learner.rs")
+            )
+            .unwrap(),
             b"// learner-owned\n"
         );
     }

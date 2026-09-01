@@ -14,7 +14,7 @@ adapter then supplies only an ordinary scalar function such as `neg_number(value
 
 ## What is in the starter
 
-Begin from your completed Chapter 5 workspace. In `src/numeric.rs`, selected arithmetic adapters
+Begin from your completed Chapter 5 workspace. In `expr/src/numeric.rs`, selected arithmetic adapters
 still contain repeated batch mechanics. `validate_expression_inputs` is private. The file ends with
 comment shells for the Day 6 additions:
 
@@ -22,7 +22,8 @@ comment shells for the Day 6 additions:
 - the three shared auto-vectorizers and their nullable/fallible thin adapters;
 - scalar-only negation and clamp operations plus generated physical selectors;
 - the physical numeric `neg` and `clamp` builders; and
-- the exact re-export to add in `src/lib.rs`.
+- the core visibility change that publishes the shared validator through the facade's existing
+  core re-export.
 
 You own those additions and the contextual invalid-bound error used by `clamp`. Remove repeated
 operation loops as you route them through the shared helpers. Logical function registration waits
@@ -60,10 +61,13 @@ later wrong length return contextual `anyhow` messages with expected and actual 
 input index where applicable. This does not require a four-input expression. It proves that
 validation itself is not binary-specific.
 
-Publish only the validator from `src/lib.rs`:
+Make only the validator public in `core/src/expression.rs`. The core package already exports its
+expression module through `core/src/lib.rs`, and the facade already re-exports that core surface:
 
 ```rust,ignore
-pub use type_exercise_starter_core::validate_expression_inputs;
+pub fn validate_expression_inputs(/* existing arguments */) -> anyhow::Result<usize> {
+    // existing validation order
+}
 ```
 
 Run the same checkpoint again:
@@ -109,7 +113,7 @@ is still missing.
 
 ## Checkpoint 3: author scalar work and generate adapters
 
-Finish `src/numeric.rs` with the crate-private physical builders named by the starter:
+Finish `expr/src/numeric.rs` with the crate-private physical builders named by the starter:
 `build_numeric_neg_expression` and `build_numeric_clamp_expression`. They receive already-selected
 physical families, just as Chapter 5's binary builder does. Chapter 11 will place logical name
 binding in front of them.

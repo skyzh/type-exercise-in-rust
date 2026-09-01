@@ -14,9 +14,9 @@ need to materialize another array first.
 ## What is in the starter
 
 Begin from your completed Chapter 2 workspace. The scalar, array, erasure, logical-type, and
-Decimal work from the first two chapters is already present. `src/column.rs` contains only the Day
+Decimal work from the first two chapters is already present. `core/src/column.rs` contains only the Day
 3 comment shells for `ColumnViewImpl<'a>` and `ColumnView<'a, S>`. The `column` module and its public
-exports remain commented in `src/lib.rs`.
+exports remain commented in `core/src/lib.rs`; the facade re-exports the core package.
 
 You own two additions in this chapter:
 
@@ -39,7 +39,7 @@ has a library compile gate and Checkpoint 2 makes the focused test green.
 
 ## Checkpoint 1: Borrow each physical representation
 
-Open `src/column.rs` and implement `ColumnViewImpl<'a>`. It represents four ways a batch can supply
+Open `core/src/column.rs` and implement `ColumnViewImpl<'a>`. It represents four ways a batch can supply
 logical rows:
 
 | Representation | Borrowed state | Logical length | Physical type |
@@ -115,7 +115,7 @@ still carry an erased Decimal array and preserve its exact `PhysicalType::Decima
 Decimal does not implement the static `Scalar` relationship, so it is not a `ColumnView<Decimal>`
 family in this chapter.
 
-Finish the public export in `src/lib.rs`:
+Finish the public export in `core/src/lib.rs`:
 
 ```rust,ignore
 pub use column::{ColumnView, ColumnViewImpl};

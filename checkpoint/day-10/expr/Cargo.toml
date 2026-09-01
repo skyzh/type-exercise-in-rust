@@ -1,5 +1,5 @@
 [package]
-name = "type-exercise-checkpoint-04-expr"
+name = "type-exercise-checkpoint-10-expr"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,6 +9,6 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
-type-exercise-checkpoint-04-core = { path = "core" }
+type-exercise-checkpoint-10-core = { path = "../core" }
 anyhow = "1"
 bitvec = "1"

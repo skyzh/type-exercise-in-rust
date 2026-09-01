@@ -15,7 +15,7 @@ cargo x copy-test --chapter 11
 cargo test -p type-exercise-starter-supplied-tests chapter_11 --locked
 ```
 
-Enable `src/binder.rs` and implement the public `FunctionRegistry`, `BoundExpression`, and binding
+Enable `expr/src/binder.rs` and implement the public `FunctionRegistry`, `BoundExpression`, and binding
 errors. A registry entry is a factory over a complete logical input slice, not a binary-only
 closure. The factory either rejects the signature or returns one erased physical expression whose
 metadata agrees with the requested logical call.

@@ -55,6 +55,6 @@ jobs:
           cargo x copy-test --chapter 12
           cargo x copy-test --chapter 13
           cargo x copy-test --chapter 14
-          git diff --exit-code -- type-exercise-starter/src
+          git diff --exit-code -- type-exercise-starter/expr/src
       - name: Test course
         run: mdbook test course

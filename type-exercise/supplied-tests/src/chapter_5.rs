@@ -10,7 +10,10 @@ use crate::{build_numeric_binary_expression, build_numeric_comparison_expression
 
 #[test]
 fn arithmetic_selects_one_infallible_or_fallible_batch_kernel() {
-    let source = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../src/numeric.rs"));
+    let source = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../expr/src/numeric.rs"
+    ));
     let expression = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../core/src/expression.rs"

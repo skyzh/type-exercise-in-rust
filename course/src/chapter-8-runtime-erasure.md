@@ -19,7 +19,7 @@ cargo x copy-test --chapter 8 --checkpoint 1
 cargo test -p type-exercise-starter-supplied-tests chapter_8 --locked
 ```
 
-Enable only the private `src/boolean.rs` module in `src/lib.rs`, then implement these
+Enable only the private `expr/src/boolean.rs` module in `expr/src/lib.rs`, then implement these
 crate-visible scalar functions:
 
 ```rust,ignore
@@ -53,7 +53,7 @@ function before row evaluation:
 - `And` delegates to the nullable-aware binary evaluator with the `and` scalar function; and
 - `Or` delegates to the same evaluator with `or`.
 
-Now uncomment the `pub use boolean::*` line in `src/lib.rs` so the completed expression surface is
+Now uncomment the `pub use boolean::*` line in `expr/src/lib.rs` so the completed expression surface is
 available to later chapters. The scalar helpers remain crate-visible implementation details.
 
 Keep operator selection outside the shared loops. A null-policy enum tested per row would make

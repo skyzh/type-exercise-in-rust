@@ -2,7 +2,7 @@
 
 pub use type_exercise_starter_core::*;
 
-// This crate is the concrete-expression facade. The nested core package owns storage, views,
+// This crate is the concrete-expression facade. The sibling core package owns storage, views,
 // evaluator families, erasure, and the generic registry from Day 1 onward.
 
 // Day 4: enable the first scalar arithmetic implementation.

@@ -38,7 +38,8 @@ Both commands should pass. Chapter tests do not exist in the starter until you c
 
 ## Follow the learner boundary
 
-- Work only in implementation files under `type-exercise-starter/src/`.
+- Work only in implementation files under `type-exercise-starter/expr/src/` and
+  `type-exercise-starter/core/src/`.
 - Do not edit `supplied-tests/src/lib.rs` or copied files under `supplied-tests/src/`.
 - Do not read, search, diff, or copy `type-exercise/`, `archived/`, Git history, or an online
   solution while implementing a chapter.
@@ -57,7 +58,7 @@ copied destination. Its first focused run should be red until you implement the 
 
 Focused chapter commands target `type-exercise-starter-supplied-tests`. Implementation-only checks
 still target the facade package, `type-exercise-starter-expr`, or the reusable framework package,
-`type-exercise-starter-core`. Their sources live separately under `src/` and `core/src/`; the Cargo
+`type-exercise-starter-core`. Their sources live separately under `expr/src/` and `core/src/`; the Cargo
 edge is always supplied tests to facade to core, with a direct supplied-tests-to-core edge for
 framework witnesses.
 

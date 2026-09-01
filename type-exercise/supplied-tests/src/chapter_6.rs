@@ -8,7 +8,10 @@ use crate::{
 
 #[test]
 fn scalar_operations_reuse_exactly_one_loop_per_arity() {
-    let facade = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../src/numeric.rs"));
+    let facade = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../expr/src/numeric.rs"
+    ));
     let core = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../core/src/expression.rs"

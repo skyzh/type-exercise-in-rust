@@ -15,19 +15,20 @@ a small runtime match chooses one generic typed batch kernel before its row loop
 
 ## What is in the starter
 
-Begin from your completed Chapter 4 workspace. The fixed-arity batch shell in `src/numeric.rs`
+Begin from your completed Chapter 4 workspace. The fixed-arity batch shell in `expr/src/numeric.rs`
 is working code; preserve its validation order and its whole-batch kernel boundary. The Day 5
 surface is still deliberately small:
 
-- `src/promotion.rs` contains comment shells for one promotion row, the promotion catalog, and its
+- `core/src/promotion.rs` contains comment shells for one promotion row, the promotion catalog, and its
   lookup function;
 - `core/src/expression.rs` contains the general binary batch-kernel and expression shells first owned by
   this chapter;
-- `src/numeric.rs` ends with comments for the arithmetic selector;
-- `src/numeric.rs` contains the matching comparison selector;
-- `src/array/primitive_array.rs` has the Arrow-style value and validity buffers but not the
+- `expr/src/numeric.rs` ends with comments for the arithmetic selector;
+- `expr/src/numeric.rs` contains the matching comparison selector;
+- `core/src/array/primitive_array.rs` has the Arrow-style value and validity buffers but not the
   all-valid constructor used by this chapter's batch fixture; and
-- `src/lib.rs` leaves the promotion module and the two operator enums unwired.
+- `core/src/lib.rs` leaves the promotion module unwired, while `expr/src/numeric.rs` leaves the two
+  operator enums unwired.
 
 You own three connected additions: the logical promotion policy, generic arithmetic selection,
 and generic numeric comparison. You will also add the small `PrimitiveArray::from_values` helper
@@ -47,7 +48,7 @@ The focused run should fail on the missing promotion items, operator selectors, 
 
 ## Checkpoint 1: make widening a database policy
 
-Open `src/promotion.rs` and define the public shape already named by the starter:
+Open `core/src/promotion.rs` and define the public shape already named by the starter:
 
 ```rust,ignore
 pub struct NumericPromotion {
@@ -88,7 +89,7 @@ Implement `promote_numeric` as a catalog lookup that returns the row's logical o
 Do not infer a fallback from enum order or substitute a duplicate row: the supplied test audits all
 25 ordered input pairs and the exact 21 supported catalog keys.
 
-Enable `promotion` in `src/lib.rs` and export `NumericPromotion`, `NUMERIC_PROMOTIONS`, and
+Enable `promotion` in `core/src/lib.rs` and export `NumericPromotion`, `NUMERIC_PROMOTIONS`, and
 `promote_numeric`. The final focused test also imports the later operator selectors, so it cannot
 be green at this checkpoint. Use the library boundary instead:
 
@@ -101,7 +102,7 @@ evaluation.
 
 ## Checkpoint 2: choose one arithmetic kernel before the rows
 
-Start with the fixture helper in `src/array/primitive_array.rs`. It keeps the existing
+Start with the fixture helper in `core/src/array/primitive_array.rs`. It keeps the existing
 representation and marks every supplied value valid:
 
 ```rust,ignore
@@ -123,7 +124,7 @@ rejects an output whose physical type disagrees with the stored metadata. Keep a
 row-error-context construction crate-private; the public constructor stays the four-argument API
 shown by the starter.
 
-Now extend `src/numeric.rs` with the public `ArithmeticOperator` variants `Add`, `Subtract`,
+Now extend `expr/src/numeric.rs` with the public `ArithmeticOperator` variants `Add`, `Subtract`,
 `Multiply`, and `Divide`. Describe the five concrete numeric types with standard operator bounds,
 not another trait whose methods re-name arithmetic:
 

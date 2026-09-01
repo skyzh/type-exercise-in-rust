@@ -337,7 +337,10 @@ fn metadata_and_getters_pin_the_public_contract() {
 
 #[test]
 fn operation_selection_stays_outside_the_shared_row_loops() {
-    let source = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../src/boolean.rs"));
+    let source = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../expr/src/boolean.rs"
+    ));
     assert!(!source.contains("NullEvaluationPolicy"));
     assert!(source.contains("match self.operator"));
     let core = include_str!(concat!(

@@ -9,6 +9,6 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
-type-exercise-checkpoint-06-core = { path = "core" }
+type-exercise-checkpoint-06-core = { path = "../core" }
 anyhow = "1"
 bitvec = "1"

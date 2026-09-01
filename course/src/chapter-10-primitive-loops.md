@@ -61,7 +61,7 @@ cargo test -p type-exercise-starter-supplied-tests chapter_10 --locked
 cargo check -p type-exercise-starter-core --locked
 ```
 
-Enable `src/string.rs` and implement the borrowed concatenation scalar operation. It receives two
+Enable `expr/src/string.rs` and implement the borrowed concatenation scalar operation. It receives two
 `&str` values plus a `Writer`, writes each input directly into the builder's bytes, publishes one
 offset and validity bit, and returns `WriterUsed`. Do not allocate a temporary `String` with
 `format!`, and do not write an operation-specific batch loop.

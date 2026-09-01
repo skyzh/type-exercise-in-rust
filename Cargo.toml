@@ -1,18 +1,18 @@
 [workspace]
 resolver = "3"
 members = [
-    "type-exercise",
+    "type-exercise/expr",
     "type-exercise/supplied-tests",
-    "type-exercise-starter",
+    "type-exercise-starter/expr",
     "type-exercise-starter/supplied-tests",
     "xtask",
-    "checkpoint/day-*",
+    "checkpoint/day-*/expr",
     "checkpoint/day-*/supplied-tests",
 ]
 default-members = [
-    "type-exercise",
+    "type-exercise/expr",
     "type-exercise/supplied-tests",
-    "type-exercise-starter",
+    "type-exercise-starter/expr",
     "type-exercise-starter/supplied-tests",
     "xtask",
 ]

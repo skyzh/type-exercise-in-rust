@@ -8,5 +8,5 @@ publish.workspace = true
 [dependencies]
 anyhow = "1"
 bitvec = "1"
-type-exercise-checkpoint-09-expr = { path = ".." }
+type-exercise-checkpoint-09-expr = { path = "../expr" }
 type-exercise-checkpoint-09-core = { path = "../core" }

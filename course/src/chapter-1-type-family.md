@@ -38,7 +38,7 @@ The test is cumulative course material; do not edit the copied file. Work only i
 
 ## Checkpoint 1: Implement the `Scalar` and `ScalarRef` traits
 
-Open `src/scalar.rs`. The starter already distinguishes owned Int32 and String values in `ScalarImpl` and borrowed Int32 and String values in `ScalarRefImpl<'a>`. What it does not yet express is that each owned type has exactly one borrowed type and one array type, and that the borrowed type points back to the same family.
+Open `core/src/scalar.rs`. The starter already distinguishes owned Int32 and String values in `ScalarImpl` and borrowed Int32 and String values in `ScalarRefImpl<'a>`. What it does not yet express is that each owned type has exactly one borrowed type and one array type, and that the borrowed type points back to the same family.
 
 Complete only the owned↔borrowed bounds and associated-type relationship on `Scalar` and `ScalarRef`. `Scalar::ArrayType` and `ScalarRef::ArrayType` remain unconstrained associated-type placeholders in this checkpoint; do not require them to implement `Array` or tie them reciprocally yet. Use `RefType<'a>` and `ScalarType` to make the owned and borrowed directions agree: if `String::RefType<'a>` is `&'a str`, then that reference must identify `String` as its owned scalar. Checkpoint 3 will connect both scalar forms to the concrete array and builder once those implementations exist.
 
@@ -90,9 +90,9 @@ cargo test -p type-exercise-starter-supplied-tests chapter_1 --locked
 
 The traits from Checkpoint 1 work when Rust knows the concrete type `S` at compile time. A database plan does not always have that information in its Rust type. A scan may read a runtime schema, or an expression node may hold a value whose physical type is known only after binding. We therefore need one runtime container for all scalar families supported so far.
 
-That is the role of `ScalarImpl` and `ScalarRefImpl<'a>` in `src/scalar.rs`. The first owns a value; the second can borrow one. For Day 1, each enum contains only Int32 and String. The enums erase the concrete Rust type at the runtime boundary while their variants preserve enough information to recover it safely.
+That is the role of `ScalarImpl` and `ScalarRefImpl<'a>` in `core/src/scalar.rs`. The first owns a value; the second can borrow one. For Day 1, each enum contains only Int32 and String. The enums erase the concrete Rust type at the runtime boundary while their variants preserve enough information to recover it safely.
 
-Implement the Day 1 erased methods and conversions in `src/scalar.rs` and the display/error behavior of the existing `TypeMismatch` carrier in `src/physical_type.rs`:
+Implement the Day 1 erased methods and conversions in `core/src/scalar.rs` and the display/error behavior of the existing `TypeMismatch` carrier in `core/src/physical_type.rs`:
 
 - `ScalarImpl::physical_type` and `ScalarRefImpl::physical_type` report the variant's `PhysicalType`.
 - `ScalarRefImpl::to_owned_scalar` turns an erased borrowed value into the matching erased owned value.
@@ -114,7 +114,7 @@ cargo test -p type-exercise-starter-supplied-tests chapter_1 --locked
 
 ## Checkpoint 3: Implement primitive and string arrays
 
-Now connect the array-type placeholders from Checkpoint 1 to concrete arrays. Open `src/array.rs`, `src/array/primitive_array.rs`, and `src/array/string_array.rs`. Add the reciprocal Scalar↔Array and Array↔ArrayBuilder bounds here, then implement the storage and access methods for `I32Array` and `StringArray`.
+Now connect the array-type placeholders from Checkpoint 1 to concrete arrays. Open `core/src/array.rs`, `core/src/array/primitive_array.rs`, and `core/src/array/string_array.rs`. Add the reciprocal Scalar↔Array and Array↔ArrayBuilder bounds here, then implement the storage and access methods for `I32Array` and `StringArray`.
 
 Why arrays? Database execution engines usually process columns in batches instead of dispatching one operator for every row. Conceptually, a vectorized binary expression performs the same scalar operation across two input arrays:
 
@@ -161,11 +161,11 @@ When this checkpoint passes, the scalar relationship from Checkpoint 1 becomes o
 
 ## Checkpoint 4: Handwrite the erased array boundary
 
-Concrete arrays are ideal for generic code, but a database operator often receives a column selected from a runtime schema. `ArrayImpl` in `src/array.rs` is the erased boundary for that case. On Day 1 it has only `Int32(I32Array)` and `String(StringArray)` variants.
+Concrete arrays are ideal for generic code, but a database operator often receives a column selected from a runtime schema. `ArrayImpl` in `core/src/array.rs` is the erased boundary for that case. On Day 1 it has only `Int32(I32Array)` and `String(StringArray)` variants.
 
-Keep every Day 1 erased boundary handwritten. Checkpoint 2 gave `ScalarImpl` and `ScalarRefImpl` explicit physical-type dispatch plus owned and borrowed checked conversions in `src/scalar.rs`. In this checkpoint, do the same for `ArrayImpl` in `src/array.rs`: implement its common erased-array operations and write the Int32 and String conversion implementations directly. Upcasting with `From` cannot fail, while downcasting with `TryFrom` must return `TypeMismatch` for the wrong variant. Support both owned recovery and borrowed recovery so callers can inspect an erased array without cloning its buffers.
+Keep every Day 1 erased boundary handwritten. Checkpoint 2 gave `ScalarImpl` and `ScalarRefImpl` explicit physical-type dispatch plus owned and borrowed checked conversions in `core/src/scalar.rs`. In this checkpoint, do the same for `ArrayImpl` in `core/src/array.rs`: implement its common erased-array operations and write the Int32 and String conversion implementations directly. Upcasting with `From` cannot fail, while downcasting with `TryFrom` must return `TypeMismatch` for the wrong variant. Support both owned recovery and borrowed recovery so callers can inspect an erased array without cloning its buffers.
 
-Also complete the family inventory in `src/variant_catalog.rs` with exactly the Int32 and String rows. On Day 1, that callback supplies only the public `PHYSICAL_FAMILY_CATALOG` audit list. Do not use it to generate scalar or array variants, match arms, or conversion implementations yet, and do not add the later physical families.
+Also complete the family inventory in `core/src/variant_catalog.rs` with exactly the Int32 and String rows. On Day 1, that callback supplies only the public `PHYSICAL_FAMILY_CATALOG` audit list. Do not use it to generate scalar or array variants, match arms, or conversion implementations yet, and do not add the later physical families.
 
 Writing the two families explicitly makes the repeated conversion shape visible before a macro hides it. Chapter 2 will expand the finite inventory and then use catalog callbacks to generate that repeated erased dispatch and conversion code. The catalog is a compile-time inventory, not a runtime reflection system.
 
