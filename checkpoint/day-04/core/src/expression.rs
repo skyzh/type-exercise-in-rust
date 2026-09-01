@@ -29,18 +29,18 @@ where
     <F::Right as Scalar>::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
 {
     let left = ColumnView::<F::Left>::try_from(left).map_err(|error| {
-        anyhow::anyhow!(
+        let context = format!(
             "input 0 type mismatch: expected {:?}, got {:?}",
-            error.expected,
-            error.actual
-        )
+            error.expected, error.actual
+        );
+        anyhow::Error::new(error).context(context)
     })?;
     let right = ColumnView::<F::Right>::try_from(right).map_err(|error| {
-        anyhow::anyhow!(
+        let context = format!(
             "input 1 type mismatch: expected {:?}, got {:?}",
-            error.expected,
-            error.actual
-        )
+            error.expected, error.actual
+        );
+        anyhow::Error::new(error).context(context)
     })?;
     if left.len() != right.len() {
         anyhow::bail!(
@@ -126,5 +126,59 @@ impl<const N: usize> BatchExpression<N> {
     pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         validate_expression_inputs(inputs, &self.input_types)?;
         (self.kernel)(self, inputs)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{PhysicalType, StringArray};
+
+    struct I32Add;
+
+    impl BinaryScalarFunction for I32Add {
+        type Left = i32;
+        type Right = i32;
+        type Output = i32;
+
+        fn evaluate<'a>(&self, left: i32, right: i32) -> i32 {
+            left.wrapping_add(right)
+        }
+    }
+
+    #[test]
+    fn conversion_errors_preserve_their_typed_causes() {
+        let strings: ArrayImpl = StringArray::from_slice(&[Some("wrong")]).into();
+        let valid = ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1);
+
+        let left_error = evaluate_binary(
+            &I32Add,
+            ColumnViewImpl::array(&strings),
+            valid.clone(),
+        )
+        .unwrap_err();
+        assert_eq!(
+            left_error.to_string(),
+            "input 0 type mismatch: expected Int32, got String"
+        );
+        let left_cause = left_error
+            .downcast_ref::<TypeMismatch>()
+            .expect("left conversion must preserve its typed cause");
+        assert_eq!(left_cause.expected, PhysicalType::Int32);
+        assert_eq!(left_cause.actual, PhysicalType::String);
+        assert_eq!(left_error.chain().count(), 2);
+
+        let right_error = evaluate_binary(&I32Add, valid, ColumnViewImpl::array(&strings))
+            .unwrap_err();
+        assert_eq!(
+            right_error.to_string(),
+            "input 1 type mismatch: expected Int32, got String"
+        );
+        let right_cause = right_error
+            .downcast_ref::<TypeMismatch>()
+            .expect("right conversion must preserve its typed cause");
+        assert_eq!(right_cause.expected, PhysicalType::Int32);
+        assert_eq!(right_cause.actual, PhysicalType::String);
+        assert_eq!(right_error.chain().count(), 2);
     }
 }
