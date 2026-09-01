@@ -6,13 +6,18 @@ use crate::{
 #[test]
 fn reads_arrays_constants_and_indexed_views_as_logical_rows() {
     let array: ArrayImpl = I32Array::from_slice(&[Some(10), None, Some(30)]).into();
-    let array_view = ColumnView::<i32>::try_from(ColumnViewImpl::array(&array)).unwrap();
+    let erased_array = ColumnViewImpl::array(&array);
+    assert_eq!(erased_array.get(0), Some(ScalarRefImpl::Int32(10)));
+    assert_eq!(erased_array.get(1), None);
+    let array_view = ColumnView::<i32>::try_from(erased_array).unwrap();
     assert_eq!(array_view.len(), 3);
     assert_eq!(array_view.get(0), Some(10));
     assert_eq!(array_view.get(1), None);
 
     let erased_constant = ColumnViewImpl::constant(ScalarRefImpl::String("a"), 3);
     assert_eq!(erased_constant.physical_type(), PhysicalType::String);
+    assert_eq!(erased_constant.get(0), Some(ScalarRefImpl::String("a")));
+    assert_eq!(erased_constant.get(2), Some(ScalarRefImpl::String("a")));
     let constant = ColumnView::<String>::try_from(erased_constant).unwrap();
     assert_eq!(
         (0..constant.len())
@@ -23,9 +28,10 @@ fn reads_arrays_constants_and_indexed_views_as_logical_rows() {
 
     let values: ArrayImpl = StringArray::from_slice(&[Some("red"), None, Some("green")]).into();
     let indices = [2, 1, 1, 0, 2];
-    let indexed =
-        ColumnView::<String>::try_from(ColumnViewImpl::indexed(&indices, &values).unwrap())
-            .unwrap();
+    let erased_indexed = ColumnViewImpl::indexed(&indices, &values).unwrap();
+    assert_eq!(erased_indexed.get(0), Some(ScalarRefImpl::String("green")));
+    assert_eq!(erased_indexed.get(1), None);
+    let indexed = ColumnView::<String>::try_from(erased_indexed).unwrap();
     assert_eq!(
         (0..indexed.len())
             .map(|row| indexed.get(row))
