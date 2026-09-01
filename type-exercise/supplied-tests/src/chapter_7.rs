@@ -221,6 +221,9 @@ fn raw_loops_are_branch_free_and_preserve_operand_order() {
         "enum Nullability",
         "try_non_null_array",
         "fn nullability(&self)",
+        "pub enum RawI32Column",
+        "pub fn as_raw_i32",
+        "pub fn len(self)",
     ] {
         assert!(
             !column_source.contains(forbidden),

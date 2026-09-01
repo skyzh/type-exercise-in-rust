@@ -20,6 +20,7 @@ fn checkpoint_1_binds_raw_i32_arrays_and_constants() {
     }
     assert!(!source.contains("pub enum RawI32Column"));
     assert!(!source.contains("pub fn as_raw_i32"));
+    assert!(!source.contains("pub fn len(self)"));
     for forbidden in [
         "enum Nullability",
         "try_non_null_array",
@@ -55,6 +56,9 @@ fn checkpoint_1_keeps_indexed_detection_separate() {
     let indexed_body = source
         .split("fn is_indexed")
         .nth(1)
-        .expect("is_indexed body");
-    assert!(indexed_body.contains("ColumnViewImplKind::Indexed"));
+        .expect("is_indexed body")
+        .split("\n    }")
+        .next()
+        .expect("is_indexed boundary");
+    assert!(indexed_body.contains("matches!(self.kind, ColumnViewImplKind::Indexed { .. })"));
 }

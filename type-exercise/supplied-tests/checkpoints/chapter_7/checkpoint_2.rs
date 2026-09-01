@@ -1,6 +1,6 @@
 use crate::{
     Array, ArrayImpl, ColumnViewImpl, I32Add, I32Array, PrimitiveBinaryExpression, PrimitiveLoop,
-    ScalarRefImpl,
+    PhysicalType, ScalarRefImpl,
 };
 
 fn i32_values(array: &ArrayImpl) -> Vec<Option<i32>> {
@@ -19,12 +19,24 @@ fn checkpoint_1_binds_raw_i32_arrays_and_constants() {
         "validity: &'a BitVec",
         "value: i32",
         "valid: bool",
+        "valid: value.is_some()",
         "fn as_raw_i32(&self)",
     ] {
         assert!(source.contains(required), "missing raw binding: {required}");
     }
     assert!(!source.contains("pub enum RawI32Column"));
     assert!(!source.contains("pub fn as_raw_i32"));
+    assert!(!source.contains("pub fn len(self)"));
+    for forbidden in [
+        "enum Nullability",
+        "try_non_null_array",
+        "fn nullability(&self)",
+    ] {
+        assert!(
+            !source.contains(forbidden),
+            "Day 7 must not expose stale nullability API: {forbidden}"
+        );
+    }
 }
 
 #[test]
@@ -44,8 +56,14 @@ fn checkpoint_1_keeps_indexed_detection_separate() {
     assert!(raw_body.contains("Some(ScalarRefImpl::Int32(value))"));
     assert!(raw_body.contains("None => 0"));
     assert!(raw_body.contains("_ => None"));
-    assert!(source.contains("fn is_indexed"));
-    assert!(source.contains("ColumnViewImplKind::Indexed"));
+    let indexed_body = source
+        .split("fn is_indexed")
+        .nth(1)
+        .expect("is_indexed body")
+        .split("\n    }")
+        .next()
+        .expect("is_indexed boundary");
+    assert!(indexed_body.contains("matches!(self.kind, ColumnViewImplKind::Indexed { .. })"));
 }
 
 #[test]
@@ -108,6 +126,14 @@ fn checkpoint_2_selects_all_four_raw_shapes() {
             ],
             PrimitiveLoop::ConstantConstant,
             vec![Some(12), Some(12), Some(12)],
+        ),
+        (
+            [
+                ColumnViewImpl::array(&left),
+                ColumnViewImpl::null(PhysicalType::Int32, 3),
+            ],
+            PrimitiveLoop::ArrayConstant,
+            vec![None, None, None],
         ),
     ];
 
