@@ -17,10 +17,9 @@ impl BinaryScalarFunction for StringLengthAdd {
     }
 }
 
-fn assert_copyable_output<F: BinaryScalarFunction>()
-where
-    F::Output: Copy,
-{
+fn assert_copyable_output<F: BinaryScalarFunction>() {
+    fn assert_copy<T: Copy>() {}
+    assert_copy::<F::Output>();
 }
 
 #[test]
@@ -97,13 +96,14 @@ fn addition_uses_explicit_wrapping_overflow() {
 
 #[test]
 fn rejects_input_lengths_before_evaluating_rows() {
-    assert!(
-        evaluate_binary(
-            &I32Add,
-            ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 2),
-            ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 3),
-        )
-        .is_err()
+    let error = evaluate_binary(
+        &I32Add,
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 2),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 3),
+    );
+    assert_eq!(
+        error.unwrap_err().to_string(),
+        "input 1 length mismatch: expected 2, got 3"
     );
 }
 
@@ -160,6 +160,20 @@ fn checked_add_batch(
         );
     }
     Ok(output.finish().into())
+}
+
+fn validation_probe_unary(
+    _expression: &BatchExpression<1>,
+    _inputs: &[ColumnViewImpl<'_>],
+) -> anyhow::Result<ArrayImpl> {
+    Ok(I32Array::from_slice(&[]).into())
+}
+
+fn validation_probe_binary(
+    _expression: &BatchExpression<2>,
+    _inputs: &[ColumnViewImpl<'_>],
+) -> anyhow::Result<ArrayImpl> {
+    Ok(I32Array::from_slice(&[]).into())
 }
 
 fn checked_fail_on_seven_batch(
@@ -291,56 +305,59 @@ fn batch_expressions_reject_extra_or_missing_inputs_before_indexing() {
         "checked_add",
         [PhysicalType::Int32, PhysicalType::Int32],
         PhysicalType::Int32,
-        checked_add_batch,
+        validation_probe_binary,
     );
-    assert!(
-        binary
-            .evaluate(&[
-                ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
-                ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 1),
-                ColumnViewImpl::constant(ScalarRefImpl::Int32(3), 1),
-            ])
-            .is_err()
+    let extra = binary.evaluate(&[
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 1),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(3), 1),
+    ]);
+    assert_eq!(
+        extra.unwrap_err().to_string(),
+        "input arity mismatch: expected 2, got 3"
     );
-    assert!(
-        binary
-            .evaluate(&[ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1)])
-            .is_err()
+    let missing = binary.evaluate(&[ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1)]);
+    assert_eq!(
+        missing.unwrap_err().to_string(),
+        "input arity mismatch: expected 2, got 1"
     );
 
     let unary = BatchExpression::new(
         "checked_neg",
         [PhysicalType::Int32],
         PhysicalType::Int32,
-        checked_neg_batch,
+        validation_probe_unary,
     );
-    assert!(
-        unary
-            .evaluate(&[
-                ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
-                ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 1),
-            ])
-            .is_err()
+    let extra = unary.evaluate(&[
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 1),
+    ]);
+    assert_eq!(
+        extra.unwrap_err().to_string(),
+        "input arity mismatch: expected 1, got 2"
     );
-    assert!(unary.evaluate(&[]).is_err());
+    assert_eq!(
+        unary.evaluate(&[]).unwrap_err().to_string(),
+        "input arity mismatch: expected 1, got 0"
+    );
 }
 
 #[test]
 fn batch_expressions_reject_the_second_input_physical_type() {
-    let strings: ArrayImpl = StringArray::from_slice(&[Some("wrong")]).into();
+    let strings: ArrayImpl = StringArray::from_slice(&[Some("wrong"), Some("still wrong")]).into();
     let binary = BatchExpression::new(
         "checked_add",
         [PhysicalType::Int32, PhysicalType::Int32],
         PhysicalType::Int32,
-        checked_add_batch,
+        validation_probe_binary,
     );
-    assert!(
-        binary
-            .evaluate(&[
-                ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
-                ColumnViewImpl::array(&strings),
-            ])
-            .is_err()
+    let error = binary.evaluate(&[
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1),
+        ColumnViewImpl::array(&strings),
+    ]);
+    assert_eq!(
+        error.unwrap_err().to_string(),
+        "input 1 type mismatch: expected Int32, got String"
     );
 }
 
@@ -350,15 +367,15 @@ fn batch_expressions_reject_mismatched_input_lengths() {
         "checked_add",
         [PhysicalType::Int32, PhysicalType::Int32],
         PhysicalType::Int32,
-        checked_add_batch,
+        validation_probe_binary,
     );
-    assert!(
-        binary
-            .evaluate(&[
-                ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 2),
-                ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 3),
-            ])
-            .is_err()
+    let error = binary.evaluate(&[
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 2),
+        ColumnViewImpl::constant(ScalarRefImpl::Int32(2), 3),
+    ]);
+    assert_eq!(
+        error.unwrap_err().to_string(),
+        "input 1 length mismatch: expected 2, got 3"
     );
 }
 

@@ -151,7 +151,7 @@ Run the focused contract, then the cumulative learner-library suite:
 
 ```console
 cargo test -p type-exercise-starter-supplied-tests chapter_4 --locked
-cargo test -p type-exercise-starter-expr --lib --locked
+cargo test -p type-exercise-starter-supplied-tests --lib --locked
 ```
 
 The 14 focused cases prove the complete boundary:

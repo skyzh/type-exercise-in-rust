@@ -4,7 +4,7 @@
 //! traversal. Facade operation modules supply scalar callbacks and never write batch loops.
 //!
 //! Day 4: define `BinaryScalarFunction`, `evaluate_binary`, and the first fixed-width
-//! `BinaryExpression`. Validate arity, physical types, and lengths before evaluating rows.
+//! `BatchExpression`. Validate arity, physical types, and lengths before evaluating rows.
 //!
 //! Day 5: generalize the binary shell so the facade can select one typed arithmetic or comparison
 //! callback for a complete batch.
