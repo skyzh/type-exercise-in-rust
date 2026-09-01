@@ -12,7 +12,7 @@
 请按顺序阅读[在线课程](https://skyzh.github.io/type-exercise-in-rust/)，并只在
 `type-exercise-starter/` 中完成练习。每章先运行 `cargo x copy-test --chapter N`，
 再使用该章给出的 `type-exercise-starter-supplied-tests` 测试命令完成当前检查点；实现代码
-仍分别位于真实的 `core/src/` 与门面 `src/` 目录中。
+仍分别位于真实的 `core/src/` 与门面 `expr/src/` 目录中。
 
 源代码采用 Apache 2.0 许可证；课程文字采用
 [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) 许可证。

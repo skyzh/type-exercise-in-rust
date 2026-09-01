@@ -1,4 +1,6 @@
-use crate::boolean::{and, not, or};
+#[path = "../../expr/src/boolean.rs"]
+mod boolean;
+use boolean::{and, not, or};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum TruthOperation {

@@ -17,8 +17,14 @@ fn checkpoint_1_string_array_pins_bytes_offsets_and_validity() {
 
 #[test]
 fn checkpoint_2_consumed_writer_is_the_only_publication_path() {
-    let array = include_str!("../array/string_array.rs");
-    let core = include_str!("../expression.rs");
+    let array = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../core/src/array/string_array.rs"
+    ));
+    let core = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../core/src/expression.rs"
+    ));
     assert!(array.contains("pub struct Writer<'a>"));
     assert!(array.contains("pub struct WriterUsed<'a>"));
     assert!(array.contains("pub fn write(self"));
