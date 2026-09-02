@@ -118,10 +118,10 @@ is still missing.
 
 ## Checkpoint 3: author scalar work and generate adapters
 
-Finish `expr/src/numeric.rs` with the crate-private physical builders named by the starter:
-`build_numeric_neg_expression` and `build_numeric_clamp_expression`. They receive already-selected
-physical families, just as Chapter 5's binary builder does. Chapter 11 will place logical name
-binding in front of them.
+Finish `expr/src/numeric.rs` with the public physical builders named by the starter:
+`build_numeric_neg_expression` and `build_numeric_clamp_expression`. The separate supplied-test
+crate calls them directly. They receive already-selected physical families, just as Chapter 5's
+binary builder does. Chapter 11 will place logical name binding in front of them.
 
 `neg_number` owns only one scalar value. For signed integers, apply the standard `Neg`
 trait to `std::num::Wrapping<T>` and recover `.0`; negating `MIN` then has the same wrapping result

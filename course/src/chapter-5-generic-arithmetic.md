@@ -173,9 +173,9 @@ a per-scalar erased operation object, re-run logical promotion, or match physica
 every row. The caller must obtain the logical output from `promote_numeric` first; an unsupported
 pair never reaches the physical builder.
 
-Keep `build_numeric_binary_expression` and its returned shell crate-private. Export
-`ArithmeticOperator` from the crate root, but do not turn the physical constructor into a public
-user API: Chapter 11 will place logical name binding in front of it.
+Keep `build_numeric_binary_expression`, its returned shell, and `ArithmeticOperator` public: the
+separate supplied-test crate exercises that physical construction boundary directly. This is the
+low-level API; Chapter 11 will place logical name binding in front of it.
 
 The copied test still imports numeric comparison, so use the library compile boundary again:
 
@@ -191,7 +191,7 @@ widening the public runtime boundary or testing the operator inside each row.
 Add the six public `ComparisonOperator` variants: `Less`, `LessOrEqual`, `Greater`,
 `GreaterOrEqual`, `Equal`, and `NotEqual`. A crate-private `NumericCompare<L, R, O>` reuses the same
 typed `TryFrom` conversions and tuple-selected batch kernel, but it builds `bool`. Keep
-`build_numeric_comparison_expression` crate-private.
+`build_numeric_comparison_expression` public for the same separate-crate checkpoint contract.
 
 Both inputs may be converted to `f64` for comparison while the batch kernel builds a `BoolArray`.
 The runtime selector still chooses once before the rows.
