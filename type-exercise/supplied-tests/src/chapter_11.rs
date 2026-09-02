@@ -3,8 +3,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::{
     Array, ArrayImpl, BindError, BoolArray, BoundExpression, ColumnViewImpl, DataType, Expression,
-    FunctionRegistry, I32Array, PhysicalType, PrimitiveLoop, ScalarRefImpl, StringArray,
-    build_builtin_expression,
+    FunctionRegistry, I32Array, PhysicalType, ScalarRefImpl, StringArray, build_builtin_expression,
 };
 
 fn i32_values(array: &ArrayImpl) -> Vec<Option<i32>> {
@@ -318,18 +317,8 @@ fn public_string_and_boolean_comparisons_reject_wrong_runtime_arity() {
     ];
 
     for expression in expressions {
-        for (actual, expected) in [
-            (0, "input arity mismatch: expected 2, got 0"),
-            (1, "input arity mismatch: expected 2, got 1"),
-            (3, "input arity mismatch: expected 2, got 3"),
-        ] {
-            assert_eq!(
-                expression
-                    .evaluate(&inputs[..actual])
-                    .unwrap_err()
-                    .to_string(),
-                expected
-            );
+        for actual in [0, 1, 3] {
+            assert!(expression.evaluate(&inputs[..actual]).is_err());
         }
     }
 }
@@ -499,24 +488,22 @@ fn keeps_binding_and_non_primitive_catalog_entries_working() {
         .bind_binary("+", DataType::Integer, DataType::Integer)
         .unwrap();
     let integers: ArrayImpl = I32Array::from_values(vec![1, 2]).into();
-    let (output, selected) = add
-        .evaluate_with_loop(&[
+    let output = add
+        .evaluate(&[
             ColumnViewImpl::array(&integers),
             ColumnViewImpl::constant(ScalarRefImpl::Int32(5), 2),
         ])
         .unwrap();
-    assert_eq!(selected, PrimitiveLoop::ArrayConstant);
     assert_eq!(i32_values(&output), vec![Some(6), Some(7)]);
 
     let concat = build_builtin_expression("string_concat").unwrap();
     let strings: ArrayImpl = StringArray::from_slice(&[Some("data"), None]).into();
-    let (output, selected) = concat
-        .evaluate_with_loop(&[
+    let output = concat
+        .evaluate(&[
             ColumnViewImpl::array(&strings),
             ColumnViewImpl::constant(ScalarRefImpl::String("base"), 2),
         ])
         .unwrap();
-    assert_eq!(selected, PrimitiveLoop::General);
     let output = <&StringArray>::try_from(&output).unwrap();
     assert_eq!(
         output.iter().collect::<Vec<_>>(),

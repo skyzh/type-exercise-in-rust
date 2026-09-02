@@ -6,19 +6,39 @@ The physical catalog can evaluate a known signature, but SQL starts with a logic
 logical argument types. Binding is the planning step that resolves that call once. Evaluation must
 not redo name lookup, promotion, or kernel selection for every batch or row.
 
-## The learner-owned boundary
+## Checkpoint 1: store one finished binding
 
 Start from completed Chapter 10:
 
 ```console
-cargo x copy-test --chapter 11
+cargo x copy-test --chapter 11 --checkpoint 1
 cargo test -p type-exercise-starter-supplied-tests chapter_11 --locked
 ```
 
-Enable `expr/src/binder.rs` and implement the public `FunctionRegistry`, `BoundExpression`, and binding
-errors. A registry entry is a factory over a complete logical input slice, not a binary-only
-closure. The factory either rejects the signature or returns one erased physical expression whose
-metadata agrees with the requested logical call.
+Enable `expr/src/binder.rs`. Add the public binding error, `BoundExpression`, and
+`FunctionRegistry` surfaces named by the starter. A bound expression stores the logical input and
+output types beside one already-selected erased physical expression. Its constructor rejects
+logical metadata that disagrees with that expression's physical input or output family.
+
+A registry entry is a reusable factory over a complete logical input slice. `register` stores that
+slice factory directly; the unary, binary, and ternary helpers check arity before adapting their
+typed closures. `bind` resolves one name and calls its factory once. Unknown names and unsupported
+arities fail without evaluating a batch.
+
+The six focused tests keep this stage independent of the builtin catalog: they cover logical versus
+physical metadata, zero through five input positions, custom registration, repeated binding, helper
+arity, and unknown names. Passing them reaches 83 cumulative tests.
+
+## Checkpoint 2: register the builtin logical catalog
+
+```console
+cargo x copy-test --chapter 11 --checkpoint 2
+cargo test -p type-exercise-starter-supplied-tests chapter_11 --locked
+```
+
+Now implement `FunctionRegistry::with_builtins`. Register arithmetic, comparison, Boolean, and
+string factories. Each factory either rejects its complete logical signature or returns one erased
+physical expression whose metadata agrees with the requested logical call.
 
 Binding follows this order:
 
@@ -43,7 +63,7 @@ operation before the expression reaches a row loop.
 ## Boolean and strings
 
 Register unary `not`, binary `and`/`or`, strict string comparisons, `contains`, and the Chapter 10
-concatenation path with their exact logical signatures. Logical `String` and `Varchar` may share a
+concatenation path with their exact logical signatures. Logical `Char` and `Varchar` may share a
 physical representation without becoming the same planner type. Binding preserves that
 distinction even though evaluation borrows the same UTF-8 slices.
 
@@ -57,10 +77,15 @@ cargo test -p type-exercise-starter-expr --lib --locked
 cargo check -p type-exercise-starter-core --locked
 ```
 
-The 19 focused tests cover successful numeric, Boolean, comparison, and string calls; unknown
-names; unsupported and lossy signatures; inconsistent factory metadata; arbitrary arity slices;
-custom registration; checked runtime errors; and metadata validation through both physical and
-bound expressions.
+The 19 focused tests reach 96 cumulative tests. They cover successful numeric, Boolean,
+comparison, and string calls; unknown names; unsupported and lossy signatures; inconsistent
+factory metadata; arbitrary arity slices; custom registration; checked runtime failures; and
+metadata validation through both physical and bound expressions.
+
+As a final inspection, confirm that binding chooses a factory before evaluation and that
+`BoundExpression::evaluate` delegates the complete batch. Loop selection and the absence of a
+facade row loop are implementation-review concerns; supplied tests grade only public API and
+behavior.
 
 The dependency direction remains important. The facade owns concrete operations and the builtin
 registry. Core owns only the generic registry and erased expression vocabulary needed to store a
