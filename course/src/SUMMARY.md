@@ -15,5 +15,5 @@
 - [Build Variable-Width Strings Transactionally](./chapter-10-primitive-loops.md)
 - [Bind and Coerce Logical Calls](./chapter-11-list.md)
 - [Build a One-Level List Column](./chapter-12-rust-boundaries.md)
-- [Strengthen Rust Type Boundaries](./chapter-13-async-boundary.md)
+- [Share Logical Factories Across Threads](./chapter-13-async-boundary.md)
 - [Add a Batch Async Boundary](./chapter-14-async-boundary.md)

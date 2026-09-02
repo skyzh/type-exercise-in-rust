@@ -1,52 +1,62 @@
 {{#include wip-banner.md}}
 
-# Chapter 13: Strengthen Rust Type Boundaries
+# Chapter 13: Share Logical Factories Across Threads
 
-The engine now has borrowed views, erased expressions, registries, and List slices. This chapter
-does not add a new database feature. It makes the Rust contracts around those existing values
-explicit so the compiler can preserve borrowing and thread-safety across generic and erased code.
+The completed Day 12 engine already preserves five Rust boundaries that matter here: array
+iterators borrow their arrays behind an opaque return type, erased expressions support checked
+`Any` recovery and are safe to share, and erased column views can shorten their borrow for one
+evaluation call. This chapter keeps those compiler-enforced properties intact. Your one new change
+is to make the logical function registry safe to share when its factories capture state.
 
-## The learner-owned boundary
+## See the missing bound
 
 ```console
 cargo x copy-test --chapter 13
 cargo test -p type-exercise-starter-supplied-tests chapter_13 --locked
 ```
 
-You will strengthen three connected surfaces.
+The first run is compile-red only at the captured-factory test: `FunctionRegistry` stores a trait
+object that is not yet `Send + Sync`, so the registry cannot cross a thread boundary. The other
+five tests protect properties already present at the end of Day 12; they are regression witnesses,
+not additional implementation tasks.
 
-### Return opaque borrowed iterators
+## Strengthen the factory boundary
 
-Make `Array::iter` return `impl Iterator` while retaining the lifetime that borrows its array. The
-caller can traverse nullable fixed-width and string rows without naming the private iterator type
-or allocating owned strings. Empty arrays remain ordinary empty iterators.
+In `expr/src/binder.rs`, require the stored `FunctionFactory` and every factory accepted by
+`register`, `register_unary`, `register_binary`, and `register_ternary` to be
+`Send + Sync + 'static`. Keep the callable bound as `Fn`: registration stores a reusable factory,
+and shared calls must not require mutable access to the closure itself.
 
-### Recover erased expression objects safely
+A factory can still capture state through thread-safe shared ownership. The supplied test uses an
+`Arc<AtomicUsize>` to observe one call after the registry crosses a worker-thread boundary. Do not
+add a marker trait, expose a new helper, use `unsafe`, or turn borrowed evaluation data into
+`'static` data.
 
-Keep `Expression: Any + Send + Sync`, then support checked recovery and direct trait-object
-upcasting where the language permits it. The erased object must be safe to share with worker
-threads because its selected kernel and metadata are immutable for evaluation.
+## Inspect the inherited boundaries
 
-### Preserve captures and shorten borrows
+No core-code edit is required for the other five tests:
 
-Allow logical factories to capture thread-safe shared state. Keep `ColumnViewImpl<'a>` covariant
-so a view with a longer borrow can be used for a shorter evaluation scope. Do not use `unsafe` or
-erase the view lifetime to `'static`; the type relationship should follow from the data each enum
-variant actually contains.
+- `Array::iter` already returns an opaque `impl Iterator + 'a`; integer rows stay nullable and
+  string items remain borrowed from the array. Its concrete implementation is private and is not
+  part of the learner contract.
+- `Expression` already extends `Any + Send + Sync`, so a `dyn Expression` can upcast directly to
+  `dyn Any` for checked recovery and can be shared with a worker thread.
+- `ColumnViewImpl<'a>` already stores borrows covariantly, so a longer-lived view can be reborrowed
+  for a shorter expression call without `unsafe` or a `'static` workaround.
 
-Run the full contract:
+Run the focused and cumulative contracts:
 
 ```console
 cargo test -p type-exercise-starter-supplied-tests chapter_13 --locked
+cargo test -p type-exercise-starter-supplied-tests --locked
 cargo test -p type-exercise-starter-expr --doc --locked
 cargo test -p type-exercise-starter-expr --lib --locked
 cargo check -p type-exercise-starter-core --locked
 ```
 
-The six focused tests prove opaque iteration over integers and borrowed strings, checked
-trait-object recovery, cross-thread expression use, captured shared state, and lifetime shortening
-for erased views. These are compile-time API properties exercised through runnable values, not a
-parallel hierarchy of marker types.
+The focused result is 6 passed, and the cumulative result is 111 passed. Together they prove the
+one new thread-safe factory boundary without regressing the five inherited borrowing, erasure, and
+sharing properties.
 
 The result is still the same synchronous expression engine. The stronger ownership boundary is
 what lets Chapter 14 borrow expressions and input views across one future without cloning their

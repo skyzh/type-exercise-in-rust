@@ -32,7 +32,8 @@
 //! Day 10: add the writer-based binary evaluator. A variable-width callback consumes
 //! `Writer<'a>` and returns `WriterUsed<'a>`, proving exactly one non-null row is committed.
 //!
-//! Day 13: add checked `Any` recovery and lifetime-shortening helpers.
+//! Day 13 inspection: the existing `Any + Send + Sync` erasure and borrowed evaluation signature
+//! already support checked recovery, worker sharing, and lifetime shortening. Add no core helper.
 //!
 //! Day 14: add `evaluate_static`, `BatchFuture`, `AsyncExpression`, and the erased async
 //! adapter while preserving the same borrowed input lifetime and synchronous result.
