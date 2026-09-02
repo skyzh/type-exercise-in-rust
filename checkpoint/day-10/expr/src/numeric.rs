@@ -115,43 +115,43 @@ impl Numeric for f64 {
 }
 
 trait CheckedDivide: Sized {
-    fn checked_divide(self, rhs: Self) -> anyhow::Result<Self>;
+    fn checked_divide(self, rhs: Self) -> Result<Self, &'static str>;
 }
 
 impl CheckedDivide for i16 {
-    fn checked_divide(self, rhs: Self) -> anyhow::Result<Self> {
+    fn checked_divide(self, rhs: Self) -> Result<Self, &'static str> {
         if rhs == 0 {
-            anyhow::bail!("division by zero");
+            return Err("division by zero");
         }
         self.checked_div(rhs)
-            .ok_or_else(|| anyhow::anyhow!("signed integer division overflow"))
+            .ok_or("signed integer division overflow")
     }
 }
 
 impl CheckedDivide for i32 {
-    fn checked_divide(self, rhs: Self) -> anyhow::Result<Self> {
+    fn checked_divide(self, rhs: Self) -> Result<Self, &'static str> {
         if rhs == 0 {
-            anyhow::bail!("division by zero");
+            return Err("division by zero");
         }
         self.checked_div(rhs)
-            .ok_or_else(|| anyhow::anyhow!("signed integer division overflow"))
+            .ok_or("signed integer division overflow")
     }
 }
 
 impl CheckedDivide for i64 {
-    fn checked_divide(self, rhs: Self) -> anyhow::Result<Self> {
+    fn checked_divide(self, rhs: Self) -> Result<Self, &'static str> {
         if rhs == 0 {
-            anyhow::bail!("division by zero");
+            return Err("division by zero");
         }
         self.checked_div(rhs)
-            .ok_or_else(|| anyhow::anyhow!("signed integer division overflow"))
+            .ok_or("signed integer division overflow")
     }
 }
 
 impl CheckedDivide for f32 {
-    fn checked_divide(self, rhs: Self) -> anyhow::Result<Self> {
+    fn checked_divide(self, rhs: Self) -> Result<Self, &'static str> {
         if rhs == 0.0 {
-            anyhow::bail!("division by zero")
+            Err("division by zero")
         } else {
             Ok(self / rhs)
         }
@@ -159,9 +159,9 @@ impl CheckedDivide for f32 {
 }
 
 impl CheckedDivide for f64 {
-    fn checked_divide(self, rhs: Self) -> anyhow::Result<Self> {
+    fn checked_divide(self, rhs: Self) -> Result<Self, &'static str> {
         if rhs == 0.0 {
-            anyhow::bail!("division by zero")
+            Err("division by zero")
         } else {
             Ok(self / rhs)
         }
@@ -180,7 +180,7 @@ fn multiply_number<O: Numeric>(left: O, right: O) -> O {
     O::from_arithmetic(Mul::mul(left.into_arithmetic(), right.into_arithmetic()))
 }
 
-fn divide_number<O: CheckedDivide>(left: O, right: O) -> anyhow::Result<O> {
+fn divide_number<O: CheckedDivide>(left: O, right: O) -> Result<O, &'static str> {
     left.checked_divide(right)
 }
 
@@ -188,11 +188,11 @@ fn neg_number<O: Numeric>(value: O) -> O {
     O::from_arithmetic(Neg::neg(value.into_arithmetic()))
 }
 
-fn clamp_number<O: Numeric>(value: O, lower: O, upper: O) -> anyhow::Result<O> {
+fn clamp_number<O: Numeric>(value: O, lower: O, upper: O) -> Result<O, &'static str> {
     if lower.partial_cmp(&upper) != Some(Ordering::Less)
         && lower.partial_cmp(&upper) != Some(Ordering::Equal)
     {
-        anyhow::bail!("invalid clamp bounds");
+        Err("invalid clamp bounds")
     } else if value < lower {
         Ok(lower)
     } else if value > upper {
@@ -401,7 +401,7 @@ where
     for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
 {
-    try_evaluate_binary::<L, R, O, _>(inputs[0].clone(), inputs[1].clone(), "", |left, right| {
+    try_evaluate_binary::<L, R, O, _, _>(inputs[0].clone(), inputs[1].clone(), "", |left, right| {
         let left = lossless_try_from::<O, L>(left);
         let right = lossless_try_from::<O, R>(right);
         divide_number(left, right)
@@ -635,7 +635,7 @@ where
     for<'a> B::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> C::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
 {
-    try_evaluate_ternary::<A, B, C, O, _>(
+    try_evaluate_ternary::<A, B, C, O, _, _>(
         inputs[0].clone(),
         inputs[1].clone(),
         inputs[2].clone(),

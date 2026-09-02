@@ -29,7 +29,7 @@
 //! Day 9: add the object-safe `Expression: Any + Send + Sync` boundary, fixed-width erased
 //! adapters, and the generic registry. The builtin catalog is registered by the facade.
 //!
-//! Day 10: add writer-based unary/binary/ternary evaluators. A variable-width callback consumes
+//! Day 10: add the writer-based binary evaluator. A variable-width callback consumes
 //! `Writer<'a>` and returns `WriterUsed<'a>`, proving exactly one non-null row is committed.
 //!
 //! Day 13: add checked `Any` recovery and lifetime-shortening helpers.
