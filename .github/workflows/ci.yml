@@ -21,26 +21,26 @@ jobs:
       - uses: taiki-e/install-action@mdbook
       - name: Check current workspace format
         run: cargo fmt --all -- --check
-      - name: Clippy final artifact and checkpoints through Day 13
+      - name: Clippy final artifact and checkpoints through Day 14
         run: |
           for package in type-exercise-core type-exercise-expr type-exercise-supplied-tests; do
             cargo clippy -p "$package" --all-targets --locked -- -D warnings
           done
-          for day in 01 02 03 04 05 06 07 08 09 10 11 12 13; do
+          for day in 01 02 03 04 05 06 07 08 09 10 11 12 13 14; do
             for component in core expr supplied-tests; do
               cargo clippy -p "type-exercise-checkpoint-${day}-${component}" --all-targets --locked -- -D warnings
             done
           done
-      - name: Test final artifact and checkpoint implementations through Day 13
+      - name: Test final artifact and checkpoint implementations through Day 14
         run: |
           cargo test -p type-exercise-core -p type-exercise-expr --locked
-          for day in 01 02 03 04 05 06 07 08 09 10 11 12 13; do
+          for day in 01 02 03 04 05 06 07 08 09 10 11 12 13 14; do
             cargo test -p "type-exercise-checkpoint-${day}-core" -p "type-exercise-checkpoint-${day}-expr" --locked
           done
-      - name: Test final and cumulative supplied contracts through Day 13
+      - name: Test final and cumulative supplied contracts through Day 14
         run: |
           cargo test -p type-exercise-supplied-tests --locked
-          for day in 01 02 03 04 05 06 07 08 09 10 11 12 13; do
+          for day in 01 02 03 04 05 06 07 08 09 10 11 12 13 14; do
             cargo test -p "type-exercise-checkpoint-${day}-supplied-tests" --locked
           done
       - name: Check minimal starter
@@ -72,27 +72,3 @@ jobs:
           git diff --exit-code -- type-exercise-starter/expr/src
       - name: Test course
         run: mdbook test course
-
-  later-checkpoint-diagnostics:
-    name: Non-blocking Day ${{ matrix.day }} diagnostic
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    strategy:
-      fail-fast: false
-      matrix:
-        day: ["14"]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install latest stable Rust
-        run: |
-          rustup update stable
-          rustc --version
-      - name: Clippy later checkpoint
-        run: |
-          for component in core expr supplied-tests; do
-            cargo clippy -p "type-exercise-checkpoint-${{ matrix.day }}-${component}" --all-targets --locked -- -D warnings
-          done
-      - name: Test later checkpoint implementation
-        run: cargo test -p "type-exercise-checkpoint-${{ matrix.day }}-core" -p "type-exercise-checkpoint-${{ matrix.day }}-expr" --locked
-      - name: Observe later cumulative contract
-        run: cargo test -p "type-exercise-checkpoint-${{ matrix.day }}-supplied-tests" --locked

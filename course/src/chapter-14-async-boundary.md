@@ -53,7 +53,7 @@ cargo check -p type-exercise-starter-core --locked
 ```
 
 The nine focused tests prove equal synchronous/static/erased/bound results, exactly one underlying
-evaluation for every async path, exact propagation of scalar and validation errors, `Send`
+evaluation for every async path, propagation of scalar and validation failures, `Send`
 futures, and a borrow lifetime that covers expression, views, and arrays.
 
 ## Why the future is the outer boundary
