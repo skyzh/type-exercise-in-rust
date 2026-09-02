@@ -85,6 +85,7 @@ fn chapter_checkpoint_count(chapter: usize) -> Option<usize> {
         8 => Some(2),
         9 => Some(3),
         10 => Some(3),
+        11 => Some(2),
         _ => None,
     }
 }
