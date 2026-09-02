@@ -9,8 +9,8 @@ mod string_array;
 // `array/list_array.rs`; keep `ListArrayBuilder` private to the module.
 // mod list_array;
 // pub use list_array::{ListArray, ListError, ListScalar, ListScalarRef};
-// Day 13, checkpoint 1: uncomment when replacing `Array::iter` with the private iterator.
-// mod iterator;
+// Day 13 inspection: `Array::iter` is already opaque and tied to the array borrow. Its concrete
+// implementation is not a learner-owned API or checkpoint task.
 
 pub use primitive_array::{I32Array, I32ArrayBuilder, PrimitiveArray, PrimitiveArrayBuilder};
 // Day 2, checkpoint 1: extend the primitive re-export with I16, I64, Bool, F32, and F64 arrays

@@ -1,2 +1,2 @@
-//! Day 13: keep this concrete borrowed iterator private to the array module.
-// pub(crate) struct ArrayIterator<'a, A: Array> { /* borrowed array and next row */ }
+//! `Array::iter` is already opaque and borrow-preserving at the completed Day 12 boundary.
+//! Chapter 13 does not ask the learner to add or expose a concrete iterator type.

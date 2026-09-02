@@ -377,15 +377,13 @@ impl ListArrayBuilder {
             .into());
         }
 
-        // Materialize the row before mutating the builder so an error cannot leak a prefix.
-        let row_values = (0..value.len())
-            .map(|index| {
-                value
-                    .get(index)
-                    .map(|item| item.map(ScalarRefImpl::to_owned_scalar))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        self.values.extend(row_values);
+        // The child type is checked above, and 0..len keeps row reads in bounds.
+        self.values.extend((0..value.len()).map(|index| {
+            value
+                .get(index)
+                .expect("in-bounds List row index")
+                .map(ScalarRefImpl::to_owned_scalar)
+        }));
         self.validity.push(true);
         self.offsets.push(self.values.len());
         Ok(())

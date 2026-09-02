@@ -1,11 +1,9 @@
 mod decimal_array;
-mod iterator;
 mod list_array;
 mod primitive_array;
 mod string_array;
 
 pub use decimal_array::{DecimalArray, DecimalArrayBuilder};
-use iterator::ArrayIterator;
 pub use list_array::{ListArray, ListError, ListScalar, ListScalarRef};
 pub use primitive_array::{
     BoolArray, BoolArrayBuilder, F32Array, F32ArrayBuilder, F64Array, F64ArrayBuilder, I16Array,
@@ -83,13 +81,8 @@ where
         self.len() == 0
     }
 
-    /// Iterate without exposing the concrete iterator type.
-    ///
-    /// ```compile_fail
-    /// use type_exercise::ArrayIterator;
-    /// ```
     fn iter<'a>(&'a self) -> impl Iterator<Item = Option<Self::RefItem<'a>>> + 'a {
-        ArrayIterator::new(self)
+        (0..self.len()).map(|row| self.get(row))
     }
 
     fn from_slice(values: &[Option<Self::RefItem<'_>>]) -> Self {

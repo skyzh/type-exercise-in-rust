@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::fmt::Display;
 
 use bitvec::vec::BitVec;
 
@@ -38,7 +39,7 @@ pub enum PrimitiveLoop {
 }
 
 /// One typed binary scalar function that can be lifted over nullable columns.
-pub trait BinaryScalarFunction: Send + Sync + 'static {
+pub trait BinaryScalarFunction {
     type Left: Scalar;
     type Right: Scalar;
     type Output: Scalar + Copy;
@@ -249,7 +250,7 @@ where
 }
 
 /// Lift one fallible scalar function over two nullable columns.
-pub fn try_evaluate_binary<L, R, O, F>(
+pub fn try_evaluate_binary<L, R, O, F, E>(
     left: ColumnViewImpl<'_>,
     right: ColumnViewImpl<'_>,
     function_name: &str,
@@ -259,7 +260,8 @@ where
     L: Scalar + Copy,
     R: Scalar + Copy,
     O: Scalar + Copy,
-    F: Fn(L, R) -> anyhow::Result<O>,
+    F: Fn(L, R) -> Result<O, E>,
+    E: Display,
     for<'a> L: Scalar<RefType<'a> = L>,
     for<'a> R: Scalar<RefType<'a> = R>,
     for<'a> &'a L::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
@@ -318,7 +320,7 @@ where
 }
 
 /// Lift one fallible scalar function over three nullable columns.
-pub fn try_evaluate_ternary<A, B, C, O, F>(
+pub fn try_evaluate_ternary<A, B, C, O, F, E>(
     first: ColumnViewImpl<'_>,
     second: ColumnViewImpl<'_>,
     third: ColumnViewImpl<'_>,
@@ -330,7 +332,8 @@ where
     B: Scalar + Copy,
     C: Scalar + Copy,
     O: Scalar + Copy,
-    F: Fn(A, B, C) -> anyhow::Result<O>,
+    F: Fn(A, B, C) -> Result<O, E>,
+    E: Display,
     for<'a> A: Scalar<RefType<'a> = A>,
     for<'a> B: Scalar<RefType<'a> = B>,
     for<'a> C: Scalar<RefType<'a> = C>,
@@ -481,7 +484,7 @@ fn and_raw_i32_validity(left: RawI32Column<'_>, right: RawI32Column<'_>, len: us
 
 impl<F> PrimitiveBinaryExpression<F>
 where
-    F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32>,
+    F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32> + Send + Sync + 'static,
 {
     pub fn new(name: &'static str, function: F) -> Self {
         Self {
@@ -578,7 +581,7 @@ where
 
 impl<F> Expression for PrimitiveBinaryExpression<F>
 where
-    F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32>,
+    F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32> + Send + Sync + 'static,
 {
     fn name(&self) -> &'static str {
         self.name
@@ -770,7 +773,15 @@ impl<const N: usize> BatchExpression<N> {
 
     pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         validate_expression_inputs(inputs, &self.input_types)?;
-        (self.kernel)(self, inputs)
+        let output = (self.kernel)(self, inputs)?;
+        if output.physical_type() != self.output_type {
+            anyhow::bail!(
+                "output type mismatch: expected {:?}, got {:?}",
+                self.output_type,
+                output.physical_type()
+            );
+        }
+        Ok(output)
     }
 }
 
