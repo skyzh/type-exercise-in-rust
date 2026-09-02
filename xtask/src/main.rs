@@ -88,6 +88,15 @@ fn require_file_or_missing(path: &Path, label: &str) -> Result<()> {
     }
 }
 
+fn require_directory_chain(root: &Path, components: &[&str], label: &str) -> Result<PathBuf> {
+    let mut path = root.to_path_buf();
+    for component in components {
+        path.push(component);
+        require_directory(&path, label)?;
+    }
+    Ok(path)
+}
+
 fn workspace_root() -> Result<PathBuf> {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -355,7 +364,16 @@ fn copy_specs(
 }
 
 fn copy_test(root: &Path, chapter: usize, checkpoint: Option<usize>) -> Result<CopyReport> {
-    let source_dir = root.join("type-exercise/supplied-tests/src");
+    let source_dir = require_directory_chain(
+        root,
+        &["type-exercise", "supplied-tests", "src"],
+        "chapter source path component",
+    )?;
+    let target_parent = require_directory_chain(
+        root,
+        &["type-exercise-starter", "supplied-tests"],
+        "managed destination path component",
+    )?;
     let available = available_chapters(&source_dir)?;
     let last_chapter = available
         .last()
@@ -368,7 +386,7 @@ fn copy_test(root: &Path, chapter: usize, checkpoint: Option<usize>) -> Result<C
         chapter_checkpoint_root(root, chapter, checkpoint)?;
     }
 
-    let target_dir = root.join("type-exercise-starter/supplied-tests/src");
+    let target_dir = target_parent.join("src");
     let specs = copy_specs(root, &source_dir, &target_dir, chapter, checkpoint)?;
     preflight_destination(&target_dir, &specs)?;
     fs::create_dir_all(&target_dir).context("failed to create the starter test directory")?;
@@ -538,6 +556,16 @@ mod tests {
         } else {
             fs::remove_file(&victim).unwrap();
         }
+        symlink(&outside, &victim).unwrap();
+        outside
+    }
+
+    #[cfg(unix)]
+    fn move_directory_to_outside_symlink(root: &Path, relative: &str) -> PathBuf {
+        let victim = root.join(relative);
+        let outside = root.join("outside-ancestor-sentinel");
+        fs::rename(&victim, &outside).unwrap();
+        fs::write(outside.join("sentinel"), b"outside\n").unwrap();
         symlink(&outside, &victim).unwrap();
         outside
     }
@@ -774,6 +802,36 @@ mod tests {
             root.join("type-exercise/supplied-tests/src/chapter_1/mod.rs")
                 .is_file()
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_every_repository_relative_ancestor_symlink_before_target_mutation() {
+        let cases = [
+            ("type-exercise", 1, Some(1)),
+            ("type-exercise/supplied-tests", 1, Some(1)),
+            ("type-exercise-starter", 1, Some(1)),
+        ];
+
+        for (relative, chapter, checkpoint) in cases {
+            let root = fixture();
+            let target = seed_target(root.path());
+            let outside = move_directory_to_outside_symlink(root.path(), relative);
+            let target_before = snapshot(&target);
+            let outside_before = snapshot(&outside);
+
+            assert!(copy_test(root.path(), chapter, checkpoint).is_err());
+            assert_eq!(
+                snapshot(&target),
+                target_before,
+                "target changed for {relative}"
+            );
+            assert_eq!(
+                snapshot(&outside),
+                outside_before,
+                "outside sentinel changed for {relative}"
+            );
+        }
     }
 
     #[cfg(unix)]
