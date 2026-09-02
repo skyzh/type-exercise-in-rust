@@ -198,6 +198,9 @@ fn checked_list_column_rejects_nested_typed_nulls() {
     assert_eq!(nested.len(), 2);
     assert!(nested.try_as_list(nested_element).is_err());
 
+    let wrong_child = ColumnViewImpl::null(PhysicalType::List(Box::new(PhysicalType::String)), 2);
+    assert!(wrong_child.try_as_list(PhysicalType::Int32).is_err());
+
     let one_level = ColumnViewImpl::null(PhysicalType::List(Box::new(PhysicalType::Int32)), 2)
         .try_as_list(PhysicalType::Int32)
         .unwrap();
