@@ -40,13 +40,17 @@ is shaped like this:
 
 ```rust,ignore
 impl<'a> Writer<'a> {
-    pub fn write(self, value: &str) -> WriterUsed<'a>;
+    pub fn write(
+        self,
+        write: impl FnOnce(&mut StringValueWriter<'_>),
+    ) -> WriterUsed<'a>;
 }
 ```
 
-`write` consumes the unused writer, appends the bytes, ending offset, and valid bit, then returns
-proof that this row has been published. Only the core evaluator may recover the builder from
-`WriterUsed` to begin the next row.
+The closure may append several borrowed fragments directly to the pending value. When it returns,
+`write` appends the ending offset and valid bit, then returns proof that this row has been
+published. Only the core evaluator may recover the builder from `WriterUsed` to begin the next
+row.
 
 The type transition prevents a callback from returning without publishing or calling `write`
 twice through the same value. It does not make partial mutation magically reversible; instead, the
