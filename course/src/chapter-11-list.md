@@ -63,7 +63,7 @@ operation before the expression reaches a row loop.
 ## Boolean and strings
 
 Register unary `not`, binary `and`/`or`, strict string comparisons, `contains`, and the Chapter 10
-concatenation path with their exact logical signatures. Logical `String` and `Varchar` may share a
+concatenation path with their exact logical signatures. Logical `Char` and `Varchar` may share a
 physical representation without becoming the same planner type. Binding preserves that
 distinction even though evaluation borrows the same UTF-8 slices.
 
