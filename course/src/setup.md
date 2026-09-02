@@ -1,5 +1,3 @@
-{{#include wip-banner.md}}
-
 # Environment Setup
 
 Install [rustup](https://rustup.rs/), update stable Rust, and install

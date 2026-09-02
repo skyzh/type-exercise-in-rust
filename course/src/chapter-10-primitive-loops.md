@@ -1,5 +1,3 @@
-{{#include wip-banner.md}}
-
 # Chapter 10: Build Variable-Width Strings Transactionally
 
 Fixed-width evaluators can compute a scalar and then push its copied value. A string result has no
@@ -85,6 +83,8 @@ the evaluator's builder; the move prevents reuse; and the distinct return type p
 published before the evaluator continues. The compiler checks the transaction boundary that a
 runtime `wrote: bool` flag would only check after the fact.
 
-Next: [Chapter 11 binds logical calls to physical expressions](./chapter-11-list.md).
+The evaluator can now publish both fixed-width and variable-width results without changing its
+batch boundary. The next module begins where a SQL planner meets that boundary:
+[binding logical calls to physical expressions](./chapter-11-list.md).
 
 {{#include copyright.md}}

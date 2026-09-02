@@ -1,5 +1,3 @@
-{{#include wip-banner.md}}
-
 # Chapter 4: Expose the Cost of Concrete Loops
 
 Chapter 3 gave arrays, constants, typed nulls, and indexed values one borrowed row interface. That
@@ -15,7 +13,7 @@ dispatched object call for every scalar row.
 ## What is in the starter
 
 Begin from your completed Chapter 3 workspace. `core/src/column.rs` already provides
-`ColumnViewImpl<'a>` and the checked `ColumnView<'a, S>` conversion. The Day 4 files contain only
+`ColumnViewImpl<'a>` and the checked `ColumnView<'a, S>` conversion. The Chapter 4 files contain only
 comment shells:
 
 - `core/src/expression.rs` names the first typed binary scalar function, evaluator, fixed-arity
@@ -23,7 +21,7 @@ comment shells:
 - `expr/src/numeric.rs` names the concrete `I32Add` scalar operation; and
 - `core/src/lib.rs` and `expr/src/lib.rs` keep their respective modules and exports commented out.
 
-You own two additions in this chapter:
+Build two pieces:
 
 1. one typed binary scalar operation lifted over nullable borrowed columns; and
 2. one batch expression that validates a complete fixed-arity input contract before delegating to
@@ -40,7 +38,7 @@ cargo x copy-test --chapter 4
 cargo test -p type-exercise-starter-supplied-tests chapter_4 --locked
 ```
 
-The first focused run should fail because the Day 4 modules and public items do not exist yet. Do
+The first focused run should fail because the Chapter 4 modules and public items do not exist yet. Do
 not edit the copied test.
 
 ## Checkpoint 1: keep one row operation small
@@ -165,7 +163,7 @@ The 14 focused cases prove the complete boundary:
 - strict nulls skip the typed operation and append null; and
 - a row error inside a whole-batch kernel stops later rows and returns no partial array.
 
-## Read the shared boundary as evidence
+## Compare the repeated boundary
 
 Compare the arity-one and arity-two kernels you exercised through the same shell:
 
@@ -183,15 +181,15 @@ Chapter 5 will select generic numeric batch kernels while preserving these rules
 make the shared validator public and add vectorized negation and clamp. Runtime trait-object
 erasure comes later, after the whole-batch path has concrete behavior to preserve.
 
-Before continuing, make sure you can explain three distinctions in your own words:
+Before generalizing the loop, check three distinctions:
 
 1. Why is strict null propagation batch control flow rather than a scalar-operation object?
 2. Why must arity, physical types, and lengths be checked before the first row is evaluated?
 3. Why is a whole-batch function pointer a different boundary from a dynamically dispatched call
    on every scalar row?
 
-You can now point to the exact work required to lift one scalar operation over a nullable batch.
-
-Next: [Chapter 5 makes numeric operation selection generic](./chapter-5-generic-arithmetic.md).
+This module ends with the exact work required to lift one scalar operation over a nullable batch.
+[Chapter 5 makes numeric operation selection generic](./chapter-5-generic-arithmetic.md) without
+moving dynamic dispatch into the row loop.
 
 {{#include copyright.md}}

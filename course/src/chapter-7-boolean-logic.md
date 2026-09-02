@@ -1,5 +1,3 @@
-{{#include wip-banner.md}}
-
 # Chapter 7: Select Dense Fixed-Width Loops
 
 Chapter 6 gave strict scalar functions one reusable evaluator. Its general loop must support
@@ -45,7 +43,8 @@ typed nulls, and Indexed inputs; the next checkpoint changes how dense inputs ar
 
 Run the first checkpoint again. Before the new public type exists, both tests fail to compile. Once
 it evaluates dense, typed-null, and Indexed inputs through ordinary public results, the cumulative
-suite has 48 passing tests. The tests do not inspect private fields or source text.
+suite has 48 passing tests. Keep the representation choices private; only the evaluation result
+belongs to the public API.
 
 ## Checkpoint 2: bind the physical representation
 
@@ -98,11 +97,11 @@ After values are computed, combine the two validity sources by `BitVec` storage 
 the final word to the exact row count. A valid constant behaves like virtual all-ones; a typed-null
 constant behaves like virtual all-zeros. Build the output through `I32Array::from_raw_parts`.
 
-The first two tests retain the public evaluation boundary. Two new public-behavior tests exercise
-nullable arrays across multiple storage words and require constant/constant evaluation to call the
-scalar function once for a non-empty batch and zero times for an empty batch. After the dense path
-is connected, the cumulative suite has 50 passing tests. Inspect the private raw binding and loop
-selection in the implementation rather than trying to expose them through a test API.
+The first two tests retain the public evaluation boundary. Two more cases exercise nullable arrays
+across multiple storage words and require constant/constant evaluation to call the scalar function
+once for a non-empty batch and zero times for an empty batch. After the dense path is connected,
+the cumulative suite has 50 passing tests. The raw binding and loop selection remain private
+implementation details.
 
 ## Checkpoint 3: prove the safety boundaries
 
@@ -138,6 +137,8 @@ lanes, and SQL Boolean operators have non-strict three-valued semantics. Selecti
 once gives the total fixed-width case an honest simple loop without disguising those required
 branches elsewhere.
 
-Next: [Chapter 8 adds three-valued Boolean logic](./chapter-8-runtime-erasure.md).
+[Chapter 8 completes this module with three-valued Boolean
+logic](./chapter-8-runtime-erasure.md), where null is part of the scalar semantics rather than a
+reason to skip the operation.
 
 {{#include copyright.md}}

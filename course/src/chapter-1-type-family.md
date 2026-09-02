@@ -1,8 +1,9 @@
-{{#include wip-banner.md}}
-
 # Chapter 1: Connect One Type Family by Hand
 
-In this chapter, you will use generic associated types (GATs) to connect the different representations of one database value: an owned scalar, a borrowed scalar reference, and a nullable array. We will make those connections for `i32` and `String`. The same relationships will later let us implement primitive arrays once and write generic expression code without repeating it for every physical type.
+Start with the representations of one database value: an owned scalar, a borrowed scalar
+reference, and a nullable array. Generic associated types (GATs) connect them for `i32` and
+`String`. Those relationships will later let one primitive-array implementation and one generic
+expression loop serve several physical types.
 
 A database execution engine rarely works with one Rust representation of a value. A string may arrive as an owned `String`, be read from an array as an `&str`, and live inside a compact column with thousands of other strings. These are different Rust types, but the engine must know that they belong to the same logical family.
 
@@ -21,11 +22,11 @@ For the integer family, the owned and borrowed representations are both `i32` be
 
 ## What is in the starter
 
-The Day 1 starter is deliberately small. It exposes only the two families used in this chapter: Int32 and String. `PhysicalType` and `PhysicalFamily` contain those two variants; `ScalarImpl`, `ScalarRefImpl`, and `ArrayImpl` contain their two erased variants. The starter also provides placeholder `PrimitiveArray<T>` and `StringArray` types and their builders. These declarations let the crate compile, but they do not implement the family relationships or store any values yet.
+The Chapter 1 starter is deliberately small. It exposes only the two families used in this chapter: Int32 and String. `PhysicalType` and `PhysicalFamily` contain those two variants; `ScalarImpl`, `ScalarRefImpl`, and `ArrayImpl` contain their two erased variants. The starter also provides placeholder `PrimitiveArray<T>` and `StringArray` types and their builders. These declarations let the crate compile, but they do not implement the family relationships or store any values yet.
 
-The `Scalar`, `ScalarRef`, `Array`, and `ArrayBuilder` traits begin as unbounded shells. They name the associated types and operations you will connect, but their supertraits, `where` clauses, and reciprocal associated-type bounds are learner work. Later physical types and later-day relationships appear only in comments or docstrings; they are not executable scaffolding for you to work around.
+The `Scalar`, `ScalarRef`, `Array`, and `ArrayBuilder` traits begin as unbounded shells. They name the associated types and operations you will connect, but their supertraits, `where` clauses, and reciprocal associated-type bounds are learner work. Later physical types and later-chapter relationships appear only in comments or docstrings; they are not executable scaffolding for you to work around.
 
-The comments beside each missing relationship name the checkpoint that owns it. Treat those comments as the implementation boundary: complete the two Day 1 families, but do not add the later families yet.
+The comments beside each missing relationship name the checkpoint that owns it. Treat those comments as the implementation boundary: complete the two Chapter 1 families, but do not add the later families yet.
 
 Copy the supplied Chapter 1 test and run it once before editing the starter:
 
@@ -75,9 +76,14 @@ assert_eq!(nullable_eq::<String>(Some("db"), Some("rust")), Some(false));
 assert_eq!(nullable_eq::<String>(None, Some("rust")), None);
 ```
 
-The function describes the database rule once: compare two non-null values, otherwise produce `NULL`. The type family decides whether the compared values are copied integers or borrowed strings:
+The function describes the database rule once: compare two non-null values, otherwise produce
+`NULL`. The type family decides whether the compared values are copied integers or borrowed
+strings.
 
-Chapter 1 does not build the generic expression framework yet. The supplied Checkpoint 1 compile witness uses this same idea to prove that each owned scalar and borrowed scalar point back to one another. When this checkpoint passes, generic code can name `S::RefType<'a>` without separately teaching it the Int32 and String cases; no `Array` or builder relationship is required yet.
+Chapter 1 does not build the generic expression framework yet. This checkpoint establishes that
+each owned scalar and borrowed scalar point back to one another. Once it compiles, generic code can
+name `S::RefType<'a>` without separately spelling out the Int32 and String cases; no `Array` or
+builder relationship is required yet.
 
 Run the focused test again:
 
@@ -90,9 +96,9 @@ cargo test -p type-exercise-starter-supplied-tests chapter_1 --locked
 
 The traits from Checkpoint 1 work when Rust knows the concrete type `S` at compile time. A database plan does not always have that information in its Rust type. A scan may read a runtime schema, or an expression node may hold a value whose physical type is known only after binding. We therefore need one runtime container for all scalar families supported so far.
 
-That is the role of `ScalarImpl` and `ScalarRefImpl<'a>` in `core/src/scalar.rs`. The first owns a value; the second can borrow one. For Day 1, each enum contains only Int32 and String. The enums erase the concrete Rust type at the runtime boundary while their variants preserve enough information to recover it safely.
+That is the role of `ScalarImpl` and `ScalarRefImpl<'a>` in `core/src/scalar.rs`. The first owns a value; the second can borrow one. For Chapter 1, each enum contains only Int32 and String. The enums erase the concrete Rust type at the runtime boundary while their variants preserve enough information to recover it safely.
 
-Implement the Day 1 erased methods and conversions in `core/src/scalar.rs` and the display/error behavior of the existing `TypeMismatch` carrier in `core/src/physical_type.rs`:
+Implement the Chapter 1 erased methods and conversions in `core/src/scalar.rs` and the display/error behavior of the existing `TypeMismatch` carrier in `core/src/physical_type.rs`:
 
 - `ScalarImpl::physical_type` and `ScalarRefImpl::physical_type` report the variant's `PhysicalType`.
 - `ScalarRefImpl::to_owned_scalar` turns an erased borrowed value into the matching erased owned value.
@@ -144,7 +150,7 @@ For `StringArray`, store:
 
 Row `i` occupies the half-open byte range `offsets[i]..offsets[i + 1]`. The first offset is zero, the offsets never decrease, and the last offset is the byte-buffer length. A null row and an empty string may repeat an offset; the validity bit distinguishes them. Because the bytes live in the array, `StringArray::get` returns an `&str` borrowed from that buffer rather than allocating a `String`.
 
-Implement the Day 1 array surface described by the starter comments:
+Implement the Chapter 1 array surface described by the starter comments:
 
 - array access: `get`, `len`, `is_empty`, `iter`, and the read-only buffer accessors used by the tests;
 - construction: `with_capacity`, `push`, and `finish` on each builder; and
@@ -161,11 +167,11 @@ When this checkpoint passes, the scalar relationship from Checkpoint 1 becomes o
 
 ## Checkpoint 4: Handwrite the erased array boundary
 
-Concrete arrays are ideal for generic code, but a database operator often receives a column selected from a runtime schema. `ArrayImpl` in `core/src/array.rs` is the erased boundary for that case. On Day 1 it has only `Int32(I32Array)` and `String(StringArray)` variants.
+Concrete arrays are ideal for generic code, but a database operator often receives a column selected from a runtime schema. `ArrayImpl` in `core/src/array.rs` is the erased boundary for that case. In Chapter 1 it has only `Int32(I32Array)` and `String(StringArray)` variants.
 
-Keep every Day 1 erased boundary handwritten. Checkpoint 2 gave `ScalarImpl` and `ScalarRefImpl` explicit physical-type dispatch plus owned and borrowed checked conversions in `core/src/scalar.rs`. In this checkpoint, do the same for `ArrayImpl` in `core/src/array.rs`: implement its common erased-array operations and write the Int32 and String conversion implementations directly. Upcasting with `From` cannot fail, while downcasting with `TryFrom` must return `TypeMismatch` for the wrong variant. Support both owned recovery and borrowed recovery so callers can inspect an erased array without cloning its buffers.
+Keep every Chapter 1 erased boundary handwritten. Checkpoint 2 gave `ScalarImpl` and `ScalarRefImpl` explicit physical-type dispatch plus owned and borrowed checked conversions in `core/src/scalar.rs`. In this checkpoint, do the same for `ArrayImpl` in `core/src/array.rs`: implement its common erased-array operations and write the Int32 and String conversion implementations directly. Upcasting with `From` cannot fail, while downcasting with `TryFrom` must return `TypeMismatch` for the wrong variant. Support both owned recovery and borrowed recovery so callers can inspect an erased array without cloning its buffers.
 
-Also complete the family inventory in `core/src/variant_catalog.rs` with exactly the Int32 and String rows. On Day 1, that callback supplies only the public `PHYSICAL_FAMILY_CATALOG` audit list. Do not use it to generate scalar or array variants, match arms, or conversion implementations yet, and do not add the later physical families.
+Also complete the family inventory in `core/src/variant_catalog.rs` with exactly the Int32 and String rows. In Chapter 1, that callback supplies only the public `PHYSICAL_FAMILY_CATALOG` audit list. Do not use it to generate scalar or array variants, match arms, or conversion implementations yet, and do not add the later physical families.
 
 Writing the two families explicitly makes the repeated conversion shape visible before a macro hides it. Chapter 2 will expand the finite inventory and then use catalog callbacks to generate that repeated erased dispatch and conversion code. The catalog is a compile-time inventory, not a runtime reflection system.
 
@@ -185,14 +191,14 @@ cargo test -p type-exercise-starter-supplied-tests chapter_1 --locked
 cargo test -p type-exercise-starter-expr --lib --locked
 ```
 
-Before continuing, make sure you can explain three boundaries in your own words:
+The chapter is complete when you can account for three boundaries:
 
 1. Why does `String` need `RefType<'a> = &'a str`, while `i32` can use `RefType<'a> = i32`?
 2. Why can generic code trust a `Scalar` relationship, while erased code must perform a checked downcast?
 3. Which bytes represent a null string row, and which structure tells you that it is null rather than empty?
 
-You have connected the first two concrete families by hand and recorded them in a two-row physical-family inventory. Chapter 2 will expand that inventory and only then use catalog callbacks to generate the repeated erased dispatch and conversion implementations for more types.
-
-Next: [Chapter 2 scales the family without copying every connection](./chapter-2-type-catalog.md).
+The two handwritten families make the repeated erased conversions visible. [Chapter 2 scales the
+family without copying every connection](./chapter-2-type-catalog.md), using the catalog only after
+there is real repetition to remove.
 
 {{#include copyright.md}}

@@ -1,5 +1,3 @@
-{{#include wip-banner.md}}
-
 # Chapter 6: Make Arity Systematic
 
 Chapter 5 chose one typed binary adapter before each batch and already centralized both infallible
@@ -18,7 +16,7 @@ contracts differ.
 
 Begin from your completed Chapter 5 workspace. In `expr/src/numeric.rs`, selected arithmetic adapters
 already delegate to the core binary helpers. `validate_expression_inputs` is private. The file ends
-with comment shells for the Day 6 additions:
+with comment shells for the Chapter 6 additions:
 
 - the public shared validator;
 - shared unary and ternary evaluators alongside the existing binary boundary;
@@ -27,7 +25,7 @@ with comment shells for the Day 6 additions:
 - the core visibility change that publishes the shared validator, plus removal of Chapter 5's
   facade-local duplicate so the facade's existing core re-export exposes the shared function.
 
-You own those additions and the contextual invalid-bound error used by `clamp`. Keep the new unary
+Implement those additions and the contextual invalid-bound error used by `clamp`. Keep the new unary
 and ternary adapters free of operation-specific row loops as you route them through the shared
 helpers. Logical function registration waits until Chapter 11, and a fourth arity is not part of
 this chapter.
@@ -39,7 +37,7 @@ cargo x copy-test --chapter 6 --checkpoint 1
 cargo test -p type-exercise-starter-supplied-tests chapter_6 --locked
 ```
 
-The focused run should fail because the Day 5 core validator is private and the facade-local helper
+The focused run should fail because the Chapter 5 core validator is private and the facade-local helper
 shadows its name. Do not edit the copied test. Checkpoints 1 and 2 deliberately avoid importing later
 constructors; Checkpoint 3 copies the completed Chapter 6 test.
 
@@ -58,9 +56,9 @@ That precedence is observable when more than one fact is wrong. A type error in 
 must win over an earlier length mismatch because all physical types are checked before any
 length. The helper returns the batch length only after every check passes.
 
-Its expected types are a slice rather than a two-element array. The supplied test uses that fact
-directly: four valid two-row inputs return `Ok(2)`, while wrong arity, a later wrong type, and a
-later wrong length return contextual `anyhow` messages with expected and actual values plus the
+Its expected types are a slice rather than a two-element array. Four valid two-row inputs return
+`Ok(2)`, while wrong arity, a later wrong type, and a later wrong length return contextual
+`anyhow` messages with expected and actual values plus the
 input index where applicable. This does not require a four-input expression. It proves that
 validation itself is not binary-specific.
 
@@ -173,14 +171,14 @@ typed scalar function, then delegate to `evaluate_unary`, `auto_vectorize_binary
 loop. `cargo expand` is an inspection step rather than a build dependency; the ordinary tests
 remain the completion gate.
 
-## Read the shared boundary
+## Trace the shared boundary
 
 Unary, binary, and ternary expressions share core auto-vectorizers by arity and callback/null policy.
 The helpers own validation, typed view recovery, null handling, row context, and output construction.
 Generated physical adapters own promotion and select the scalar function; scalar functions own only
 one value-level operation.
 
-Before continuing, make sure you can explain these boundaries in your own words:
+Check the boundary before leaving generic numeric evaluation:
 
 1. Why must every physical type be checked before the first length mismatch is reported?
 2. Why does an expected-type slice prove more than a validator hard-coded for three inputs?
@@ -188,9 +186,8 @@ Before continuing, make sure you can explain these boundaries in your own words:
    kernel before row evaluation begins?
 4. Why is an unordered `NaN` bound an error while a null input skips the clamp scalar call?
 
-You now have a real ternary expression without scalar-operation erasure or duplicated batch checks.
-Chapter 7 will add fixed-width dense paths while preserving the same nullable-aware fallback.
-
-Next: [Chapter 7 selects dense fixed-width loops](./chapter-7-boolean-logic.md).
+The module ends with a real ternary expression and no scalar-operation erasure or duplicated batch
+checks. [Chapter 7 adds fixed-width dense paths](./chapter-7-boolean-logic.md) while preserving the
+nullable-aware fallback.
 
 {{#include copyright.md}}

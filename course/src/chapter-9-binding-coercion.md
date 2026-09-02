@@ -1,5 +1,3 @@
-{{#include wip-banner.md}}
-
 # Chapter 9: Erase Typed Expressions at Runtime
 
 The evaluator families are generic so Rust can specialize their scalar and row work. A query plan,
@@ -21,7 +19,7 @@ Define the object-safe `Expression: Any + Send + Sync` trait with name, input ph
 output type, and `evaluate`. Store the complete input signature as a slice; deriving
 arity from `input_types().len()` keeps unary, binary, and ternary metadata consistent.
 
-Day 8 already leaves evaluation-only `Expression` implementations on the existing typed shells.
+Chapter 8 already leaves evaluation-only `Expression` implementations on the existing typed shells.
 Publish truthful metadata for each of those implementations when you extend the trait so the
 predecessor still compiles. Adapt only `i32_add` to `Box<dyn Expression>` at this checkpoint; the
 other erased families arrive next. The two focused tests pass here, for 63 cumulative tests.
@@ -41,8 +39,8 @@ Add erased adapters for the complete typed evaluator families. Their job is deli
 3. verify that the returned physical family matches the declared output.
 
 Do not repeat arity, type, length, strict-null, or row-context logic in the adapter. The ten
-focused tests cover unary, binary, and ternary shells and prove that errors and nulls still
-originate at the typed boundary, including a deliberately wrong kernel result. This checkpoint
+focused tests cover unary, binary, and ternary shells while preserving errors and nulls at the
+typed boundary, including a deliberately wrong kernel result. This checkpoint
 reaches 71 cumulative tests without requiring the catalog or Boolean erasure from checkpoint 3.
 
 ## Checkpoint 3: assemble the fixed builtin catalog
@@ -57,7 +55,7 @@ Build the finite builtin catalog, add Boolean delegation, and confirm safe `Send
 the course. Each catalog entry stores one preselected batch kernel. It may describe arithmetic,
 comparison, or Boolean work, but it does not inspect an operation for every row.
 
-The 13 focused tests prove:
+The 13 focused tests cover:
 
 - complete builtin coverage and metadata;
 - typed validation and strict-null behavior through trait objects;
@@ -75,6 +73,7 @@ with repeated runtime matching. Erasing the whole `Expression` lets a planner ke
 objects while each object still owns a monomorphized batch kernel. Runtime flexibility and typed
 inner loops are complementary when the boundary is placed at batch granularity.
 
-Next: [Chapter 10 builds variable-width strings transactionally](./chapter-10-primitive-loops.md).
+The runtime boundary is now complete. Chapter 10 uses it for a result whose physical storage must
+be published transactionally: [variable-width strings](./chapter-10-primitive-loops.md).
 
 {{#include copyright.md}}
