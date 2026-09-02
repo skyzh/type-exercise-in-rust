@@ -1,1 +1,0 @@
-../../../../type-exercise/supplied-tests/src/chapter_12.rs
