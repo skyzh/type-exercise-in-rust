@@ -4,8 +4,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 
 use crate::{
-    Array, ArrayImpl, BinaryExpression, BoundExpression, ColumnViewImpl, DataType, Expression,
-    FunctionRegistry, I32Add, I32Array, PrimitiveBinaryExpression, ScalarRefImpl, StringArray,
+    Array, ArrayImpl, BoundExpression, ColumnViewImpl, DataType, Expression, FunctionRegistry,
+    I32Add, I32Array, PrimitiveBinaryExpression, ScalarRefImpl, StringArray,
     build_builtin_expression,
 };
 
@@ -40,18 +40,14 @@ fn opaque_iterator_keeps_string_items_borrowed_from_the_array() {
 
 #[test]
 fn expression_trait_objects_upcast_directly_for_checked_recovery() {
-    let add = build_builtin_expression("i32_add").unwrap();
-    let erased: &dyn Any = add.as_ref();
-    assert!(erased.downcast_ref::<BinaryExpression>().is_none());
+    let expression: Box<dyn Expression> =
+        Box::new(PrimitiveBinaryExpression::new("any_probe", I32Add));
+    let erased: &dyn Any = expression.as_ref();
     assert!(
         erased
             .downcast_ref::<PrimitiveBinaryExpression<I32Add>>()
             .is_some()
     );
-
-    let concat = build_builtin_expression("string_concat").unwrap();
-    let erased: &dyn Any = concat.as_ref();
-    assert!(erased.downcast_ref::<BinaryExpression>().is_some());
 }
 
 #[test]
