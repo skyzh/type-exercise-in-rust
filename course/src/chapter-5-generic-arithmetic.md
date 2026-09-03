@@ -1,5 +1,3 @@
-{{#include wip-banner.md}}
-
 # Chapter 5: Make Numeric Evaluation Generic
 
 Chapter 4 separated an ordinary typed scalar function from the whole-batch boundary around it.

@@ -1,5 +1,3 @@
-{{#include wip-banner.md}}
-
 # Chapter 1: Connect One Type Family by Hand
 
 In this chapter, you will use generic associated types (GATs) to connect the different representations of one database value: an owned scalar, a borrowed scalar reference, and a nullable array. We will make those connections for `i32` and `String`. The same relationships will later let us implement primitive arrays once and write generic expression code without repeating it for every physical type.

@@ -1,5 +1,3 @@
-{{#include wip-banner.md}}
-
 # Build a Typed Database Expression Engine in Rust
 
 A hand-written loop for `i32 + i32` is easy:

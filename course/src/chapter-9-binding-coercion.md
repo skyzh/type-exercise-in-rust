@@ -1,5 +1,3 @@
-{{#include wip-banner.md}}
-
 # Chapter 9: Erase Typed Expressions at Runtime
 
 The evaluator families are generic so Rust can specialize their scalar and row work. A query plan,

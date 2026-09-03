@@ -1,5 +1,3 @@
-{{#include wip-banner.md}}
-
 # Chapter 4: Expose the Cost of Concrete Loops
 
 Chapter 3 gave arrays, constants, typed nulls, and indexed values one borrowed row interface. That

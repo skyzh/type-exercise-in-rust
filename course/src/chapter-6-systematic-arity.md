@@ -1,5 +1,3 @@
-{{#include wip-banner.md}}
-
 # Chapter 6: Make Arity Systematic
 
 Chapter 5 chose one typed binary adapter before each batch and already centralized both infallible

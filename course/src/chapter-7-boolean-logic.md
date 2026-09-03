@@ -1,5 +1,3 @@
-{{#include wip-banner.md}}
-
 # Chapter 7: Select Dense Fixed-Width Loops
 
 Chapter 6 gave strict scalar functions one reusable evaluator. Its general loop must support
