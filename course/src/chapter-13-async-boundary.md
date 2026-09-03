@@ -1,3 +1,5 @@
+{{#include wip-banner.md}}
+
 # Chapter 13: Share Logical Factories Across Threads
 
 The completed Chapter 12 engine already preserves five Rust boundaries that matter here: array

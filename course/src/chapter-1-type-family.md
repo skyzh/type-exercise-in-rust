@@ -1,3 +1,5 @@
+{{#include wip-banner.md}}
+
 # Chapter 1: Connect One Type Family by Hand
 
 Start with the representations of one database value: an owned scalar, a borrowed scalar

@@ -1,3 +1,5 @@
+{{#include wip-banner.md}}
+
 # Chapter 8: Implement Three-Valued Boolean Logic
 
 Strict arithmetic can skip its scalar function whenever an input is null. SQL Boolean logic is

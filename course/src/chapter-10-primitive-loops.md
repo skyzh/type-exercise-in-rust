@@ -1,3 +1,5 @@
+{{#include wip-banner.md}}
+
 # Chapter 10: Build Variable-Width Strings Transactionally
 
 Fixed-width evaluators can compute a scalar and then push its copied value. A string result has no

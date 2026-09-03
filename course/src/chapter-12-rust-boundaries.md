@@ -1,3 +1,5 @@
+{{#include wip-banner.md}}
+
 # Chapter 12: Build a One-Level List Column
 
 A List column combines two independent structures: outer rows and one contiguous child array.

@@ -1,3 +1,5 @@
+{{#include wip-banner.md}}
+
 # Chapter 3: Read Nullable Columns Without Materializing Them
 
 Chapter 2 gave the executor several physical families. A row loop still should not need separate

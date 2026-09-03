@@ -1,3 +1,5 @@
+{{#include wip-banner.md}}
+
 # Chapter 2: Scale the Physical Type Family
 
 Chapter 1 connected Int32 and String by hand. An owned scalar, its borrowed form, its nullable
