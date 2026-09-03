@@ -14,17 +14,17 @@ need to materialize another array first.
 ## What is in the starter
 
 Begin from your completed Chapter 2 workspace. The scalar, array, erasure, logical-type, and
-Decimal work from the first two chapters is already present. `core/src/column.rs` contains only the Day
-3 comment shells for `ColumnViewImpl<'a>` and `ColumnView<'a, S>`. The `column` module and its public
+Decimal work from the first two chapters is already present. `core/src/column.rs` contains only the
+Chapter 3 comment shells for `ColumnViewImpl<'a>` and `ColumnView<'a, S>`. The `column` module and its public
 exports remain commented in `core/src/lib.rs`; the facade re-exports the core package.
 
-You own two additions in this chapter:
+Add two pieces:
 
 1. a representation-erased borrowed view with checked constructors; and
 2. a typed borrowed view that checks one physical family before row access.
 
-Later relationships in the starter remain comments. Do not implement Day 7 raw specialization or
-Day 12 List views here.
+Later relationships in the starter remain comments. Do not implement Chapter 7 raw specialization or
+Chapter 12 List views here.
 
 Copy the cumulative supplied test before editing:
 
@@ -128,7 +128,7 @@ cargo test -p type-exercise-starter-supplied-tests chapter_3 --locked
 cargo test -p type-exercise-starter-expr --lib --locked
 ```
 
-The focused test proves five boundaries:
+The focused test covers five boundaries:
 
 - arrays, constants, and indexed values expose the same logical-row interface;
 - the primitive families added in Chapter 2 work without family-specific row loops;
@@ -142,16 +142,15 @@ key-array family, builder, or storage encoding. Leave run-length encoding as an 
 7 adds primitive-loop specialization, and Chapter 12 reuses this representation boundary for
 List.
 
-Before continuing, make sure you can explain three boundaries in your own words:
+Use these questions to check the representation boundary:
 
 1. Why must an all-null or empty column carry a physical type instead of inferring one from rows?
 2. Why does `indexed` validate every key before it returns a view?
 3. Why can `ColumnView<'a, String>::get` return a borrowed `&'a str` without materializing a new
    `StringArray`?
 
-You can now separate the representation of a batch from the scalar operation that reads it.
-Chapter 4 will use this borrowed boundary to expose what concrete unary and binary row loops repeat.
-
-Next: [Chapter 4 exposes what unary and binary loops repeat](./chapter-4-concrete-loops.md).
+The batch representation is now independent of the scalar operation that reads it. [Chapter 4
+uses this borrowed boundary to expose what concrete unary and binary row loops
+repeat](./chapter-4-concrete-loops.md).
 
 {{#include copyright.md}}

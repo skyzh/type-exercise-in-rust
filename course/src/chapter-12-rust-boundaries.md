@@ -44,9 +44,8 @@ For `row_count = n`, preserve these invariants:
 That final pair is why offsets alone cannot encode nullability.
 
 When a row contains the wrong child type, return an error without publishing a partial List array.
-Validate the complete row before advancing its final offset or validity bit. The private builder
-state is an implementation detail; the learner-visible test observes the transaction through the
-public constructor.
+Validate the complete row before advancing its final offset or validity bit. The public constructor
+makes that transaction observable without exposing the builder's private state.
 
 Owned and borrowed list scalars should slice only their row's child range. They must not copy or
 expose neighboring rows. Empty and all-null arrays still retain the declared child physical type.
@@ -78,6 +77,8 @@ The nine focused tests reach 105 cumulative tests. They cover logical/physical m
 empty/null/nonempty rows, raw-part validation, owned and borrowed slices, all erased view forms,
 typed-null mismatch, explicit nested rejection, and failure without partial publication.
 
-Next: [Chapter 13 strengthens Rust ownership boundaries](./chapter-13-async-boundary.md).
+Logical binding and nested storage now share one erased execution vocabulary. The final module
+strengthens the Rust boundaries that let the engine move safely across threads and futures,
+starting with [thread-safe factories](./chapter-13-async-boundary.md).
 
 {{#include copyright.md}}

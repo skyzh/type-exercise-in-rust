@@ -43,7 +43,7 @@ expression an inherent `evaluate` method. Validate a one-element Boolean type sl
 a two-element Boolean type slice for `And` and `Or`, then select the matching core evaluator outside
 the row loop: strict unary for `Not`, nullable-aware binary for `And` and `Or`.
 
-The supplied test sends the exhaustive 21 truth rows through the public builder,
+The checkpoint sends the exhaustive 21 truth rows through the public builder,
 `ColumnViewImpl`, and `evaluate`; it never imports the private helpers or depends on their names,
 file, or signatures. Do not export a production truth-table constant or `BooleanTruthRow` merely
 to make the test convenient: production code owns behavior, while tests own enumerated examples.
@@ -71,7 +71,7 @@ the core depend on Boolean semantics and would put dispatch back into the hot pa
 function itself may branch because those branches *are* SQL Boolean semantics, not operation
 dispatch.
 
-The eight focused tests cover all truth rows, array evaluation, absorption rules, strict `NOT`,
+The focused tests cover all truth rows, array evaluation, absorption rules, strict `NOT`,
 arity and metadata, operation selection through public results, and unchanged type/length
 validation.
 
@@ -86,6 +86,7 @@ The core crate knows only whether a callback accepts values or `Option` values. 
 meaning of `FALSE AND NULL`. This one-way ownership is why adding a different nullable-aware
 operation does not require another core loop.
 
-Next: [Chapter 9 erases complete typed expressions at runtime](./chapter-9-binding-coercion.md).
+With specialized execution and Boolean nulls in place, [Chapter 9 erases complete typed
+expressions at runtime](./chapter-9-binding-coercion.md).
 
 {{#include copyright.md}}

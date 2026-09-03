@@ -25,7 +25,7 @@ slice factory directly; the unary, binary, and ternary helpers check arity befor
 typed closures. `bind` resolves one name and calls its factory once. Unknown names and unsupported
 arities fail without evaluating a batch.
 
-The six focused tests keep this stage independent of the builtin catalog: they cover logical versus
+The six focused tests keep this stage independent of the builtin catalog. They cover logical versus
 physical metadata, zero through five input positions, custom registration, repeated binding, helper
 arity, and unknown names. Passing them reaches 83 cumulative tests.
 
@@ -82,15 +82,16 @@ comparison, and string calls; unknown names; unsupported and lossy signatures; i
 factory metadata; arbitrary arity slices; custom registration; checked runtime failures; and
 metadata validation through both physical and bound expressions.
 
-As a final inspection, confirm that binding chooses a factory before evaluation and that
-`BoundExpression::evaluate` delegates the complete batch. Loop selection and the absence of a
-facade row loop are implementation-review concerns; supplied tests grade only public API and
-behavior.
+Before continuing, confirm that binding chooses a factory before evaluation and that
+`BoundExpression::evaluate` delegates the complete batch. The facade should select and assemble
+operations; the generic row loop remains in core.
 
-The dependency direction remains important. The facade owns concrete operations and the builtin
-registry. Core owns only the generic registry and erased expression vocabulary needed to store a
-finished factory result. Core never imports the builtin catalog.
+The dependency direction remains important. The expression facade owns `FunctionRegistry`,
+`BoundExpression`, concrete operations, and the builtin catalog. Core owns the generic evaluators
+and erased expression vocabulary that a finished binding delegates to. Core never imports the
+registry or builtin catalog.
 
-Next: [Chapter 12 builds a one-level List column](./chapter-12-rust-boundaries.md).
+With planning resolved to one physical expression, Chapter 12 adds a new storage shape without
+weakening that boundary: [a one-level List column](./chapter-12-rust-boundaries.md).
 
 {{#include copyright.md}}

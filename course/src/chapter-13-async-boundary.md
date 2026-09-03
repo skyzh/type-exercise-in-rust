@@ -2,7 +2,7 @@
 
 # Chapter 13: Share Logical Factories Across Threads
 
-The completed Day 12 engine already preserves five Rust boundaries that matter here: array
+The completed Chapter 12 engine already preserves five Rust boundaries that matter here: array
 iterators borrow their arrays behind an opaque return type, erased expressions support checked
 `Any` recovery and are safe to share, and erased column views can shorten their borrow for one
 evaluation call. This chapter keeps those compiler-enforced properties intact. Your one new change
@@ -17,7 +17,7 @@ cargo test -p type-exercise-starter-supplied-tests chapter_13 --locked
 
 The first run is compile-red only at the captured-factory test: `FunctionRegistry` stores a trait
 object that is not yet `Send + Sync`, so the registry cannot cross a thread boundary. The other
-five tests protect properties already present at the end of Day 12; they are regression witnesses,
+five tests protect properties already present at the end of Chapter 12; they are regression witnesses,
 not additional implementation tasks.
 
 ## Strengthen the factory boundary
@@ -27,7 +27,7 @@ In `expr/src/binder.rs`, require the stored `FunctionFactory` and every factory 
 `Send + Sync + 'static`. Keep the callable bound as `Fn`: registration stores a reusable factory,
 and shared calls must not require mutable access to the closure itself.
 
-A factory can still capture state through thread-safe shared ownership. The supplied test uses an
+A factory can still capture state through thread-safe shared ownership. The checkpoint uses an
 `Arc<AtomicUsize>` to observe one call after the registry crosses a worker-thread boundary. Do not
 add a marker trait, expose a new helper, use `unsafe`, or turn borrowed evaluation data into
 `'static` data.
@@ -54,14 +54,15 @@ cargo test -p type-exercise-starter-expr --lib --locked
 cargo check -p type-exercise-starter-core --locked
 ```
 
-The focused result is 6 passed, and the cumulative result is 111 passed. Together they prove the
-one new thread-safe factory boundary without regressing the five inherited borrowing, erasure, and
-sharing properties.
+The focused result is 6 passed, and the cumulative result is 111 passed. Together they check the
+new thread-safe factory boundary alongside the five inherited borrowing, erasure, and sharing
+properties.
 
 The result is still the same synchronous expression engine. The stronger ownership boundary is
 what lets Chapter 14 borrow expressions and input views across one future without cloning their
 contents.
 
-Next: [Chapter 14 adds a batch async boundary](./chapter-14-async-boundary.md).
+The registry can now cross a worker-thread boundary without changing how a batch is evaluated.
+Chapter 14 carries the same borrows through [one batch future](./chapter-14-async-boundary.md).
 
 {{#include copyright.md}}

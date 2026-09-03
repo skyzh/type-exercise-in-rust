@@ -6,7 +6,7 @@ Evaluation is synchronous, but an execution engine may need to schedule a comple
 an asynchronous interface. This chapter wraps the existing operation exactly once. It does not
 make scalar functions async, yield between rows, or change validation and error semantics.
 
-## The learner-owned boundary
+## Add the async boundary
 
 ```console
 cargo x copy-test --chapter 14
@@ -52,7 +52,7 @@ cargo test -p type-exercise-starter-expr --lib --locked
 cargo check -p type-exercise-starter-core --locked
 ```
 
-The nine focused tests prove equal synchronous/static/erased/bound results, exactly one underlying
+The nine focused tests check equal synchronous/static/erased/bound results, exactly one underlying
 evaluation for every async path, propagation of scalar and validation failures, `Send`
 futures, and a borrow lifetime that covers expression, views, and arrays.
 
@@ -63,8 +63,11 @@ that operation gives a scheduler one uniform interface without imposing async di
 row. Static callers keep an opaque compiler-known future; erased callers pay boxing once per
 batch. Both paths preserve the synchronous implementation as the single semantic authority.
 
-You have now connected the full path: physical families, borrowed views, scalar operations,
-reusable vectorizers, dense selection, SQL null semantics, runtime erasure, transactional strings,
-logical binding, nested storage, Rust ownership, and an async batch boundary.
+The complete course now connects the full path: physical families, borrowed views, scalar
+operations, reusable vectorizers, dense selection, SQL null semantics, runtime erasure,
+transactional strings, logical binding, nested storage, Rust ownership, and an async batch
+boundary. Each abstraction was introduced at the boundary where the expression engine needed it,
+and the final async wrapper preserves the synchronous batch evaluator as the single semantic
+authority.
 
 {{#include copyright.md}}

@@ -27,13 +27,13 @@ The goal is not to hide the type system behind a general framework. It is to kee
 ## What is in the starter
 
 Begin from your completed Chapter 1 workspace. `core/src/variant_catalog.rs` contains exactly the
-Int32 and String rows. On Day 1, those rows drive only `PHYSICAL_FAMILY_CATALOG`; scalar and array
-erasure remains handwritten in `core/src/scalar.rs` and `core/src/array.rs`. Day 2 first replaces that
+Int32 and String rows. In Chapter 1, those rows drive only `PHYSICAL_FAMILY_CATALOG`; scalar and array
+erasure remains handwritten in `core/src/scalar.rs` and `core/src/array.rs`. Chapter 2 first replaces that
 Int32/String erasure with catalog callbacks, then extends the inventory. `core/src/physical_type.rs`,
 `core/src/scalar.rs`, and `core/src/array.rs` expose those two physical families, and
 `core/src/array/primitive_array.rs` has the working `I32Array` layout you implemented.
 
-The Day 2 starter does not predeclare the rest of the solution. Comments in the active files mark
+The Chapter 2 starter does not predeclare the rest of the solution. Comments in the active files mark
 where the primitive variants and aliases belong. `core/src/data_type.rs`, `core/src/decimal.rs`, and
 `core/src/array/decimal_array.rs` are still docstrings rather than executable declarations, and their
 modules remain commented in `core/src/lib.rs` and `core/src/array.rs`. You will make those files executable
@@ -100,7 +100,7 @@ Now open `core/src/variant_catalog.rs`. Each row names six facts that otherwise 
 storage kind, erased variant, array, builder, owned scalar, borrowed scalar
 ```
 
-Extend the inventory with the static Day 2 families: Int16, Int64, Bool, Float32, and Float64.
+Extend the inventory with the static Chapter 2 families: Int16, Int64, Bool, Float32, and Float64.
 Int32 remains in place, and String remains the one `borrowed` row because its array yields `&str`
 rather than copying an owned `String`.
 
@@ -156,15 +156,15 @@ Implement `physical_type`, `is_string`, and `is_numeric`. `Boolean` is not numer
 `Char { width }` remains logical metadata even though it does not change the physical array.
 
 Do not add a nullable logical variant or List. Keep one primitive array representation with its
-values and packed validity bitmap. Day 7 will borrow those two buffers through a crate-private raw
+values and packed validity bitmap. Chapter 7 will borrow those two buffers through a crate-private raw
 view, run strict total `i32` operations over values, and combine validity separately by storage
 word. Constants use the same raw route through one copied value plus a validity bit; Indexed views
 keep the general gather loop. This requires neither a second Arrow array type nor a public
-all-valid proof. List arrives with its own scalar and array relationships on Day 12.
+all-valid proof. List arrives with its own scalar and array relationships in Chapter 12.
 
 Checkpoint 4 adds the Decimal variants and checked constructor to this same file. After that work,
 uncomment the `data_type` and `decimal` modules and exports in `core/src/lib.rs`; do not enable any
-later-day module.
+later-chapter module.
 
 ## Checkpoint 4: Keep Decimal metadata with the physical value
 
@@ -226,7 +226,7 @@ cargo test -p type-exercise-starter-supplied-tests chapter_2 --locked
 cargo test -p type-exercise-starter-expr --lib --locked
 ```
 
-Before continuing, make sure you can explain three boundaries in your own words:
+Check the separation between storage, static families, and runtime metadata before moving on:
 
 1. Which existing scalar, array, and conversion bounds admit `PrimitiveArray<f64>` to the generic
    database-array implementation, while an arbitrary `PrimitiveArray<T>` does not qualify?
@@ -234,10 +234,8 @@ Before continuing, make sure you can explain three boundaries in your own words:
    `PhysicalType::String`?
 3. Why can `DecimalArray` reuse `PrimitiveArray<i128>` storage while `DecimalArrayBuilder` still cannot use the metadata-free `ArrayBuilder::with_capacity` constructor?
 
-You now have one compile-time inventory for the repeated static relationships and one explicit,
-checked path for runtime metadata. Chapter 3 will use those physical families through several
-nullable column encodings.
-
-Next: [Chapter 3 reads several nullable column encodings](./chapter-3-column-views.md).
+The Type families module ends with one compile-time inventory for repeated static relationships and
+one explicit checked path for runtime metadata. [Chapter 3 reads those physical families through
+several nullable column representations](./chapter-3-column-views.md).
 
 {{#include copyright.md}}

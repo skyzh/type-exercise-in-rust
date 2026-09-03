@@ -15,9 +15,10 @@ a small runtime match chooses one generic typed batch kernel before its row loop
 
 ## What is in the starter
 
-Begin from your completed Chapter 4 workspace. The fixed-arity batch shell in `expr/src/numeric.rs`
-is working code; preserve its validation order and its whole-batch kernel boundary. The Day 5
-surface is still deliberately small:
+Begin from your completed Chapter 4 workspace. The fixed-arity batch shell in
+`core/src/expression.rs` is working code; preserve its validation order and whole-batch kernel
+boundary. The concrete `I32Add` operation remains in `expr/src/numeric.rs`. The Chapter 5 surface
+is still deliberately small:
 
 - `core/src/promotion.rs` contains comment shells for one promotion row, the promotion catalog, and its
   lookup function;
@@ -30,7 +31,7 @@ surface is still deliberately small:
 - `core/src/lib.rs` leaves the promotion module unwired, while `expr/src/numeric.rs` leaves the two
   operator enums unwired.
 
-You own three connected additions: the logical promotion policy, generic arithmetic selection,
+Add three connected pieces: the logical promotion policy, generic arithmetic selection,
 and generic numeric comparison. You will also add the small `PrimitiveArray::from_values` helper
 needed to construct a non-null batch directly. Leave shared arity validation and ternary
 evaluation for Chapter 6, runtime expression erasure for Chapter 9, and logical name binding for
@@ -86,8 +87,8 @@ rounding, overflow, and division scale need a separate contract before an implic
 operation is meaningful. A physical representation alone does not supply those semantics.
 
 Implement `promote_numeric` as a catalog lookup that returns the row's logical output or `None`.
-Do not infer a fallback from enum order or substitute a duplicate row: the supplied test audits all
-25 ordered input pairs and the exact 21 supported catalog keys.
+Do not infer a fallback from enum order or substitute a duplicate row. The table has all 25
+ordered input pairs and exactly 21 supported catalog keys.
 
 Enable `promotion` in `core/src/lib.rs` and export `NumericPromotion`, `NUMERIC_PROMOTIONS`, and
 `promote_numeric`. The final focused test also imports the later operator selectors, so it cannot
@@ -142,8 +143,7 @@ trait Numeric:
 
 Implement the small representation bridge explicitly for `i16`, `i32`, `i64`, `f32`, and `f64`.
 Express addition, subtraction, and multiplication through the standard `Add`, `Sub`, and `Mul`
-traits. For signed
-integers, apply those traits to `std::num::Wrapping<T>` and recover `.0`; this keeps the course's
+traits. For signed integers, apply those traits to `std::num::Wrapping<T>` and recover `.0`; this keeps the course's
 deterministic wrapping result in debug and release builds. Standard `Add` on a bare signed integer
 does not itself choose one cross-profile overflow policy, so changing overflow into an error would
 be a separate product-semantic decision rather than part of this generic refactor. Floating-point
@@ -169,15 +169,15 @@ parallel conversion trait.
 
 The facade adapter selects only the monomorphized conversion and scalar operation. It passes that
 callback to the binary auto-vectorizer in `core/src/expression.rs`, which converts each erased
-column to its typed view once and owns the row traversal. Day 6 generalizes this same core-owned
+column to its typed view once and owns the row traversal. Chapter 6 generalizes this same core-owned
 pattern across unary and ternary arities. Do not accept `ScalarRefImpl`, create
 a per-scalar erased operation object, re-run logical promotion, or match physical variants inside
 every row. The caller must obtain the logical output from `promote_numeric` first; an unsupported
 pair never reaches the physical builder.
 
-Keep `build_numeric_binary_expression` and its returned shell crate-private. Export
-`ArithmeticOperator` from the crate root, but do not turn the physical constructor into a public
-user API: Chapter 11 will place logical name binding in front of it.
+Keep `build_numeric_binary_expression`, its returned shell, and `ArithmeticOperator` public: the
+separate supplied-test crate exercises that physical construction boundary directly. This is the
+low-level API; Chapter 11 will place logical name binding in front of it.
 
 The copied test still imports numeric comparison, so use the library compile boundary again:
 
@@ -193,7 +193,7 @@ widening the public runtime boundary or testing the operator inside each row.
 Add the six public `ComparisonOperator` variants: `Less`, `LessOrEqual`, `Greater`,
 `GreaterOrEqual`, `Equal`, and `NotEqual`. A crate-private `NumericCompare<L, R, O>` reuses the same
 typed `TryFrom` conversions and tuple-selected batch kernel, but it builds `bool`. Keep
-`build_numeric_comparison_expression` crate-private.
+`build_numeric_comparison_expression` public for the same separate-crate checkpoint contract.
 
 Both inputs may be converted to `f64` for comparison while the batch kernel builds a `BoolArray`.
 The runtime selector still chooses once before the rows.
@@ -210,7 +210,7 @@ cargo test -p type-exercise-starter-supplied-tests chapter_5 --locked
 cargo test -p type-exercise-starter-expr --lib --locked
 ```
 
-The 10 focused cases and 39 cumulative learner tests prove the whole Day 5 boundary:
+The 10 focused cases and 39 cumulative learner tests cover the whole Chapter 5 boundary:
 
 - the catalog contains exactly the approved ordered promotions and rejects every lossy pair;
 - arithmetic works in both mixed operand orders and builds the promoted physical family;
@@ -228,7 +228,7 @@ operation?” The selected kernel then answers the batch question for every row.
 three stages into `as f64`, a per-row type match, or another handwritten loop would make the code
 shorter by hiding the policy you need to audit.
 
-Before continuing, make sure you can explain these boundaries in your own words:
+Check the separation among policy, selection, and row execution:
 
 1. Why may `SmallInt + Real` produce `Real` while `Integer + Real` produces `Double`?
 2. Why is every `BigInt`/floating-point pair absent even though Rust provides an `as` conversion?
@@ -236,10 +236,8 @@ Before continuing, make sure you can explain these boundaries in your own words:
    each row?
 4. Why is `null / 0` a null row rather than a division error?
 
-You now have generic numeric operation selection without changing the batch contract that made
-the concrete loops correct. Chapter 6 will publish their validator across arities and add a real
-vectorized ternary path.
-
-Next: [Chapter 6 makes expression arity systematic](./chapter-6-systematic-arity.md).
+Generic numeric operation selection now reuses the batch contract that made the concrete loops
+correct. [Chapter 6 makes expression arity systematic](./chapter-6-systematic-arity.md) by
+publishing the validator and adding a real vectorized ternary path.
 
 {{#include copyright.md}}

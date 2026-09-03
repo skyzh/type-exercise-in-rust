@@ -52,12 +52,29 @@ You should be comfortable with Rust enums, traits, references, `Option`, and ord
 The course introduces generic associated types, checked runtime erasure, typestate, and
 return-position `impl Trait` in the concrete places that need them.
 
-Every chapter names prerequisites, exact starter targets, required work, extensions, and a copied
-test. Passing the test is necessary; you should also be able to explain why the new boundary exists
-and which failure it prevents.
+Each lab begins from the preceding completed snapshot, names the learner-owned change, and gives an
+exact command for useful feedback. Passing the supplied test is necessary; you should also be able
+to explain why the new boundary exists and which failure it prevents.
 
-Treat each of the fourteen focused chapters as roughly half a day. An experienced Rust learner can
-finish the course in about seven working days; newer learners should expect to take longer.
+The fourteen labs form seven modules:
+
+1. **Type families** (Chapters 1–2) connects scalar and array representations, then scales the
+   finite catalog.
+2. **Borrowed columns and first batch evaluation** (Chapters 3–4) normalizes column
+   representations and lifts the first scalar operation over a batch.
+3. **Generic numeric evaluation** (Chapters 5–6) separates promotion, kernel selection, and
+   reusable arity-shaped vectorization.
+4. **Specialized execution and Boolean nulls** (Chapters 7–8) adds a narrow dense path and then
+   handles SQL's non-strict Boolean semantics.
+5. **Runtime expressions and variable-width output** (Chapters 9–10) erases whole expressions
+   and publishes string rows transactionally.
+6. **Logical binding and nested storage** (Chapters 11–12) resolves runtime calls and extends the
+   same boundaries to one-level Lists.
+7. **Thread-safe and async boundaries** (Chapters 13–14) makes logical factories shareable and
+   wraps one batch in a future without introducing per-row async work.
+
+Treat each lab as roughly half a day. An experienced Rust learner can finish the course in about
+seven working days; newer learners should expect to take longer.
 
 Continue to [Environment Setup](./setup.md).
 
