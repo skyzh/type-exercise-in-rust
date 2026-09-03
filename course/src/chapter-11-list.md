@@ -1,5 +1,3 @@
-{{#include wip-banner.md}}
-
 # Chapter 11: Bind and Coerce Logical Calls
 
 The physical catalog can evaluate a known signature, but SQL starts with a logical name and
