@@ -1,21 +1,33 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
+use crate::DecimalType;
 use crate::variant_catalog::for_each_physical_family;
 
+/// The in-memory representation selected for a value at runtime.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum PhysicalType {
+    Int16,
     Int32,
+    Int64,
+    Bool,
+    Float32,
+    Float64,
     String,
-    // Day 2 adds the remaining primitive families and Decimal.
-    // Day 12 adds List.
+    Decimal(DecimalType),
 }
 
+/// A descriptor-free tag for each supported physical family.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum PhysicalFamily {
+    Int16,
     Int32,
+    Int64,
+    Bool,
+    Float32,
+    Float64,
     String,
-    // Day 2 adds the remaining non-List families.
+    Decimal,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -25,18 +37,19 @@ pub struct PhysicalFamilyEntry {
 }
 
 macro_rules! define_family_catalog {
-    ($( { $kind:ident, $variant:ident, $array:ident, $builder:ident, $owned:ty, $borrowed:ty } ),+ $(,)?) => {
+    ($( { $kind:ident, $variant:ident, $array:ident, $builder:ident, $owned:ty, $borrowed:ty } ),* $(,)?) => {
         pub const PHYSICAL_FAMILY_CATALOG: &[PhysicalFamilyEntry] = &[
             $(PhysicalFamilyEntry {
                 family: PhysicalFamily::$variant,
                 name: stringify!($variant),
-            }),+
+            }),*
         ];
     };
 }
 
 for_each_physical_family!(define_family_catalog);
 
+/// A checked erased-to-typed conversion encountered another physical family.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TypeMismatch {
     pub expected: PhysicalType,

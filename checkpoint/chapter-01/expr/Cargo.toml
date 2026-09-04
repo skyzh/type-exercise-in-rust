@@ -10,4 +10,3 @@ doctest = false
 
 [dependencies]
 type-exercise-checkpoint-01-core = { path = "../core" }
-bitvec = "1"

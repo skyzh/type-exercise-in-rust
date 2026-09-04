@@ -1,24 +1,20 @@
 use crate::variant_catalog::for_each_physical_family;
 
-/// The two physical types visible at the start of Day 1.
-///
-/// Day 2 adds Int16, Int64, Bool, Float32, Float64, and Decimal. Day 12 adds List.
+/// Checkpoint 1: extend this starter pair to every non-List physical type.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum PhysicalType {
     Int32,
     String,
-    // Day 2: add the remaining primitive variants and `Decimal(DecimalType)`.
-    // Day 12: add `List(Box<PhysicalType>)`.
+    // Add Int16, Int64, Bool, Float32, Float64, and `Decimal(DecimalType)`.
+    // A later checkpoint adds List.
 }
 
-/// The two descriptor-free families visible at the start of Day 1.
-///
-/// Day 2 extends this inventory with the remaining non-List families.
+/// Checkpoint 1: extend this descriptor-free inventory in the same order.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum PhysicalFamily {
     Int32,
     String,
-    // Day 2: add Int16, Int64, Bool, Float32, Float64, and Decimal.
+    // Add Int16, Int64, Bool, Float32, Float64, and Decimal.
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -40,11 +36,11 @@ macro_rules! define_family_catalog {
 
 for_each_physical_family!(define_family_catalog);
 
-/// Day 1, checkpoint 2: use this value for checked erased-to-typed failures.
+/// Checkpoint 1: use this value for checked erased-to-typed failures.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TypeMismatch {
     pub expected: PhysicalType,
     pub actual: PhysicalType,
 }
 
-// Day 1, checkpoint 2: implement `Display` and `std::error::Error` for `TypeMismatch`.
+// Checkpoint 1: implement `Display` and `std::error::Error` for `TypeMismatch`.
