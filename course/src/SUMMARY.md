@@ -15,7 +15,7 @@
 
 # Specialized evaluation
 
-- [Measure the Cost of Concrete Loops](./chapter-5-generic-arithmetic.md)
+- [Specialize Common Column Shapes](./chapter-5-generic-arithmetic.md)
 - [Separate Fast Paths from Semantic Exceptions](./chapter-6-systematic-arity.md)
 
 # Runtime planning

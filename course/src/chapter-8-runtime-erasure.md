@@ -11,11 +11,17 @@ cargo x copy-test --chapter 8
 cargo test -p type-exercise-starter-supplied-tests chapter_8 --locked
 ```
 
-## Keep one registry and one bound expression
+## Build the physical catalog, then bind once
 
 Enable `core/src/promotion.rs` and implement the explicit lossless table for SmallInt, Integer,
 BigInt, Real, and Double. Reject BigInt/float pairs and every Decimal arithmetic pair whose scale
 and rounding semantics are unspecified.
+
+Now expand `expr/src/numeric.rs` from its Chapter 3 examples and enable `boolean.rs` and
+`string.rs`. Each module owns concrete scalar semantics and exposes crate-private factories that
+choose a complete batch kernel, its fixed arity, and physical input/output metadata before building
+a `BatchExpression<N>`. This is the first checkpoint with that physical catalog; Chapter 7 kept
+only the shell and a test-local kernel.
 
 In `expr/src/binder.rs`, implement:
 
@@ -40,8 +46,9 @@ cargo test -p type-exercise-starter-supplied-tests --lib --locked
 cargo check -p type-exercise-starter-core --locked
 ```
 
-The tests cover mixed-width arithmetic, Boolean nulls, borrowed String concatenation, unknown
-names, wrong arities, and lossy signatures through public registry behavior. [Chapter 9](./chapter-9-binding-coercion.md)
-adds one nested storage shape without changing the expression boundary.
+The tests bind and evaluate the introduced numeric, Boolean, and borrowed String factories through
+the public registry, then reject unknown names, wrong arities, and lossy signatures before
+evaluation. [Chapter 9](./chapter-9-binding-coercion.md) adds one nested storage shape without
+changing the expression boundary.
 
 {{#include copyright.md}}

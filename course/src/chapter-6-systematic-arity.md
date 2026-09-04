@@ -28,14 +28,15 @@ add, subtract, and multiply fit it; division does not.
 
 ## Keep exceptions and SQL nulls visible
 
-Implement `try_evaluate_binary` and the fallible ternary adapter so the first scalar failure names
-its row and returns no partial array. Integer division must reject zero and `MIN / -1`; floating
-division rejects both positive and negative zero. Decimal remains unsupported until precision,
-scale, rounding, and overflow have an explicit policy.
+Implement `try_evaluate_binary` and the fallible ternary adapter so the first scalar callback
+failure names its row and returns no partial array. The supplied test uses checked integer division
+to exercise zero without making core choose an arithmetic operator. Decimal remains unsupported
+until precision, scale, rounding, and overflow have an explicit policy.
 
-Boolean AND and OR are not strict functions. Add nullable-aware core adapters, then implement the
-SQL truth table in `expr/src/boolean.rs`: `FALSE AND NULL` is false, `TRUE OR NULL` is true, and
-the remaining unknown combinations stay null. NOT remains strict.
+Boolean AND and OR are not strict functions. Add nullable-aware core adapters that pass
+`Option<bool>` values to one supplied callback. The test expresses the SQL cases: `FALSE AND NULL`
+is false, while the remaining unknown combinations stay null. Do not enable a concrete Boolean
+facade here; Chapter 8 introduces NOT, AND, OR, and their physical factories together.
 
 ```console
 cargo test -p type-exercise-starter-supplied-tests chapter_6 --locked

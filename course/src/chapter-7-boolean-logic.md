@@ -30,8 +30,10 @@ one complete-batch `evaluate` method. Implement it for every `BatchExpression<N>
 `BinaryExpression`, `PrimitiveBinaryExpression`, `PrimitiveLoop`, and `evaluate_with_loop`
 absent—there is one shell and one traversal layer.
 
-The facade now chooses concrete numeric, Boolean, and String kernels before constructing the
-shell. The row loop receives no operator enum and performs no logical lookup.
+The supplied test declares one local binary batch kernel with Chapter 5's existing core adapter,
+then places that complete kernel behind both the typed and erased interfaces. Do not enable numeric,
+Boolean, or String factory catalogs, and do not enable numeric promotion. Chapter 8 owns those
+physical choices and the logical registry that selects them.
 
 ```console
 cargo test -p type-exercise-starter-supplied-tests chapter_7 --locked
@@ -39,8 +41,8 @@ cargo test -p type-exercise-starter-supplied-tests --lib --locked
 cargo check -p type-exercise-starter-core --locked
 ```
 
-The focused tests use unary and binary shells through `dyn Expression`, and exercise arity, type,
-length, output-family, and output-length rejection. [Chapter 8](./chapter-8-runtime-erasure.md)
-binds logical calls to these already-selected physical expressions.
+The focused tests use a binary shell through `dyn Expression`, and exercise arity, type, length,
+output-family, and output-length rejection. [Chapter 8](./chapter-8-runtime-erasure.md) introduces
+the physical factory catalog and binds logical calls to those selected expressions.
 
 {{#include copyright.md}}

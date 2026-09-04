@@ -46,6 +46,10 @@ lengths before reading a row, converts both inputs to typed borrowed views once,
 batch loop. For a non-null pair it passes `&str`, `&str`, and a fresh `Writer` to the callback. For
 a null pair it publishes one null directly.
 
+Keep this boundary in core. The supplied test passes its borrowed concatenation callback directly;
+do not enable the concrete String facade yet. Chapter 8 introduces the physical String factories
+when the binder has a reason to select them.
+
 The callback can concatenate two borrowed strings without allocating a temporary `String`:
 
 ```rust,ignore
@@ -63,7 +67,7 @@ cargo test -p type-exercise-starter-supplied-tests --lib --locked
 ```
 
 The tests distinguish empty from null strings, pin bytes/offsets/validity, and prove failed writes
-do not leak partial bytes. [Chapter 5](./chapter-5-generic-arithmetic.md) keeps this shared boundary
-while specializing common fixed-width column shapes.
+do not leak partial bytes. [Chapter 5: Specialize Common Column Shapes](./chapter-5-generic-arithmetic.md)
+keeps this shared boundary while specializing common fixed-width column shapes.
 
 {{#include copyright.md}}

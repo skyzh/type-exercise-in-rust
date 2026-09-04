@@ -1,6 +1,6 @@
 {{#include wip-banner.md}}
 
-# Chapter 5: Measure the Cost of Concrete Loops
+# Chapter 5: Specialize Common Column Shapes
 
 The shared Chapter 3 fallback calls `ColumnView::get(row)` so Array, Constant, and Indexed inputs
 all behave correctly. That generality also repeats representation dispatch inside every row. This

@@ -6,3 +6,6 @@
 //!
 //! This facade chooses concrete scalar types and operations. It must not contain a row loop or
 //! inspect Array, Constant, or Indexed representations.
+//!
+//! Chapter 8: expand this module with physical operator metadata and crate-private factories that
+//! select a complete numeric kernel and construct `BatchExpression<N>` for the binder.

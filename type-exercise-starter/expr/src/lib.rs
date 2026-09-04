@@ -9,16 +9,16 @@ pub use type_exercise_starter_core::*;
 // mod numeric;
 // pub use numeric::*;
 
-// Chapter 6: enable the private module, implement scalar NOT/AND/OR, and expose the
-// public Boolean expression surface.
+// Chapter 8: enable the private Boolean module and add its physical factories.
 // mod boolean;
 // pub use boolean::*;
-// Add public metadata and verify array-backed and invalid batches in the same chapter.
 
-// Chapter 4: enable variable-width scalar operations after the core writer evaluator exists.
+// Chapter 8: enable variable-width scalar operations and their physical factories. Chapter 4
+// introduced only the core writer publication boundary.
 // mod string;
 // pub use string::*;
 
-// Chapter 8: enable logical binding and the builtin catalog.
+// Chapter 8: after expanding numeric.rs and enabling Boolean/String factories, enable logical
+// binding as the sole builtin catalog.
 // mod binder;
 // pub use binder::*;

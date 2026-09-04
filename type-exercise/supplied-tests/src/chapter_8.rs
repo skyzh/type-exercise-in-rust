@@ -10,6 +10,7 @@ fn binds_logical_numeric_calls_once_then_evaluates_the_selected_batch() {
         .bind("+", &[DataType::SmallInt, DataType::Integer])
         .unwrap();
     assert_eq!(expression.output_type(), DataType::Integer);
+    assert_eq!(expression.physical_name(), "numeric_add");
 
     let left: ArrayImpl = I16Array::from_slice(&[Some(2), None]).into();
     let output = expression
@@ -33,6 +34,7 @@ fn keeps_boolean_and_string_semantics_behind_the_same_registry() {
     let and = registry
         .bind("boolean_and", &[DataType::Boolean, DataType::Boolean])
         .unwrap();
+    assert_eq!(and.physical_name(), "boolean_and");
     let left: ArrayImpl = BoolArray::from_slice(&[Some(false), Some(true)]).into();
     let output = and
         .evaluate(&[
@@ -51,6 +53,7 @@ fn keeps_boolean_and_string_semantics_behind_the_same_registry() {
     let concat = registry
         .bind("concat", &[DataType::Varchar, DataType::Varchar])
         .unwrap();
+    assert_eq!(concat.physical_name(), "string_concat");
     let words: ArrayImpl = StringArray::from_slice(&[Some("data"), None]).into();
     let output = concat
         .evaluate(&[
