@@ -21,9 +21,17 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - name: Check maintained final artifact format
         run: cargo fmt --package type-exercise-core --package type-exercise-expr -- --check
+      - name: Check Checkpoint 1 format
+        run: cargo fmt --package type-exercise-checkpoint-01-core --package type-exercise-checkpoint-01-expr --package type-exercise-checkpoint-01-supplied-tests -- --check
       - name: Clippy maintained final artifact
         run: cargo clippy --package type-exercise-core --package type-exercise-expr --all-targets --locked -- -D warnings
+      - name: Clippy Checkpoint 1
+        run: cargo clippy --package type-exercise-checkpoint-01-core --package type-exercise-checkpoint-01-expr --package type-exercise-checkpoint-01-supplied-tests --all-targets --locked -- -D warnings
       - name: Test maintained final artifact
         run: cargo nextest run --package type-exercise-core --package type-exercise-expr --locked
+      - name: Test Checkpoint 1
+        run: cargo nextest run --package type-exercise-checkpoint-01-core --package type-exercise-checkpoint-01-expr --package type-exercise-checkpoint-01-supplied-tests --locked
       - name: Test maintained final artifact documentation
         run: cargo test --package type-exercise-core --package type-exercise-expr --doc --locked
+      - name: Test Checkpoint 1 documentation
+        run: cargo test --package type-exercise-checkpoint-01-core --package type-exercise-checkpoint-01-expr --doc --locked

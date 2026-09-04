@@ -2,6 +2,7 @@ use bitvec::vec::BitVec;
 
 use crate::{Array, ArrayBuilder};
 
+/// A nullable UTF-8 array backed by one byte buffer and row offsets.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StringArray {
     data: Vec<u8>,
@@ -9,7 +10,7 @@ pub struct StringArray {
     validity: BitVec,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct StringArrayBuilder {
     data: Vec<u8>,
     offsets: Vec<usize>,
@@ -40,7 +41,7 @@ impl Array for StringArray {
             return None;
         }
         let bytes = &self.data[self.offsets[row]..self.offsets[row + 1]];
-        Some(std::str::from_utf8(bytes).expect("StringArrayBuilder accepts only UTF-8 strings"))
+        Some(std::str::from_utf8(bytes).expect("StringArrayBuilder stores valid UTF-8"))
     }
 
     fn len(&self) -> usize {
@@ -62,12 +63,11 @@ impl ArrayBuilder for StringArrayBuilder {
     }
 
     fn push(&mut self, value: Option<&str>) {
-        match value {
-            Some(value) => {
-                self.data.extend_from_slice(value.as_bytes());
-                self.validity.push(true);
-            }
-            None => self.validity.push(false),
+        if let Some(value) = value {
+            self.data.extend_from_slice(value.as_bytes());
+            self.validity.push(true);
+        } else {
+            self.validity.push(false);
         }
         self.offsets.push(self.data.len());
     }

@@ -1,5 +1,4 @@
-/// Day 1, checkpoint 4: replace the empty callback with the Int32 and String rows.
-/// Day 2, checkpoint 2: extend that inventory with every remaining non-List family.
+/// Checkpoint 1: replace the empty callback with every non-List physical family.
 macro_rules! for_each_physical_family {
     ($callback:ident) => {
         $callback! {}

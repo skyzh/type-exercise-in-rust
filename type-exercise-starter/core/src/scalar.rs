@@ -1,48 +1,42 @@
-/// Day 1, checkpoint 1: add the bounds that connect an owned scalar to its borrowed form. Keep
-/// ArrayType as an unconstrained placeholder until checkpoint 3.
+/// Checkpoint 1: add the bounds connecting each owned scalar, borrowed scalar, and dense array.
 pub trait Scalar {
     type ArrayType;
     // Rust requires this lifetime well-formedness clause for a GAT returned from `&self`; the
-    // reciprocal family bounds are still learner work in checkpoint 1.
+    // reciprocal family bounds are still learner work.
     type RefType<'a>
     where
         Self: 'a;
     fn as_scalar_ref(&self) -> Self::RefType<'_>;
 }
 
-/// Day 1, checkpoint 1: add the reciprocal owned↔borrowed bounds. Keep ArrayType unconstrained
-/// until checkpoint 3 connects the concrete arrays.
+/// Checkpoint 1: add the reciprocal owned, borrowed, and array relationships.
 pub trait ScalarRef<'a> {
     type ArrayType;
     type ScalarType;
     fn to_owned_scalar(self) -> Self::ScalarType;
 }
 
-/// The two owned scalar variants visible at the start of Day 1.
+/// Checkpoint 1: extend this starter pair to every non-List physical family.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ScalarImpl {
     Int32(i32),
     String(String),
-    // Day 2: add the remaining primitive and Decimal variants.
-    // Day 12: add `List(ListScalar)`.
+    // Add the remaining primitive and Decimal variants.
+    // A later checkpoint adds List.
 }
 
-/// The two borrowed scalar variants visible at the start of Day 1.
+/// Checkpoint 1: extend this borrowed inventory to match `ScalarImpl`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ScalarRefImpl<'a> {
     Int32(i32),
     String(&'a str),
-    // Day 2: add the remaining primitive and Decimal variants.
-    // Day 12: add `List(ListScalarRef<'a>)`.
+    // Add the remaining primitive and Decimal variants.
+    // A later checkpoint adds List.
 }
 
-// Day 1, checkpoint 1: implement Scalar/ScalarRef for i32 and String/&str. The owned↔borrowed
-// reciprocal bounds belong on the traits, not only on these concrete implementations.
-// Day 1, checkpoint 3: connect each ArrayType placeholder to its concrete array.
-// Day 1, checkpoint 2: add physical-type methods and checked From/TryFrom conversions for both
-// erased enums. Wrong variants return TypeMismatch rather than panicking.
-// Day 2: replace the repeated family relationships with catalog callbacks, then extend the
-// catalog to the remaining scalar families and Decimal.
+// Checkpoint 1: use the physical-family catalog to connect every scalar family to its array.
+// Add physical-type methods and checked From/TryFrom conversions for both erased enums. Wrong
+// variants return TypeMismatch (or a descriptive Decimal error) rather than panicking.
 
 #[cfg(test)]
 mod tests {
