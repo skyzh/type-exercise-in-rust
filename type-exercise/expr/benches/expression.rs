@@ -3,8 +3,8 @@ use std::time::Duration;
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use type_exercise_expr::{
-    Array, ArrayBuilder, ArrayImpl, BinaryExpression, ColumnView, ColumnViewImpl, I32Add, I32Array,
-    PhysicalType, PrimitiveBinaryExpression, ScalarRefImpl,
+    Array, ArrayBuilder, ArrayImpl, ColumnView, ColumnViewImpl, I32Array, PhysicalType,
+    ScalarRefImpl, auto_vectorize_binary, auto_vectorize_primitive_i32,
 };
 
 const ROWS: usize = 65_536;
@@ -30,10 +30,6 @@ fn handwritten_general_add(inputs: &[ColumnViewImpl<'_>]) -> ArrayImpl {
         });
     }
     output.finish().into()
-}
-
-fn general_add_batch(inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-    Ok(handwritten_general_add(inputs))
 }
 
 fn assert_logical_eq(actual: ArrayImpl, expected: &ArrayImpl) {
@@ -89,23 +85,40 @@ fn benchmark_case(
     inputs: [ColumnViewImpl<'_>; 2],
     handwritten: [HandwrittenColumn<'_>; 2],
 ) {
-    let general = BinaryExpression::new(
-        "i32_add_general",
-        [PhysicalType::Int32, PhysicalType::Int32],
-        PhysicalType::Int32,
-        general_add_batch,
-    );
-    let specialized = PrimitiveBinaryExpression::new("i32_add", I32Add);
     let expected = handwritten_add(&inputs, handwritten);
-    assert_logical_eq(general.evaluate(&inputs).unwrap(), &expected);
-    assert_logical_eq(specialized.evaluate(&inputs).unwrap(), &expected);
+    assert_logical_eq(
+        auto_vectorize_binary::<i32, i32, i32, _>(
+            inputs[0].clone(),
+            inputs[1].clone(),
+            i32::wrapping_add,
+        )
+        .unwrap(),
+        &expected,
+    );
+    assert_logical_eq(
+        auto_vectorize_primitive_i32(inputs[0].clone(), inputs[1].clone(), i32::wrapping_add)
+            .unwrap(),
+        &expected,
+    );
 
     let mut group = criterion.benchmark_group(name);
     group.bench_function("general", |bencher| {
-        bencher.iter(|| general.evaluate(black_box(&inputs)).unwrap())
+        bencher.iter(|| {
+            let inputs = black_box(&inputs);
+            auto_vectorize_binary::<i32, i32, i32, _>(
+                inputs[0].clone(),
+                inputs[1].clone(),
+                i32::wrapping_add,
+            )
+            .unwrap()
+        })
     });
     group.bench_function("specialized", |bencher| {
-        bencher.iter(|| specialized.evaluate(black_box(&inputs)).unwrap())
+        bencher.iter(|| {
+            let inputs = black_box(&inputs);
+            auto_vectorize_primitive_i32(inputs[0].clone(), inputs[1].clone(), i32::wrapping_add)
+                .unwrap()
+        })
     });
     group.bench_function("handwritten", |bencher| {
         bencher.iter(|| handwritten_add(black_box(&inputs), handwritten))

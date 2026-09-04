@@ -248,11 +248,11 @@ impl<'a> ListColumnView<'a> {
 /// A borrowed logical column whose scalar family is known at compile time.
 #[derive(Debug)]
 pub struct ColumnView<'a, S: Scalar> {
-    kind: ColumnViewKind<'a, S>,
+    pub(crate) kind: ColumnViewKind<'a, S>,
 }
 
 #[derive(Debug)]
-enum ColumnViewKind<'a, S: Scalar> {
+pub(crate) enum ColumnViewKind<'a, S: Scalar> {
     Array(&'a S::ArrayType),
     Constant {
         value: Option<S::RefType<'a>>,

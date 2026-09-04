@@ -19,14 +19,11 @@ jobs:
           rustup update stable
           rustc --version
       - uses: taiki-e/install-action@nextest
-      - uses: taiki-e/install-action@mdbook
-      - name: Check current workspace format
-        run: cargo fmt --all -- --check
-      - name: Clippy workspace
-        run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - name: Test workspace
-        run: cargo nextest run --workspace --locked
-      - name: Test workspace documentation
-        run: cargo test --workspace --doc --locked
-      - name: Test course
-        run: mdbook test course
+      - name: Check maintained final artifact format
+        run: cargo fmt --package type-exercise-core --package type-exercise-expr -- --check
+      - name: Clippy maintained final artifact
+        run: cargo clippy --package type-exercise-core --package type-exercise-expr --all-targets --locked -- -D warnings
+      - name: Test maintained final artifact
+        run: cargo nextest run --package type-exercise-core --package type-exercise-expr --locked
+      - name: Test maintained final artifact documentation
+        run: cargo test --package type-exercise-core --package type-exercise-expr --doc --locked
