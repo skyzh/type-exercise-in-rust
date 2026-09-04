@@ -2,10 +2,10 @@
 
 pub use type_exercise_starter_core::*;
 
-// This crate is the concrete-expression facade. The sibling core package owns storage, views,
-// evaluator families, erasure, and the generic registry from Day 1 onward.
+// This crate is the concrete-expression facade. The sibling core package owns storage, views, and
+// shared traversal; this crate chooses concrete scalar operations.
 
-// Day 4: enable the first scalar arithmetic implementation.
+// Checkpoint 3: enable the first numeric instantiations.
 // mod numeric;
 // pub use numeric::*;
 
