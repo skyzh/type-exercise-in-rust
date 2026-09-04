@@ -3,3 +3,5 @@ pub use type_exercise_expr::*;
 
 #[cfg(test)]
 mod chapter_1;
+#[cfg(test)]
+mod chapter_2;
