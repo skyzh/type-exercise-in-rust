@@ -3,9 +3,9 @@ use std::num::Wrapping;
 use std::ops::{Add, Mul, Neg, Sub};
 
 use crate::{
-    ArrayImpl, BinaryExpression, ColumnViewImpl, Expression, PhysicalType, Scalar, ScalarRefImpl,
-    TypeMismatch, auto_vectorize_binary, evaluate_unary, try_evaluate_binary, try_evaluate_ternary,
-    validate_expression_inputs,
+    ArrayImpl, BatchExpression, BatchKernel, ColumnViewImpl, PhysicalType, Scalar, ScalarRefImpl,
+    TypeMismatch, auto_vectorize_binary, auto_vectorize_primitive_i32, auto_vectorize_unary,
+    try_auto_vectorize_ternary, try_evaluate_binary,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -14,20 +14,6 @@ pub enum ArithmeticOperator {
     Subtract,
     Multiply,
     Divide,
-}
-
-/// The first concrete scalar adapter. Its batch traversal lives in the core evaluator.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct I32Add;
-
-impl crate::BinaryScalarFunction for I32Add {
-    type Left = i32;
-    type Right = i32;
-    type Output = i32;
-
-    fn evaluate<'a>(&self, left: i32, right: i32) -> i32 {
-        left.wrapping_add(right)
-    }
 }
 
 trait Numeric:
@@ -207,107 +193,6 @@ where
     T::try_from(value).unwrap_or_else(|never| match never {})
 }
 
-type NumericBinaryBatchKernel = for<'a> fn(&[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
-type NumericComparisonBatchKernel =
-    for<'a> fn(&NumericComparisonExpression, &[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
-type NumericNegBatchKernel =
-    for<'a> fn(&NumericNegExpression, &[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
-type NumericClampBatchKernel =
-    for<'a> fn(&NumericClampExpression, &[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
-pub struct NumericComparisonExpression {
-    name: &'static str,
-    input_types: [PhysicalType; 2],
-    operator: ComparisonOperator,
-    kernel: NumericComparisonBatchKernel,
-}
-
-impl NumericComparisonExpression {
-    pub(crate) fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-        validate_expression_inputs(inputs, &self.input_types)?;
-        (self.kernel)(self, inputs)
-    }
-}
-
-impl Expression for NumericComparisonExpression {
-    fn name(&self) -> &'static str {
-        self.name
-    }
-    fn input_types(&self) -> &[PhysicalType] {
-        &self.input_types
-    }
-    fn output_type(&self) -> PhysicalType {
-        PhysicalType::Bool
-    }
-    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-        self.evaluate(inputs)
-    }
-}
-
-pub struct NumericNegExpression {
-    name: &'static str,
-    input_types: [PhysicalType; 1],
-    kernel: NumericNegBatchKernel,
-}
-
-impl NumericNegExpression {
-    pub(crate) fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-        validate_expression_inputs(inputs, &self.input_types)?;
-        (self.kernel)(self, inputs)
-    }
-}
-
-impl Expression for NumericNegExpression {
-    fn name(&self) -> &'static str {
-        self.name
-    }
-    fn input_types(&self) -> &[PhysicalType] {
-        &self.input_types
-    }
-    fn output_type(&self) -> PhysicalType {
-        self.input_types[0].clone()
-    }
-    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-        self.evaluate(inputs)
-    }
-}
-
-pub struct NumericClampExpression {
-    name: &'static str,
-    input_types: [PhysicalType; 3],
-    output_type: PhysicalType,
-    kernel: NumericClampBatchKernel,
-}
-
-impl NumericClampExpression {
-    pub(crate) fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-        validate_expression_inputs(inputs, &self.input_types)?;
-        let output = (self.kernel)(self, inputs)?;
-        if output.physical_type() != self.output_type {
-            anyhow::bail!(
-                "output type mismatch: expected {:?}, got {:?}",
-                self.output_type,
-                output.physical_type()
-            );
-        }
-        Ok(output)
-    }
-}
-
-impl Expression for NumericClampExpression {
-    fn name(&self) -> &'static str {
-        self.name
-    }
-    fn input_types(&self) -> &[PhysicalType] {
-        &self.input_types
-    }
-    fn output_type(&self) -> PhysicalType {
-        self.output_type.clone()
-    }
-    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-        self.evaluate(inputs)
-    }
-}
-
 fn evaluate_numeric_infallible<L, R, O, Operation>(
     inputs: &[ColumnViewImpl<'_>],
     operation: Operation,
@@ -399,14 +284,40 @@ where
     for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
 {
-    try_evaluate_binary::<L, R, O, _, _>(inputs[0].clone(), inputs[1].clone(), "", |left, right| {
-        let left = lossless_try_from::<O, L>(left);
-        let right = lossless_try_from::<O, R>(right);
-        divide_number(left, right)
-    })
+    try_evaluate_binary::<L, R, O, _, _>(
+        inputs[0].clone(),
+        inputs[1].clone(),
+        "numeric_divide",
+        |left, right| {
+            let left = lossless_try_from::<O, L>(left);
+            let right = lossless_try_from::<O, R>(right);
+            divide_number(left, right)
+        },
+    )
 }
 
-fn numeric_binary_kernel<L, R, O>(operator: ArithmeticOperator) -> NumericBinaryBatchKernel
+fn evaluate_i32_add(inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+    auto_vectorize_primitive_i32(inputs[0].clone(), inputs[1].clone(), i32::wrapping_add)
+}
+
+fn evaluate_i32_subtract(inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+    auto_vectorize_primitive_i32(inputs[0].clone(), inputs[1].clone(), i32::wrapping_sub)
+}
+
+fn evaluate_i32_multiply(inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+    auto_vectorize_primitive_i32(inputs[0].clone(), inputs[1].clone(), i32::wrapping_mul)
+}
+
+fn primitive_i32_kernel(operator: ArithmeticOperator) -> BatchKernel {
+    match operator {
+        ArithmeticOperator::Add => evaluate_i32_add,
+        ArithmeticOperator::Subtract => evaluate_i32_subtract,
+        ArithmeticOperator::Multiply => evaluate_i32_multiply,
+        ArithmeticOperator::Divide => evaluate_numeric_divide::<i32, i32, i32>,
+    }
+}
+
+fn numeric_binary_kernel<L, R, O>(operator: ArithmeticOperator) -> BatchKernel
 where
     L: Numeric,
     R: Numeric,
@@ -429,9 +340,9 @@ where
     }
 }
 
-fn evaluate_numeric_comparison<L, R, O>(
-    expression: &NumericComparisonExpression,
+fn evaluate_numeric_comparison<L, R, O, Operation>(
     inputs: &[ColumnViewImpl<'_>],
+    operation: Operation,
 ) -> anyhow::Result<ArrayImpl>
 where
     L: Numeric,
@@ -445,50 +356,93 @@ where
     for<'a> &'a R::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
     for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    Operation: Fn(O, O) -> bool,
 {
-    fn evaluate<L, R, O, Operation>(
-        inputs: &[ColumnViewImpl<'_>],
-        operation: Operation,
-    ) -> anyhow::Result<ArrayImpl>
-    where
-        L: Numeric,
-        R: Numeric,
-        O: Numeric
-            + TryFrom<L, Error = std::convert::Infallible>
-            + TryFrom<R, Error = std::convert::Infallible>,
-        Operation: Fn(O, O) -> bool,
-        for<'a> L: Scalar<RefType<'a> = L>,
-        for<'a> R: Scalar<RefType<'a> = R>,
-        for<'a> &'a L::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
-        for<'a> &'a R::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
-        for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-        for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-    {
-        auto_vectorize_binary::<L, R, bool, _>(
-            inputs[0].clone(),
-            inputs[1].clone(),
-            |left, right| {
-                operation(
-                    lossless_try_from::<O, L>(left),
-                    lossless_try_from::<O, R>(right),
-                )
-            },
+    auto_vectorize_binary::<L, R, bool, _>(inputs[0].clone(), inputs[1].clone(), |left, right| {
+        operation(
+            lossless_try_from::<O, L>(left),
+            lossless_try_from::<O, R>(right),
         )
-    }
+    })
+}
 
-    match expression.operator {
-        ComparisonOperator::Less => evaluate::<L, R, O, _>(inputs, less),
-        ComparisonOperator::LessOrEqual => evaluate::<L, R, O, _>(inputs, less_or_equal),
-        ComparisonOperator::Greater => evaluate::<L, R, O, _>(inputs, greater),
-        ComparisonOperator::GreaterOrEqual => evaluate::<L, R, O, _>(inputs, greater_or_equal),
-        ComparisonOperator::Equal => evaluate::<L, R, O, _>(inputs, equal),
-        ComparisonOperator::NotEqual => evaluate::<L, R, O, _>(inputs, not_equal),
+macro_rules! define_numeric_comparison_kernel {
+    ($name:ident, $operation:ident) => {
+        fn $name<L, R, O>(inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl>
+        where
+            L: Numeric,
+            R: Numeric,
+            O: Numeric
+                + TryFrom<L, Error = std::convert::Infallible>
+                + TryFrom<R, Error = std::convert::Infallible>,
+            for<'a> L: Scalar<RefType<'a> = L>,
+            for<'a> R: Scalar<RefType<'a> = R>,
+            for<'a> &'a L::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+            for<'a> &'a R::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+            for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+            for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+        {
+            evaluate_numeric_comparison::<L, R, O, _>(inputs, $operation)
+        }
+    };
+}
+
+define_numeric_comparison_kernel!(evaluate_numeric_less, less);
+define_numeric_comparison_kernel!(evaluate_numeric_less_or_equal, less_or_equal);
+define_numeric_comparison_kernel!(evaluate_numeric_greater, greater);
+define_numeric_comparison_kernel!(evaluate_numeric_greater_or_equal, greater_or_equal);
+define_numeric_comparison_kernel!(evaluate_numeric_equal, equal);
+define_numeric_comparison_kernel!(evaluate_numeric_not_equal, not_equal);
+
+struct NumericComparisonKernels {
+    less: BatchKernel,
+    less_or_equal: BatchKernel,
+    greater: BatchKernel,
+    greater_or_equal: BatchKernel,
+    equal: BatchKernel,
+    not_equal: BatchKernel,
+}
+
+impl NumericComparisonKernels {
+    fn select(&self, operator: ComparisonOperator) -> BatchKernel {
+        match operator {
+            ComparisonOperator::Less => self.less,
+            ComparisonOperator::LessOrEqual => self.less_or_equal,
+            ComparisonOperator::Greater => self.greater,
+            ComparisonOperator::GreaterOrEqual => self.greater_or_equal,
+            ComparisonOperator::Equal => self.equal,
+            ComparisonOperator::NotEqual => self.not_equal,
+        }
+    }
+}
+
+fn numeric_comparison_kernels<L, R, O>() -> NumericComparisonKernels
+where
+    L: Numeric,
+    R: Numeric,
+    O: Numeric
+        + TryFrom<L, Error = std::convert::Infallible>
+        + TryFrom<R, Error = std::convert::Infallible>,
+    for<'a> L: Scalar<RefType<'a> = L>,
+    for<'a> R: Scalar<RefType<'a> = R>,
+    for<'a> &'a L::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a R::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> L::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> R::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+{
+    NumericComparisonKernels {
+        less: evaluate_numeric_less::<L, R, O>,
+        less_or_equal: evaluate_numeric_less_or_equal::<L, R, O>,
+        greater: evaluate_numeric_greater::<L, R, O>,
+        greater_or_equal: evaluate_numeric_greater_or_equal::<L, R, O>,
+        equal: evaluate_numeric_equal::<L, R, O>,
+        not_equal: evaluate_numeric_not_equal::<L, R, O>,
     }
 }
 
 struct NumericKernels {
-    binary: NumericBinaryBatchKernel,
-    comparison: NumericComparisonBatchKernel,
+    binary: BatchKernel,
+    comparisons: NumericComparisonKernels,
 }
 
 fn numeric_kernels(
@@ -500,106 +454,103 @@ fn numeric_kernels(
     match (left, right, output) {
         (PhysicalType::Int16, PhysicalType::Int16, PhysicalType::Int16) => NumericKernels {
             binary: numeric_binary_kernel::<i16, i16, i16>(operator),
-            comparison: evaluate_numeric_comparison::<i16, i16, i16>,
+            comparisons: numeric_comparison_kernels::<i16, i16, i16>(),
         },
         (PhysicalType::Int16, PhysicalType::Int32, PhysicalType::Int32) => NumericKernels {
             binary: numeric_binary_kernel::<i16, i32, i32>(operator),
-            comparison: evaluate_numeric_comparison::<i16, i32, i32>,
+            comparisons: numeric_comparison_kernels::<i16, i32, i32>(),
         },
         (PhysicalType::Int32, PhysicalType::Int16, PhysicalType::Int32) => NumericKernels {
             binary: numeric_binary_kernel::<i32, i16, i32>(operator),
-            comparison: evaluate_numeric_comparison::<i32, i16, i32>,
+            comparisons: numeric_comparison_kernels::<i32, i16, i32>(),
         },
         (PhysicalType::Int16, PhysicalType::Int64, PhysicalType::Int64) => NumericKernels {
             binary: numeric_binary_kernel::<i16, i64, i64>(operator),
-            comparison: evaluate_numeric_comparison::<i16, i64, i64>,
+            comparisons: numeric_comparison_kernels::<i16, i64, i64>(),
         },
         (PhysicalType::Int64, PhysicalType::Int16, PhysicalType::Int64) => NumericKernels {
             binary: numeric_binary_kernel::<i64, i16, i64>(operator),
-            comparison: evaluate_numeric_comparison::<i64, i16, i64>,
+            comparisons: numeric_comparison_kernels::<i64, i16, i64>(),
         },
         (PhysicalType::Int16, PhysicalType::Float32, PhysicalType::Float32) => NumericKernels {
             binary: numeric_binary_kernel::<i16, f32, f32>(operator),
-            comparison: evaluate_numeric_comparison::<i16, f32, f32>,
+            comparisons: numeric_comparison_kernels::<i16, f32, f32>(),
         },
         (PhysicalType::Float32, PhysicalType::Int16, PhysicalType::Float32) => NumericKernels {
             binary: numeric_binary_kernel::<f32, i16, f32>(operator),
-            comparison: evaluate_numeric_comparison::<f32, i16, f32>,
+            comparisons: numeric_comparison_kernels::<f32, i16, f32>(),
         },
         (PhysicalType::Int16, PhysicalType::Float64, PhysicalType::Float64) => NumericKernels {
             binary: numeric_binary_kernel::<i16, f64, f64>(operator),
-            comparison: evaluate_numeric_comparison::<i16, f64, f64>,
+            comparisons: numeric_comparison_kernels::<i16, f64, f64>(),
         },
         (PhysicalType::Float64, PhysicalType::Int16, PhysicalType::Float64) => NumericKernels {
             binary: numeric_binary_kernel::<f64, i16, f64>(operator),
-            comparison: evaluate_numeric_comparison::<f64, i16, f64>,
+            comparisons: numeric_comparison_kernels::<f64, i16, f64>(),
         },
         (PhysicalType::Int32, PhysicalType::Int32, PhysicalType::Int32) => NumericKernels {
-            binary: numeric_binary_kernel::<i32, i32, i32>(operator),
-            comparison: evaluate_numeric_comparison::<i32, i32, i32>,
+            binary: primitive_i32_kernel(operator),
+            comparisons: numeric_comparison_kernels::<i32, i32, i32>(),
         },
         (PhysicalType::Int32, PhysicalType::Int64, PhysicalType::Int64) => NumericKernels {
             binary: numeric_binary_kernel::<i32, i64, i64>(operator),
-            comparison: evaluate_numeric_comparison::<i32, i64, i64>,
+            comparisons: numeric_comparison_kernels::<i32, i64, i64>(),
         },
         (PhysicalType::Int64, PhysicalType::Int32, PhysicalType::Int64) => NumericKernels {
             binary: numeric_binary_kernel::<i64, i32, i64>(operator),
-            comparison: evaluate_numeric_comparison::<i64, i32, i64>,
+            comparisons: numeric_comparison_kernels::<i64, i32, i64>(),
         },
         (PhysicalType::Int32, PhysicalType::Float64, PhysicalType::Float64) => NumericKernels {
             binary: numeric_binary_kernel::<i32, f64, f64>(operator),
-            comparison: evaluate_numeric_comparison::<i32, f64, f64>,
+            comparisons: numeric_comparison_kernels::<i32, f64, f64>(),
         },
         (PhysicalType::Int32, PhysicalType::Float32, PhysicalType::Float64) => NumericKernels {
             binary: numeric_binary_kernel::<i32, f32, f64>(operator),
-            comparison: evaluate_numeric_comparison::<i32, f32, f64>,
+            comparisons: numeric_comparison_kernels::<i32, f32, f64>(),
         },
         (PhysicalType::Float32, PhysicalType::Int32, PhysicalType::Float64) => NumericKernels {
             binary: numeric_binary_kernel::<f32, i32, f64>(operator),
-            comparison: evaluate_numeric_comparison::<f32, i32, f64>,
+            comparisons: numeric_comparison_kernels::<f32, i32, f64>(),
         },
         (PhysicalType::Float64, PhysicalType::Int32, PhysicalType::Float64) => NumericKernels {
             binary: numeric_binary_kernel::<f64, i32, f64>(operator),
-            comparison: evaluate_numeric_comparison::<f64, i32, f64>,
+            comparisons: numeric_comparison_kernels::<f64, i32, f64>(),
         },
         (PhysicalType::Int64, PhysicalType::Int64, PhysicalType::Int64) => NumericKernels {
             binary: numeric_binary_kernel::<i64, i64, i64>(operator),
-            comparison: evaluate_numeric_comparison::<i64, i64, i64>,
+            comparisons: numeric_comparison_kernels::<i64, i64, i64>(),
         },
         (PhysicalType::Float32, PhysicalType::Float32, PhysicalType::Float32) => NumericKernels {
             binary: numeric_binary_kernel::<f32, f32, f32>(operator),
-            comparison: evaluate_numeric_comparison::<f32, f32, f32>,
+            comparisons: numeric_comparison_kernels::<f32, f32, f32>(),
         },
         (PhysicalType::Float32, PhysicalType::Float64, PhysicalType::Float64) => NumericKernels {
             binary: numeric_binary_kernel::<f32, f64, f64>(operator),
-            comparison: evaluate_numeric_comparison::<f32, f64, f64>,
+            comparisons: numeric_comparison_kernels::<f32, f64, f64>(),
         },
         (PhysicalType::Float64, PhysicalType::Float32, PhysicalType::Float64) => NumericKernels {
             binary: numeric_binary_kernel::<f64, f32, f64>(operator),
-            comparison: evaluate_numeric_comparison::<f64, f32, f64>,
+            comparisons: numeric_comparison_kernels::<f64, f32, f64>(),
         },
         (PhysicalType::Float64, PhysicalType::Float64, PhysicalType::Float64) => NumericKernels {
             binary: numeric_binary_kernel::<f64, f64, f64>(operator),
-            comparison: evaluate_numeric_comparison::<f64, f64, f64>,
+            comparisons: numeric_comparison_kernels::<f64, f64, f64>(),
         },
         _ => unreachable!("validated numeric promotion tuple"),
     }
 }
 
-fn evaluate_numeric_neg<O>(
-    _expression: &NumericNegExpression,
-    inputs: &[ColumnViewImpl<'_>],
-) -> anyhow::Result<ArrayImpl>
+fn evaluate_numeric_neg<O>(inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl>
 where
     O: Numeric,
     for<'a> O: Scalar<RefType<'a> = O>,
     for<'a> &'a O::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
     for<'a> O::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
 {
-    evaluate_unary::<O, O, _>(inputs[0].clone(), neg_number::<O>)
+    auto_vectorize_unary::<O, O, _>(inputs[0].clone(), neg_number::<O>)
 }
 
-fn numeric_neg_kernel(input: &PhysicalType) -> NumericNegBatchKernel {
+fn numeric_neg_kernel(input: &PhysicalType) -> BatchKernel {
     match input {
         PhysicalType::Int16 => evaluate_numeric_neg::<i16>,
         PhysicalType::Int32 => evaluate_numeric_neg::<i32>,
@@ -610,10 +561,7 @@ fn numeric_neg_kernel(input: &PhysicalType) -> NumericNegBatchKernel {
     }
 }
 
-fn evaluate_numeric_clamp<A, B, C, O>(
-    expression: &NumericClampExpression,
-    inputs: &[ColumnViewImpl<'_>],
-) -> anyhow::Result<ArrayImpl>
+fn evaluate_numeric_clamp<A, B, C, O>(inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl>
 where
     A: Numeric,
     B: Numeric,
@@ -633,11 +581,11 @@ where
     for<'a> B::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
     for<'a> C::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
 {
-    try_evaluate_ternary::<A, B, C, O, _, _>(
+    try_auto_vectorize_ternary::<A, B, C, O, _, _>(
         inputs[0].clone(),
         inputs[1].clone(),
         inputs[2].clone(),
-        expression.name,
+        "numeric_clamp",
         |value, lower, upper| {
             let value = lossless_try_from::<O, A>(value);
             let lower = lossless_try_from::<O, B>(lower);
@@ -647,10 +595,7 @@ where
     )
 }
 
-fn numeric_clamp_after_int16_pair<A, B>(
-    third: &PhysicalType,
-    output: &PhysicalType,
-) -> NumericClampBatchKernel
+fn numeric_clamp_after_int16_pair<A, B>(third: &PhysicalType, output: &PhysicalType) -> BatchKernel
 where
     A: Numeric,
     B: Numeric,
@@ -681,10 +626,7 @@ where
     }
 }
 
-fn numeric_clamp_after_int32_pair<A, B>(
-    third: &PhysicalType,
-    output: &PhysicalType,
-) -> NumericClampBatchKernel
+fn numeric_clamp_after_int32_pair<A, B>(third: &PhysicalType, output: &PhysicalType) -> BatchKernel
 where
     A: Numeric,
     B: Numeric,
@@ -711,10 +653,7 @@ where
     }
 }
 
-fn numeric_clamp_after_int64_pair<A, B>(
-    third: &PhysicalType,
-    output: &PhysicalType,
-) -> NumericClampBatchKernel
+fn numeric_clamp_after_int64_pair<A, B>(third: &PhysicalType, output: &PhysicalType) -> BatchKernel
 where
     A: Numeric,
     B: Numeric,
@@ -738,7 +677,7 @@ where
 fn numeric_clamp_after_float32_pair<A, B>(
     third: &PhysicalType,
     output: &PhysicalType,
-) -> NumericClampBatchKernel
+) -> BatchKernel
 where
     A: Numeric,
     B: Numeric,
@@ -765,7 +704,7 @@ where
 fn numeric_clamp_after_float64_pair<A, B>(
     third: &PhysicalType,
     output: &PhysicalType,
-) -> NumericClampBatchKernel
+) -> BatchKernel
 where
     A: Numeric,
     B: Numeric,
@@ -787,10 +726,7 @@ where
     }
 }
 
-fn numeric_clamp_kernel(
-    inputs: &[PhysicalType; 3],
-    output: &PhysicalType,
-) -> NumericClampBatchKernel {
+fn numeric_clamp_kernel(inputs: &[PhysicalType; 3], output: &PhysicalType) -> BatchKernel {
     match (&inputs[0], &inputs[1]) {
         (PhysicalType::Int16, PhysicalType::Int16) => {
             numeric_clamp_after_int16_pair::<i16, i16>(&inputs[2], output)
@@ -859,57 +795,45 @@ fn numeric_clamp_kernel(
     }
 }
 
-pub fn build_numeric_binary_expression(
+pub(crate) fn build_numeric_binary_expression(
     name: &'static str,
     operator: ArithmeticOperator,
     left: PhysicalType,
     right: PhysicalType,
     output: PhysicalType,
-) -> BinaryExpression {
+) -> BatchExpression<2> {
     let kernel = numeric_kernels(operator, &left, &right, &output).binary;
-    BinaryExpression::new_with_scalar_rows(name, [left, right], output, kernel)
+    BatchExpression::new(name, [left, right], output, kernel)
 }
 
-pub fn build_numeric_neg_expression(
+pub(crate) fn build_numeric_neg_expression(
     name: &'static str,
     input: PhysicalType,
-) -> NumericNegExpression {
+) -> BatchExpression<1> {
     let kernel = numeric_neg_kernel(&input);
-    NumericNegExpression {
-        name,
-        input_types: [input],
-        kernel,
-    }
+    BatchExpression::new(name, [input.clone()], input, kernel)
 }
 
-pub fn build_numeric_clamp_expression(
+pub(crate) fn build_numeric_clamp_expression(
     name: &'static str,
     inputs: [PhysicalType; 3],
     output: PhysicalType,
-) -> NumericClampExpression {
+) -> BatchExpression<3> {
     let kernel = numeric_clamp_kernel(&inputs, &output);
-    NumericClampExpression {
-        name,
-        input_types: inputs,
-        output_type: output,
-        kernel,
-    }
+    BatchExpression::new(name, inputs, output, kernel)
 }
 
-pub fn build_numeric_comparison_expression(
+pub(crate) fn build_numeric_comparison_expression(
     name: &'static str,
     operator: ComparisonOperator,
     left: PhysicalType,
     right: PhysicalType,
     common: PhysicalType,
-) -> NumericComparisonExpression {
-    let kernel = numeric_kernels(ArithmeticOperator::Add, &left, &right, &common).comparison;
-    NumericComparisonExpression {
-        name,
-        input_types: [left, right],
-        operator,
-        kernel,
-    }
+) -> BatchExpression<2> {
+    let kernel = numeric_kernels(ArithmeticOperator::Add, &left, &right, &common)
+        .comparisons
+        .select(operator);
+    BatchExpression::new(name, [left, right], PhysicalType::Bool, kernel)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
