@@ -1,6 +1,6 @@
 //! Learner-owned column-view checkpoints.
 //!
-//! Day 3, checkpoint 1: uncomment and implement the borrowed representations here.
+//! Chapter 2: uncomment and implement the borrowed representations here.
 // pub struct ColumnViewImpl<'a> { /* public wrapper around private representation state */ }
 // impl<'a> ColumnViewImpl<'a> {
 //     pub fn array(array: &'a ArrayImpl) -> Self;
@@ -16,11 +16,11 @@
 //     pub fn get(&self, row: usize) -> Option<ScalarRefImpl<'a>>;
 // }
 //
-//! Day 7, checkpoint 2: add the crate-private `RawI32Column` observation. Bind Int32 arrays to
+//! Chapter 6: add the crate-private `RawI32Column` observation. Bind Int32 arrays to
 //! their values and validity buffers, value/typed-null constants to one value plus a validity bit,
 //! and detect Indexed views separately. Do not expose a public raw-column API.
 //
-//! Day 3, checkpoint 2: uncomment and implement the typed view here.
+//! Chapter 2: uncomment and implement the typed view here.
 // pub struct ColumnView<'a, S: Scalar> { /* checked borrowed state */ }
 // impl<'a, S: Scalar> ColumnView<'a, S> {
 //     pub fn get(&self, row: usize) -> Option<S::RefType<'a>>;
@@ -28,7 +28,7 @@
 // }
 // impl<'a, S> TryFrom<ColumnViewImpl<'a>> for ColumnView<'a, S> { /* checked conversion */ }
 //
-//! Day 12, checkpoint 3: extend this file with checked one-level List views.
+//! Chapter 9: extend this file with checked one-level List views.
 // pub struct ListColumnView<'a> { /* checked List state */ }
 // impl<'a> ListColumnView<'a> {
 //     pub fn len(&self) -> usize;

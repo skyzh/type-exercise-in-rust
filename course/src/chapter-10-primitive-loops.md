@@ -1,92 +1,62 @@
 {{#include wip-banner.md}}
 
-# Chapter 10: Build Variable-Width Strings Transactionally
+# Chapter 10: Share and Schedule a Batch Safely
 
-Fixed-width evaluators can compute a scalar and then push its copied value. A string result has no
-fixed-size scalar to return: its UTF-8 bytes and ending offset must be appended together, and the
-validity buffer must gain exactly one row. Publishing only part of that state would corrupt the
-array.
-
-This chapter introduces variable-width output only after the fixed-width evaluator model is
-settled. A consumed writer typestate makes one successful callback correspond to one complete row.
-
-## Checkpoint 1: pin the physical representation
+The completed engine evaluates one deterministic batch synchronously. A worker pool needs to share
+the registry and erased expressions; an async executor needs one future around the same batch.
+Neither boundary should clone column contents or move dynamic dispatch into scalar rows.
 
 ```console
-cargo x copy-test --chapter 10 --checkpoint 1
+cargo x copy-test --chapter 10
 cargo test -p type-exercise-starter-supplied-tests chapter_10 --locked
 ```
 
-Review the Chapter 1 `StringArray` representation:
+## Make shared factories reusable
 
-- `data` is one contiguous UTF-8 byte buffer;
-- `offsets` has one more entry than the row count, and row `i` uses
-  `data[offsets[i]..offsets[i + 1]]`;
-- `validity` has one bit per logical row; and
-- a null row repeats the previous offset because it contributes no bytes.
+Strengthen `Expression` to `Any + Send + Sync`. In `expr/src/binder.rs`, require the stored factory
+trait object and every registered factory to be `Fn + Send + Sync + 'static`. Keep `Fn`: binding
+is reusable and shared access must not require mutable closure state. Thread-safe captured state
+can use `Arc`, atomics, or locks outside the registry.
 
-The first test pins those buffers directly. It distinguishes an empty string—a valid row whose
-two offsets are equal—from a null row with the same byte span but a false validity bit.
+The existing `Array::iter` remains opaque and tied to the array borrow. `ColumnViewImpl<'a>` remains
+covariant so a long-lived view can be reborrowed for one shorter evaluation. Do not expose a
+concrete iterator, add `unsafe`, or force borrowed input into `'static` storage.
 
-## Checkpoint 2: consume the writer exactly once
+## Box only the complete batch future
 
-```console
-cargo x copy-test --chapter 10 --checkpoint 2
-cargo test -p type-exercise-starter-supplied-tests chapter_10 --locked
-```
-
-Add `Writer<'a>` and `WriterUsed<'a>` around a borrowed `StringArrayBuilder`. The public operation
-is shaped like this:
+Add the static and erased boundaries:
 
 ```rust,ignore
-impl<'a> Writer<'a> {
-    pub fn write(
-        self,
-        write: impl FnOnce(&mut StringValueWriter<'_>),
-    ) -> WriterUsed<'a>;
+pub fn evaluate_static<'a, E>(
+    expression: &'a E,
+    inputs: &'a [ColumnViewImpl<'a>],
+) -> impl Future<Output = anyhow::Result<ArrayImpl>> + Send + 'a;
+
+pub type BatchFuture<'a> =
+    Pin<Box<dyn Future<Output = anyhow::Result<ArrayImpl>> + Send + 'a>>;
+
+pub trait AsyncExpression: Send + Sync {
+    fn evaluate_async<'a>(&'a self, inputs: &'a [ColumnViewImpl<'a>]) -> BatchFuture<'a>;
 }
 ```
 
-The closure may append several borrowed fragments directly to the pending value. When it returns,
-`write` appends the ending offset and valid bit, then returns proof that this row has been
-published. Only the core evaluator may recover the builder from `WriterUsed` to begin the next
-row.
+`AsyncExpressionAdapter` owns one `Box<dyn Expression>` and calls its synchronous `evaluate`
+exactly once when polled. `BoundExpression` forwards through the same boundary without rebinding.
+The future lifetime covers the expression, input slice, and arrays borrowed by every view.
 
-The type transition prevents a callback from returning without publishing or calling `write`
-twice through the same value. It does not make partial mutation magically reversible; instead, the
-facade operation must prepare any fallible work before it consumes the writer. This is why the
-public callback has no path that returns an arbitrary builder.
-
-## Checkpoint 3: lift borrowed string work without allocation
+Run the completed course:
 
 ```console
-cargo x copy-test --chapter 10 --checkpoint 3
-cargo test -p type-exercise-starter-supplied-tests chapter_10 --locked
+cargo test -p type-exercise-starter-supplied-tests --locked
+cargo test -p type-exercise-starter-expr --lib --locked
 cargo check -p type-exercise-starter-core --locked
 ```
 
-Enable `expr/src/string.rs` and implement the borrowed concatenation scalar operation. It receives two
-`&str` values plus a `Writer`, writes each input directly into the builder's bytes, publishes one
-offset and validity bit, and returns `WriterUsed`. Do not allocate a temporary `String` with
-`format!`, and do not write an operation-specific batch loop.
+The final tests compare synchronous, static-future, erased-future, and bound-future results; require
+thread-safe registries and expressions; and preserve validation and scalar failures unchanged.
 
-The core variable-width evaluator validates and recovers both typed string views once, propagates
-strict nulls itself, and constructs a fresh writer only for a non-null row. Array, constant, and
-Indexed inputs therefore share the same borrowed scalar operation.
-
-The three focused tests pin the physical bytes/offsets/validity layout, the consumed public writer
-surface, and concatenation across borrowed representations. Core still compiles independently of
-the concrete concatenation function.
-
-## The ownership proof
-
-`Writer<'a> -> WriterUsed<'a>` is a small typestate machine. The lifetime keeps both values tied to
-the evaluator's builder; the move prevents reuse; and the distinct return type proves a row was
-published before the evaluator continues. The compiler checks the transaction boundary that a
-runtime `wrote: bool` flag would only check after the fact.
-
-The evaluator can now publish both fixed-width and variable-width results without changing its
-batch boundary. The next module begins where a SQL planner meets that boundary:
-[binding logical calls to physical expressions](./chapter-11-list.md).
+You now have one path from physical storage to a scheduled batch: typed arrays, lazy views, shared
+fallbacks, selective specialization, one erased expression shell, one binder, one-level Lists, and
+one async boundary around the complete operation.
 
 {{#include copyright.md}}

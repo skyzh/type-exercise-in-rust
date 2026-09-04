@@ -6,8 +6,8 @@ members = [
     "type-exercise-starter/expr",
     "type-exercise-starter/supplied-tests",
     "xtask",
-    "checkpoint/day-*/expr",
-    "checkpoint/day-*/supplied-tests",
+    "checkpoint/chapter-*/expr",
+    "checkpoint/chapter-*/supplied-tests",
 ]
 default-members = [
     "type-exercise/expr",

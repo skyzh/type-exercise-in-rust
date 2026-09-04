@@ -1,4 +1,4 @@
-//! Day 2, checkpoint 4: define Decimal metadata and scalar values here.
+//! Chapter 1: define Decimal metadata and scalar values here.
 //!
 //! `DecimalType` validates precision/scale once per column. `Decimal` pairs one transient i128
 //! coefficient with that metadata. Use `anyhow::Result` for the few checked construction and

@@ -3,37 +3,27 @@
 [Preface](./preface.md)
 [Environment Setup](./setup.md)
 
-# Type families
+# Physical values and lazy columns
 
-- [Connect One Type Family by Hand](./chapter-1-type-family.md)
-- [Scale the Physical Type Family](./chapter-2-type-catalog.md)
+- [Build Physical Types and Arrays](./chapter-1-type-family.md)
+- [Read Nullable Columns Lazily](./chapter-2-column-views.md)
 
-# Borrowed columns and first batch evaluation
+# Shared evaluation
 
-- [Read Nullable Columns Without Materializing Them](./chapter-3-column-views.md)
-- [Expose the Cost of Concrete Loops](./chapter-4-concrete-loops.md)
+- [Build Shared Typed Evaluation](./chapter-3-shared-evaluation.md)
+- [Build Variable-Width Rows Transactionally](./chapter-4-concrete-loops.md)
 
-# Generic numeric evaluation
+# Specialized evaluation
 
-- [Make Numeric Evaluation Generic](./chapter-5-generic-arithmetic.md)
-- [Make Arity Systematic](./chapter-6-systematic-arity.md)
+- [Measure the Cost of Concrete Loops](./chapter-5-generic-arithmetic.md)
+- [Separate Fast Paths from Semantic Exceptions](./chapter-6-systematic-arity.md)
 
-# Specialized execution and Boolean nulls
+# Runtime planning
 
-- [Select Dense Fixed-Width Loops](./chapter-7-boolean-logic.md)
-- [Implement Three-Valued Boolean Logic](./chapter-8-runtime-erasure.md)
+- [Erase One Complete Batch](./chapter-7-boolean-logic.md)
+- [Bind Logical Calls Once](./chapter-8-runtime-erasure.md)
 
-# Runtime expressions and variable-width output
+# Nested storage and Rust boundaries
 
-- [Erase Typed Expressions at Runtime](./chapter-9-binding-coercion.md)
-- [Build Variable-Width Strings Transactionally](./chapter-10-primitive-loops.md)
-
-# Logical binding and nested storage
-
-- [Bind and Coerce Logical Calls](./chapter-11-list.md)
-- [Build a One-Level List Column](./chapter-12-rust-boundaries.md)
-
-# Thread-safe and async boundaries
-
-- [Share Logical Factories Across Threads](./chapter-13-async-boundary.md)
-- [Add a Batch Async Boundary](./chapter-14-async-boundary.md)
+- [Build a One-Level List Column](./chapter-9-binding-coercion.md)
+- [Share and Schedule a Batch Safely](./chapter-10-primitive-loops.md)

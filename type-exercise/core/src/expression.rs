@@ -7,8 +7,8 @@ use bitvec::vec::BitVec;
 
 use crate::column::RawI32Column;
 use crate::{
-    Array, ArrayBuilder, ArrayImpl, ColumnView, ColumnViewImpl, I32Array, PhysicalType, Scalar,
-    ScalarRefImpl, TypeMismatch,
+    Array, ArrayBuilder, ArrayImpl, ColumnView, ColumnViewImpl, ColumnViewKind, I32Array,
+    PhysicalType, Scalar, ScalarRefImpl, TypeMismatch,
 };
 
 /// A runtime-erased expression with discoverable physical metadata.
@@ -20,13 +20,6 @@ pub trait Expression: Any + Send + Sync {
     }
     fn output_type(&self) -> PhysicalType;
     fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl>;
-    fn evaluate_with_loop(
-        &self,
-        inputs: &[ColumnViewImpl<'_>],
-    ) -> anyhow::Result<(ArrayImpl, PrimitiveLoop)> {
-        self.evaluate(inputs)
-            .map(|output| (output, PrimitiveLoop::General))
-    }
 }
 
 /// One erased future for one complete batch evaluation.
@@ -49,14 +42,17 @@ where
 ///
 /// ```compile_fail
 /// use type_exercise_core::{
-///     ArrayImpl, BinaryExpression, ColumnViewImpl, PhysicalType, evaluate_static,
+///     ArrayImpl, BatchExpression, ColumnViewImpl, PhysicalType, evaluate_static,
 /// };
 ///
-/// let expression = BinaryExpression::new(
+/// fn kernel(_inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+///     unreachable!()
+/// }
+/// let expression = BatchExpression::new(
 ///     "add",
 ///     [PhysicalType::Int32, PhysicalType::Int32],
 ///     PhysicalType::Int32,
-///     |_inputs| -> anyhow::Result<ArrayImpl> { unreachable!() },
+///     kernel,
 /// );
 /// let inputs: [ColumnViewImpl<'_>; 0] = [];
 /// let mut future = evaluate_static(&expression, &inputs);
@@ -86,64 +82,9 @@ impl AsyncExpression for AsyncExpressionAdapter {
     }
 }
 
-/// The loop selected for one binary evaluation.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum PrimitiveLoop {
-    General,
-    Indexed,
-    ArrayArray,
-    ArrayConstant,
-    ConstantArray,
-    ConstantConstant,
-}
-
-/// One typed binary scalar function that can be lifted over nullable columns.
-pub trait BinaryScalarFunction: Send + Sync + 'static {
-    type Left: Scalar;
-    type Right: Scalar;
-    type Output: Scalar + Copy;
-
-    fn evaluate<'a>(
-        &self,
-        left: <Self::Left as Scalar>::RefType<'a>,
-        right: <Self::Right as Scalar>::RefType<'a>,
-    ) -> Self::Output;
-}
-
-/// Convert erased inputs once, then apply a typed scalar function row by row.
-pub fn evaluate_binary<'a, F>(
-    function: &F,
-    left: ColumnViewImpl<'a>,
-    right: ColumnViewImpl<'a>,
-) -> anyhow::Result<ArrayImpl>
-where
-    F: BinaryScalarFunction,
-    <F::Left as Scalar>::ArrayType: 'a,
-    <F::Right as Scalar>::ArrayType: 'a,
-    &'a <F::Left as Scalar>::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
-    &'a <F::Right as Scalar>::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
-    <F::Left as Scalar>::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-    <F::Right as Scalar>::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
-{
-    let left = ColumnView::<F::Left>::try_from(left).map_err(|error| {
-        anyhow::anyhow!(
-            "input 0 type mismatch: expected {:?}, got {:?}",
-            error.expected,
-            error.actual
-        )
-    })?;
-    let right = ColumnView::<F::Right>::try_from(right).map_err(|error| {
-        anyhow::anyhow!(
-            "input 1 type mismatch: expected {:?}, got {:?}",
-            error.expected,
-            error.actual
-        )
-    })?;
-    evaluate_typed_binary(function, left, right)
-}
-
-/// Lift a preselected borrowed scalar function over two strict nullable columns.
-pub fn evaluate_borrowed_binary<'a, L, R, O, F>(
+/// Lift one infallible scalar function through the shared typed
+/// `ColumnView::get` binary fallback.
+pub fn evaluate_binary<'a, L, R, O, F>(
     left: ColumnViewImpl<'a>,
     right: ColumnViewImpl<'a>,
     function: F,
@@ -151,7 +92,7 @@ pub fn evaluate_borrowed_binary<'a, L, R, O, F>(
 where
     L: Scalar,
     R: Scalar,
-    O: Scalar + Copy,
+    O: Scalar,
     F: Fn(L::RefType<'a>, R::RefType<'a>) -> O,
     L::ArrayType: 'a,
     R::ArrayType: 'a,
@@ -166,43 +107,7 @@ where
     )?;
     let left = ColumnView::<L>::try_from(left)?;
     let right = ColumnView::<R>::try_from(right)?;
-    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(left.len());
-    for row in 0..left.len() {
-        let value = left
-            .get(row)
-            .zip(right.get(row))
-            .map(|(left, right)| function(left, right));
-        output.push(value.as_ref().map(Scalar::as_scalar_ref));
-    }
-    Ok(output.finish().into())
-}
-
-fn evaluate_typed_binary<'a, F>(
-    function: &F,
-    left: ColumnView<'a, F::Left>,
-    right: ColumnView<'a, F::Right>,
-) -> anyhow::Result<ArrayImpl>
-where
-    F: BinaryScalarFunction,
-{
-    if left.len() != right.len() {
-        anyhow::bail!(
-            "input 1 length mismatch: expected {}, got {}",
-            left.len(),
-            right.len()
-        );
-    }
-
-    let mut output =
-        <<F::Output as Scalar>::ArrayType as Array>::Builder::with_capacity(left.len());
-    for row in 0..left.len() {
-        let value = match (left.get(row), right.get(row)) {
-            (Some(left), Some(right)) => Some(function.evaluate(left, right)),
-            _ => None,
-        };
-        output.push(value.as_ref().map(Scalar::as_scalar_ref));
-    }
-    Ok(output.finish().into())
+    Ok(evaluate_typed_binary_with(left, right, &function))
 }
 
 /// Validate arity, physical types, and row counts before evaluating a batch.
@@ -237,7 +142,177 @@ pub fn validate_expression_inputs(
     Ok(len)
 }
 
+/// One concrete typed column shape used by a monomorphized evaluation loop.
+trait ColumnAccessor<'a, S: Scalar> {
+    fn len(&self) -> usize;
+    fn get(&self, row: usize) -> Option<S::RefType<'a>>;
+}
+
+struct ArrayColumn<'a, S: Scalar> {
+    array: &'a S::ArrayType,
+}
+
+impl<'a, S: Scalar> ColumnAccessor<'a, S> for ArrayColumn<'a, S> {
+    fn len(&self) -> usize {
+        self.array.len()
+    }
+
+    fn get(&self, row: usize) -> Option<S::RefType<'a>> {
+        let array: &'a S::ArrayType = self.array;
+        array.get(row)
+    }
+}
+
+struct ConstantColumn<'a, S: Scalar> {
+    value: Option<S::RefType<'a>>,
+    len: usize,
+}
+
+impl<'a, S: Scalar> ColumnAccessor<'a, S> for ConstantColumn<'a, S> {
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn get(&self, row: usize) -> Option<S::RefType<'a>> {
+        assert!(row < self.len, "column view row out of bounds");
+        self.value
+    }
+}
+
+fn evaluate_unary_loop<'a, C, I, O, F>(input: C, function: &F) -> ArrayImpl
+where
+    C: ColumnAccessor<'a, I>,
+    I: Scalar,
+    O: Scalar,
+    F: Fn(I::RefType<'a>) -> O,
+{
+    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(input.len());
+    for row in 0..input.len() {
+        let value = input.get(row).map(function);
+        output.push(value.as_ref().map(Scalar::as_scalar_ref));
+    }
+    output.finish().into()
+}
+
+fn evaluate_binary_loop<'a, C1, C2, L, R, O, F>(left: C1, right: C2, function: &F) -> ArrayImpl
+where
+    C1: ColumnAccessor<'a, L>,
+    C2: ColumnAccessor<'a, R>,
+    L: Scalar,
+    R: Scalar,
+    O: Scalar,
+    F: Fn(L::RefType<'a>, R::RefType<'a>) -> O,
+{
+    debug_assert_eq!(left.len(), right.len());
+    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(left.len());
+    for row in 0..left.len() {
+        let value = left
+            .get(row)
+            .zip(right.get(row))
+            .map(|(left, right)| function(left, right));
+        output.push(value.as_ref().map(Scalar::as_scalar_ref));
+    }
+    output.finish().into()
+}
+
+fn evaluate_typed_unary<'a, I, O, F>(input: ColumnView<'a, I>, function: &F) -> ArrayImpl
+where
+    I: Scalar,
+    O: Scalar,
+    F: Fn(I::RefType<'a>) -> O,
+{
+    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(input.len());
+    for row in 0..input.len() {
+        let value = input.get(row).map(function);
+        output.push(value.as_ref().map(Scalar::as_scalar_ref));
+    }
+    output.finish().into()
+}
+
+fn evaluate_typed_binary_with<'a, L, R, O, F>(
+    left: ColumnView<'a, L>,
+    right: ColumnView<'a, R>,
+    function: &F,
+) -> ArrayImpl
+where
+    L: Scalar,
+    R: Scalar,
+    O: Scalar,
+    F: Fn(L::RefType<'a>, R::RefType<'a>) -> O,
+{
+    debug_assert_eq!(left.len(), right.len());
+    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(left.len());
+    for row in 0..left.len() {
+        let value = left
+            .get(row)
+            .zip(right.get(row))
+            .map(|(left, right)| function(left, right));
+        output.push(value.as_ref().map(Scalar::as_scalar_ref));
+    }
+    output.finish().into()
+}
+
+fn evaluate_ternary_loop<'a, C1, C2, C3, A, B, C, O, F>(
+    first: C1,
+    second: C2,
+    third: C3,
+    function: &F,
+) -> ArrayImpl
+where
+    C1: ColumnAccessor<'a, A>,
+    C2: ColumnAccessor<'a, B>,
+    C3: ColumnAccessor<'a, C>,
+    A: Scalar,
+    B: Scalar,
+    C: Scalar,
+    O: Scalar,
+    F: Fn(A::RefType<'a>, B::RefType<'a>, C::RefType<'a>) -> O,
+{
+    debug_assert_eq!(first.len(), second.len());
+    debug_assert_eq!(first.len(), third.len());
+    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(first.len());
+    for row in 0..first.len() {
+        let value = first
+            .get(row)
+            .zip(second.get(row))
+            .zip(third.get(row))
+            .map(|((first, second), third)| function(first, second, third));
+        output.push(value.as_ref().map(Scalar::as_scalar_ref));
+    }
+    output.finish().into()
+}
+
+fn evaluate_typed_ternary<'a, A, B, C, O, F>(
+    first: ColumnView<'a, A>,
+    second: ColumnView<'a, B>,
+    third: ColumnView<'a, C>,
+    function: &F,
+) -> ArrayImpl
+where
+    A: Scalar,
+    B: Scalar,
+    C: Scalar,
+    O: Scalar,
+    F: Fn(A::RefType<'a>, B::RefType<'a>, C::RefType<'a>) -> O,
+{
+    debug_assert_eq!(first.len(), second.len());
+    debug_assert_eq!(first.len(), third.len());
+    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(first.len());
+    for row in 0..first.len() {
+        let value = first
+            .get(row)
+            .zip(second.get(row))
+            .zip(third.get(row))
+            .map(|((first, second), third)| function(first, second, third));
+        output.push(value.as_ref().map(Scalar::as_scalar_ref));
+    }
+    output.finish().into()
+}
+
 /// Lift one infallible scalar function over two nullable columns.
+///
+/// Array and Constant combinations use concrete accessor types. Indexed input
+/// remains on the shared typed `ColumnView::get` fallback.
 pub fn auto_vectorize_binary<L, R, O, F>(
     left: ColumnViewImpl<'_>,
     right: ColumnViewImpl<'_>,
@@ -261,18 +336,44 @@ where
     )?;
     let left = ColumnView::<L>::try_from(left)?;
     let right = ColumnView::<R>::try_from(right)?;
-    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(left.len());
-    for row in 0..left.len() {
-        let value = left
-            .get(row)
-            .zip(right.get(row))
-            .map(|(left, right)| function(left, right));
-        output.push(value.as_ref().map(Scalar::as_scalar_ref));
-    }
-    Ok(output.finish().into())
+    Ok(match (left.kind, right.kind) {
+        (ColumnViewKind::Array(left), ColumnViewKind::Array(right)) => evaluate_binary_loop(
+            ArrayColumn::<L> { array: left },
+            ArrayColumn::<R> { array: right },
+            &function,
+        ),
+        (ColumnViewKind::Array(left), ColumnViewKind::Constant { value, len }) => {
+            evaluate_binary_loop(
+                ArrayColumn::<L> { array: left },
+                ConstantColumn::<R> { value, len },
+                &function,
+            )
+        }
+        (ColumnViewKind::Constant { value, len }, ColumnViewKind::Array(right)) => {
+            evaluate_binary_loop(
+                ConstantColumn::<L> { value, len },
+                ArrayColumn::<R> { array: right },
+                &function,
+            )
+        }
+        (
+            ColumnViewKind::Constant { value: left, len },
+            ColumnViewKind::Constant { value: right, .. },
+        ) => evaluate_binary_loop(
+            ConstantColumn::<L> { value: left, len },
+            ConstantColumn::<R> { value: right, len },
+            &function,
+        ),
+        (left_kind, right_kind) => evaluate_typed_binary_with(
+            ColumnView { kind: left_kind },
+            ColumnView { kind: right_kind },
+            &function,
+        ),
+    })
 }
 
-/// Lift one infallible scalar function over a nullable unary column.
+/// Lift one infallible scalar function through the shared typed
+/// `ColumnView::get` fallback.
 pub fn evaluate_unary<I, O, F>(input: ColumnViewImpl<'_>, function: F) -> anyhow::Result<ArrayImpl>
 where
     I: Scalar + Copy,
@@ -282,7 +383,226 @@ where
     for<'a> &'a I::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
     for<'a> I::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
 {
-    evaluate_nullable_unary::<I, O, _>(input, |value| Ok(value.map(&function)))
+    validate_expression_inputs(std::slice::from_ref(&input), &[I::PHYSICAL_TYPE])?;
+    let input = ColumnView::<I>::try_from(input)?;
+    Ok(evaluate_typed_unary(input, &function))
+}
+
+/// Specialize Array and Constant unary inputs while leaving Indexed on the
+/// shared typed `ColumnView::get` fallback.
+pub fn auto_vectorize_unary<I, O, F>(
+    input: ColumnViewImpl<'_>,
+    function: F,
+) -> anyhow::Result<ArrayImpl>
+where
+    I: Scalar + Copy,
+    O: Scalar + Copy,
+    F: Fn(I) -> O,
+    for<'a> I: Scalar<RefType<'a> = I>,
+    for<'a> &'a I::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> I::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+{
+    validate_expression_inputs(std::slice::from_ref(&input), &[I::PHYSICAL_TYPE])?;
+    let input = ColumnView::<I>::try_from(input)?;
+    Ok(match input.kind {
+        ColumnViewKind::Array(array) => evaluate_unary_loop(ArrayColumn::<I> { array }, &function),
+        ColumnViewKind::Constant { value, len } => {
+            evaluate_unary_loop(ConstantColumn::<I> { value, len }, &function)
+        }
+        kind @ ColumnViewKind::Indexed { .. } => {
+            evaluate_typed_unary(ColumnView { kind }, &function)
+        }
+    })
+}
+
+/// Lift one infallible scalar function through the shared typed
+/// `ColumnView::get` ternary fallback.
+pub fn evaluate_ternary<A, B, C, O, F>(
+    first: ColumnViewImpl<'_>,
+    second: ColumnViewImpl<'_>,
+    third: ColumnViewImpl<'_>,
+    function: F,
+) -> anyhow::Result<ArrayImpl>
+where
+    A: Scalar + Copy,
+    B: Scalar + Copy,
+    C: Scalar + Copy,
+    O: Scalar + Copy,
+    F: Fn(A, B, C) -> O,
+    for<'a> A: Scalar<RefType<'a> = A>,
+    for<'a> B: Scalar<RefType<'a> = B>,
+    for<'a> C: Scalar<RefType<'a> = C>,
+    for<'a> &'a A::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a B::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a C::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> A::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> B::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> C::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+{
+    validate_expression_inputs(
+        &[first.clone(), second.clone(), third.clone()],
+        &[A::PHYSICAL_TYPE, B::PHYSICAL_TYPE, C::PHYSICAL_TYPE],
+    )?;
+    Ok(evaluate_typed_ternary(
+        ColumnView::<A>::try_from(first)?,
+        ColumnView::<B>::try_from(second)?,
+        ColumnView::<C>::try_from(third)?,
+        &function,
+    ))
+}
+
+/// Lift one infallible scalar function over three nullable columns.
+///
+/// Only the common Array/Array/Array shape receives a concrete loop. Every
+/// Constant or Indexed combination uses the shared typed `ColumnView::get`
+/// fallback.
+pub fn auto_vectorize_ternary<A, B, C, O, F>(
+    first: ColumnViewImpl<'_>,
+    second: ColumnViewImpl<'_>,
+    third: ColumnViewImpl<'_>,
+    function: F,
+) -> anyhow::Result<ArrayImpl>
+where
+    A: Scalar + Copy,
+    B: Scalar + Copy,
+    C: Scalar + Copy,
+    O: Scalar + Copy,
+    F: Fn(A, B, C) -> O,
+    for<'a> A: Scalar<RefType<'a> = A>,
+    for<'a> B: Scalar<RefType<'a> = B>,
+    for<'a> C: Scalar<RefType<'a> = C>,
+    for<'a> &'a A::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a B::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a C::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> A::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> B::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> C::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+{
+    validate_expression_inputs(
+        &[first.clone(), second.clone(), third.clone()],
+        &[A::PHYSICAL_TYPE, B::PHYSICAL_TYPE, C::PHYSICAL_TYPE],
+    )?;
+    let first = ColumnView::<A>::try_from(first)?;
+    let second = ColumnView::<B>::try_from(second)?;
+    let third = ColumnView::<C>::try_from(third)?;
+    Ok(match (first.kind, second.kind, third.kind) {
+        (
+            ColumnViewKind::Array(first),
+            ColumnViewKind::Array(second),
+            ColumnViewKind::Array(third),
+        ) => evaluate_ternary_loop(
+            ArrayColumn::<A> { array: first },
+            ArrayColumn::<B> { array: second },
+            ArrayColumn::<C> { array: third },
+            &function,
+        ),
+        (first, second, third) => evaluate_typed_ternary(
+            ColumnView { kind: first },
+            ColumnView { kind: second },
+            ColumnView { kind: third },
+            &function,
+        ),
+    })
+}
+
+fn try_evaluate_ternary_loop<'a, C1, C2, C3, A, B, C, O, F, E>(
+    first: C1,
+    second: C2,
+    third: C3,
+    function_name: &str,
+    function: &F,
+) -> anyhow::Result<ArrayImpl>
+where
+    C1: ColumnAccessor<'a, A>,
+    C2: ColumnAccessor<'a, B>,
+    C3: ColumnAccessor<'a, C>,
+    A: Scalar,
+    B: Scalar,
+    C: Scalar,
+    O: Scalar,
+    F: Fn(A::RefType<'a>, B::RefType<'a>, C::RefType<'a>) -> Result<O, E>,
+    E: Display,
+{
+    debug_assert_eq!(first.len(), second.len());
+    debug_assert_eq!(first.len(), third.len());
+    let mut output = <<O as Scalar>::ArrayType as Array>::Builder::with_capacity(first.len());
+    for row in 0..first.len() {
+        let value = match (first.get(row), second.get(row), third.get(row)) {
+            (Some(first), Some(second), Some(third)) => {
+                Some(function(first, second, third).map_err(|error| {
+                    anyhow::anyhow!("function `{function_name}` failed at row {row}: {error}")
+                })?)
+            }
+            _ => None,
+        };
+        output.push(value.as_ref().map(Scalar::as_scalar_ref));
+    }
+    Ok(output.finish().into())
+}
+
+/// Lift one fallible scalar function over three nullable columns while
+/// specializing only the Array/Array/Array shape.
+pub fn try_auto_vectorize_ternary<A, B, C, O, F, E>(
+    first: ColumnViewImpl<'_>,
+    second: ColumnViewImpl<'_>,
+    third: ColumnViewImpl<'_>,
+    function_name: &str,
+    function: F,
+) -> anyhow::Result<ArrayImpl>
+where
+    A: Scalar + Copy,
+    B: Scalar + Copy,
+    C: Scalar + Copy,
+    O: Scalar + Copy,
+    F: Fn(A, B, C) -> Result<O, E>,
+    E: Display,
+    for<'a> A: Scalar<RefType<'a> = A>,
+    for<'a> B: Scalar<RefType<'a> = B>,
+    for<'a> C: Scalar<RefType<'a> = C>,
+    for<'a> &'a A::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a B::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> &'a C::ArrayType: TryFrom<&'a ArrayImpl, Error = TypeMismatch>,
+    for<'a> A::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> B::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+    for<'a> C::RefType<'a>: TryFrom<ScalarRefImpl<'a>, Error = TypeMismatch>,
+{
+    validate_expression_inputs(
+        &[first.clone(), second.clone(), third.clone()],
+        &[A::PHYSICAL_TYPE, B::PHYSICAL_TYPE, C::PHYSICAL_TYPE],
+    )?;
+    let first = ColumnView::<A>::try_from(first)?;
+    let second = ColumnView::<B>::try_from(second)?;
+    let third = ColumnView::<C>::try_from(third)?;
+    match (first.kind, second.kind, third.kind) {
+        (
+            ColumnViewKind::Array(first),
+            ColumnViewKind::Array(second),
+            ColumnViewKind::Array(third),
+        ) => try_evaluate_ternary_loop(
+            ArrayColumn::<A> { array: first },
+            ArrayColumn::<B> { array: second },
+            ArrayColumn::<C> { array: third },
+            function_name,
+            &function,
+        ),
+        (first, second, third) => try_evaluate_ternary_loop(
+            ColumnView { kind: first },
+            ColumnView { kind: second },
+            ColumnView { kind: third },
+            function_name,
+            &function,
+        ),
+    }
+}
+
+impl<'a, S: Scalar> ColumnAccessor<'a, S> for ColumnView<'a, S> {
+    fn len(&self) -> usize {
+        self.len()
+    }
+
+    fn get(&self, row: usize) -> Option<S::RefType<'a>> {
+        ColumnView::get(self, row)
+    }
 }
 
 /// Lift one nullable-aware scalar function over a unary column.
@@ -452,58 +772,51 @@ where
     Ok(output.finish().into())
 }
 
-/// An `i32` binary adapter with representation-selected raw-lane loops.
-pub struct PrimitiveBinaryExpression<F> {
-    name: &'static str,
-    input_types: [PhysicalType; 2],
-    function: F,
-}
-
 fn raw_array_array<F>(function: &F, left: &[i32], right: &[i32]) -> Vec<i32>
 where
-    F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32>,
+    F: Fn(i32, i32) -> i32,
 {
     let mut output = Vec::with_capacity(left.len());
     for row in 0..left.len() {
         let left = left[row];
         let right = right[row];
-        output.push(function.evaluate(left, right));
+        output.push(function(left, right));
     }
     output
 }
 
 fn raw_array_constant<F>(function: &F, left: &[i32], right: i32) -> Vec<i32>
 where
-    F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32>,
+    F: Fn(i32, i32) -> i32,
 {
     let mut output = Vec::with_capacity(left.len());
     for row in 0..left.len() {
         let left = left[row];
-        output.push(function.evaluate(left, right));
+        output.push(function(left, right));
     }
     output
 }
 
 fn raw_constant_array<F>(function: &F, left: i32, right: &[i32]) -> Vec<i32>
 where
-    F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32>,
+    F: Fn(i32, i32) -> i32,
 {
     let mut output = Vec::with_capacity(right.len());
     for row in 0..right.len() {
         let right = right[row];
-        output.push(function.evaluate(left, right));
+        output.push(function(left, right));
     }
     output
 }
 
 fn raw_constant_constant<F>(function: &F, left: i32, right: i32, len: usize) -> Vec<i32>
 where
-    F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32>,
+    F: Fn(i32, i32) -> i32,
 {
     if len == 0 {
         Vec::new()
     } else {
-        vec![function.evaluate(left, right); len]
+        vec![function(left, right); len]
     }
 }
 
@@ -541,278 +854,62 @@ fn and_raw_i32_validity(left: RawI32Column<'_>, right: RawI32Column<'_>, len: us
     }
 }
 
-impl<F> PrimitiveBinaryExpression<F>
+/// Evaluate one strict, total and infallible Int32 scalar operation through
+/// raw values and validity. Indexed input deliberately uses the typed fallback.
+pub fn auto_vectorize_primitive_i32<F>(
+    left: ColumnViewImpl<'_>,
+    right: ColumnViewImpl<'_>,
+    function: F,
+) -> anyhow::Result<ArrayImpl>
 where
-    F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32>,
+    F: Fn(i32, i32) -> i32,
 {
-    pub fn new(name: &'static str, function: F) -> Self {
-        Self {
-            name,
-            input_types: [PhysicalType::Int32, PhysicalType::Int32],
-            function,
+    validate_expression_inputs(
+        &[left.clone(), right.clone()],
+        &[PhysicalType::Int32, PhysicalType::Int32],
+    )?;
+    if left.is_indexed() || right.is_indexed() {
+        return auto_vectorize_binary::<i32, i32, i32, _>(left, right, function);
+    }
+
+    let left = left
+        .as_raw_i32()
+        .expect("validated non-indexed Int32 input");
+    let right = right
+        .as_raw_i32()
+        .expect("validated non-indexed Int32 input");
+    debug_assert_eq!(left.len(), right.len());
+    let len = left.len();
+    let values = match (left, right) {
+        (RawI32Column::Array { values: left, .. }, RawI32Column::Array { values: right, .. }) => {
+            raw_array_array(&function, left, right)
         }
-    }
-
-    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-        <Self as Expression>::evaluate(self, inputs)
-    }
-
-    pub fn evaluate_with_loop(
-        &self,
-        inputs: &[ColumnViewImpl<'_>],
-    ) -> anyhow::Result<(ArrayImpl, PrimitiveLoop)> {
-        if inputs.len() != self.input_types.len() {
-            anyhow::bail!(
-                "input arity mismatch: expected {}, got {}",
-                self.input_types.len(),
-                inputs.len()
-            );
+        (RawI32Column::Array { values: left, .. }, RawI32Column::Constant { value: right, .. }) => {
+            raw_array_constant(&function, left, right)
         }
-        for (input_index, (input, expected)) in inputs.iter().zip(&self.input_types).enumerate() {
-            if input.physical_type() != *expected {
-                anyhow::bail!(
-                    "input {input_index} type mismatch: expected {expected:?}, got {:?}",
-                    input.physical_type()
-                );
-            }
+        (RawI32Column::Constant { value: left, .. }, RawI32Column::Array { values: right, .. }) => {
+            raw_constant_array(&function, left, right)
         }
-        if inputs[0].len() != inputs[1].len() {
-            anyhow::bail!(
-                "input 1 length mismatch: expected {}, got {}",
-                inputs[0].len(),
-                inputs[1].len()
-            );
-        }
-
-        if inputs[0].is_indexed() || inputs[1].is_indexed() {
-            return Ok((
-                evaluate_binary(&self.function, inputs[0].clone(), inputs[1].clone())?,
-                PrimitiveLoop::Indexed,
-            ));
-        }
-        let left = inputs[0]
-            .as_raw_i32()
-            .expect("validated non-indexed Int32 input");
-        let right = inputs[1]
-            .as_raw_i32()
-            .expect("validated non-indexed Int32 input");
-        debug_assert_eq!(left.len(), right.len());
-        let len = left.len();
-
-        let (values, selected_loop) = match (left, right) {
-            (
-                RawI32Column::Array { values: left, .. },
-                RawI32Column::Array { values: right, .. },
-            ) => (
-                raw_array_array(&self.function, left, right),
-                PrimitiveLoop::ArrayArray,
-            ),
-            (
-                RawI32Column::Array { values: left, .. },
-                RawI32Column::Constant { value: right, .. },
-            ) => (
-                raw_array_constant(&self.function, left, right),
-                PrimitiveLoop::ArrayConstant,
-            ),
-            (
-                RawI32Column::Constant { value: left, .. },
-                RawI32Column::Array { values: right, .. },
-            ) => (
-                raw_constant_array(&self.function, left, right),
-                PrimitiveLoop::ConstantArray,
-            ),
-            (
-                RawI32Column::Constant { value: left, .. },
-                RawI32Column::Constant { value: right, .. },
-            ) => (
-                raw_constant_constant(&self.function, left, right, len),
-                PrimitiveLoop::ConstantConstant,
-            ),
-        };
-        let validity = and_raw_i32_validity(left, right, len);
-
-        Ok((
-            I32Array::from_raw_parts(values, validity).into(),
-            selected_loop,
-        ))
-    }
-}
-
-impl<F> Expression for PrimitiveBinaryExpression<F>
-where
-    F: BinaryScalarFunction<Left = i32, Right = i32, Output = i32>,
-{
-    fn name(&self) -> &'static str {
-        self.name
-    }
-
-    fn input_types(&self) -> &[PhysicalType] {
-        &self.input_types
-    }
-
-    fn output_type(&self) -> PhysicalType {
-        PhysicalType::Int32
-    }
-
-    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-        self.evaluate_with_loop(inputs).map(|(output, _)| output)
-    }
-
-    fn evaluate_with_loop(
-        &self,
-        inputs: &[ColumnViewImpl<'_>],
-    ) -> anyhow::Result<(ArrayImpl, PrimitiveLoop)> {
-        PrimitiveBinaryExpression::evaluate_with_loop(self, inputs)
-    }
-}
-
-/// Adapt one typed binary scalar function to the runtime expression interface.
-pub type BinaryBatchKernel = for<'a> fn(&[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
-pub type BinaryLoopKernel =
-    for<'a> fn(&[ColumnViewImpl<'a>]) -> anyhow::Result<(ArrayImpl, PrimitiveLoop)>;
-
-pub struct BinaryExpression {
-    name: &'static str,
-    input_types: [crate::PhysicalType; 2],
-    output_type: crate::PhysicalType,
-    kernel: BinaryBatchKernel,
-    loop_kernel: Option<BinaryLoopKernel>,
-    reports_scalar_rows: bool,
-}
-
-impl BinaryExpression {
-    pub fn new(
-        name: &'static str,
-        input_types: [crate::PhysicalType; 2],
-        output_type: crate::PhysicalType,
-        kernel: BinaryBatchKernel,
-    ) -> Self {
-        Self {
-            name,
-            input_types,
-            output_type,
-            kernel,
-            loop_kernel: None,
-            reports_scalar_rows: false,
-        }
-    }
-
-    pub fn new_with_loop(
-        name: &'static str,
-        input_types: [crate::PhysicalType; 2],
-        output_type: crate::PhysicalType,
-        kernel: BinaryBatchKernel,
-        loop_kernel: BinaryLoopKernel,
-    ) -> Self {
-        Self {
-            name,
-            input_types,
-            output_type,
-            kernel,
-            loop_kernel: Some(loop_kernel),
-            reports_scalar_rows: false,
-        }
-    }
-
-    #[doc(hidden)]
-    pub fn new_with_scalar_rows(
-        name: &'static str,
-        input_types: [crate::PhysicalType; 2],
-        output_type: crate::PhysicalType,
-        kernel: BinaryBatchKernel,
-    ) -> Self {
-        Self {
-            name,
-            input_types,
-            output_type,
-            kernel,
-            loop_kernel: None,
-            reports_scalar_rows: true,
-        }
-    }
-
-    pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-        <Self as Expression>::evaluate(self, inputs)
-    }
-}
-
-impl Expression for BinaryExpression {
-    fn name(&self) -> &'static str {
-        self.name
-    }
-
-    fn input_types(&self) -> &[crate::PhysicalType] {
-        &self.input_types
-    }
-
-    fn output_type(&self) -> crate::PhysicalType {
-        self.output_type.clone()
-    }
-
-    fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-        self.evaluate_with_loop(inputs).map(|(output, _)| output)
-    }
-
-    fn evaluate_with_loop(
-        &self,
-        inputs: &[ColumnViewImpl<'_>],
-    ) -> anyhow::Result<(ArrayImpl, PrimitiveLoop)> {
-        if inputs.len() != self.arity() {
-            anyhow::bail!(
-                "input arity mismatch: expected {}, got {}",
-                self.arity(),
-                inputs.len()
-            );
-        }
-        for (input_index, (input, expected)) in inputs.iter().zip(&self.input_types).enumerate() {
-            if input.physical_type() != *expected {
-                anyhow::bail!(
-                    "input {input_index} type mismatch: expected {expected:?}, got {:?}",
-                    input.physical_type()
-                );
-            }
-        }
-        if inputs[0].len() != inputs[1].len() {
-            anyhow::bail!(
-                "input 1 length mismatch: expected {}, got {}",
-                inputs[0].len(),
-                inputs[1].len()
-            );
-        }
-        let (output, selected_loop) = match self.loop_kernel {
-            Some(kernel) => kernel(inputs),
-            None => (self.kernel)(inputs).map(|output| (output, PrimitiveLoop::General)),
-        }
-        .map_err(|error| {
-            if self.reports_scalar_rows {
-                anyhow::anyhow!("function `{}` failed at {error}", self.name)
-            } else {
-                error
-            }
-        })?;
-        if output.physical_type() != self.output_type {
-            anyhow::bail!(
-                "output type mismatch: expected {:?}, got {:?}",
-                self.output_type,
-                output.physical_type()
-            );
-        }
-        Ok((output, selected_loop))
-    }
+        (
+            RawI32Column::Constant { value: left, .. },
+            RawI32Column::Constant { value: right, .. },
+        ) => raw_constant_constant(&function, left, right, len),
+    };
+    let validity = and_raw_i32_validity(left, right, len);
+    Ok(I32Array::from_raw_parts(values, validity).into())
 }
 
 use crate::PhysicalType as BatchPhysicalType;
 
 /// One monomorphized evaluator for a complete input batch.
-pub type BatchKernel<const N: usize> =
-    for<'a> fn(&BatchExpression<N>, &[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
+pub type BatchKernel = for<'a> fn(&[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
 
 /// A fixed-arity expression whose only callable operation is vectorized.
 pub struct BatchExpression<const N: usize> {
     name: &'static str,
     input_types: [BatchPhysicalType; N],
     output_type: BatchPhysicalType,
-    kernel: BatchKernel<N>,
+    kernel: BatchKernel,
 }
 
 impl<const N: usize> BatchExpression<N> {
@@ -820,7 +917,7 @@ impl<const N: usize> BatchExpression<N> {
         name: &'static str,
         input_types: [BatchPhysicalType; N],
         output_type: BatchPhysicalType,
-        kernel: BatchKernel<N>,
+        kernel: BatchKernel,
     ) -> Self {
         Self {
             name,
@@ -830,14 +927,32 @@ impl<const N: usize> BatchExpression<N> {
         }
     }
 
+    pub fn name(&self) -> &'static str {
+        self.name
+    }
+
+    pub fn input_types(&self) -> &[BatchPhysicalType; N] {
+        &self.input_types
+    }
+
+    pub fn output_type(&self) -> BatchPhysicalType {
+        self.output_type.clone()
+    }
+
     pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
-        validate_expression_inputs(inputs, &self.input_types)?;
-        let output = (self.kernel)(self, inputs)?;
+        let input_len = validate_expression_inputs(inputs, &self.input_types)?;
+        let output = (self.kernel)(inputs)?;
         if output.physical_type() != self.output_type {
             anyhow::bail!(
                 "output type mismatch: expected {:?}, got {:?}",
                 self.output_type,
                 output.physical_type()
+            );
+        }
+        if output.len() != input_len {
+            anyhow::bail!(
+                "output length mismatch: expected {input_len}, got {}",
+                output.len()
             );
         }
         Ok(output)

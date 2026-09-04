@@ -1,117 +1,66 @@
 use crate::{
-    Array, ArrayImpl, BoolArray, ColumnView, ColumnViewImpl, F64Array, I16Array, I32Array,
-    PhysicalType, ScalarRefImpl, StringArray,
+    Array, ArrayImpl, ColumnViewImpl, F64Array, I16Array, I32Array, PhysicalType, ScalarRefImpl,
+    add_i16_i32, clamp_i32, evaluate_binary, evaluate_unary, negate_i32,
 };
 
-#[test]
-fn reads_arrays_constants_and_indexed_views_as_logical_rows() {
-    let array: ArrayImpl = I32Array::from_slice(&[Some(10), None, Some(30)]).into();
-    let erased_array = ColumnViewImpl::array(&array);
-    assert_eq!(erased_array.get(0), Some(ScalarRefImpl::Int32(10)));
-    assert_eq!(erased_array.get(1), None);
-    let array_view = ColumnView::<i32>::try_from(erased_array).unwrap();
-    assert_eq!(array_view.len(), 3);
-    assert_eq!(array_view.get(0), Some(10));
-    assert_eq!(array_view.get(1), None);
+fn i32_values(array: ArrayImpl) -> Vec<Option<i32>> {
+    I32Array::try_from(array).unwrap().iter().collect()
+}
 
-    let erased_constant = ColumnViewImpl::constant(ScalarRefImpl::String("a"), 3);
-    assert_eq!(erased_constant.physical_type(), PhysicalType::String);
-    assert_eq!(erased_constant.get(0), Some(ScalarRefImpl::String("a")));
-    assert_eq!(erased_constant.get(2), Some(ScalarRefImpl::String("a")));
-    let constant = ColumnView::<String>::try_from(erased_constant).unwrap();
+#[test]
+fn evaluates_unary_binary_and_ternary_functions_with_one_shared_contract() {
+    let input: ArrayImpl = I32Array::from_slice(&[Some(2), None, Some(-3)]).into();
+    let negated = negate_i32(ColumnViewImpl::array(&input)).unwrap();
+    assert_eq!(i32_values(negated), vec![Some(-2), None, Some(3)]);
+
+    let left: ArrayImpl = I16Array::from_slice(&[Some(1), None, Some(4)]).into();
+    let right = ColumnViewImpl::constant(ScalarRefImpl::Int32(10), 3);
+    let added = add_i16_i32(ColumnViewImpl::array(&left), right).unwrap();
+    assert_eq!(i32_values(added), vec![Some(11), None, Some(14)]);
+
+    let lower = ColumnViewImpl::constant(ScalarRefImpl::Int32(0), 3);
+    let upper = ColumnViewImpl::constant(ScalarRefImpl::Int32(5), 3);
+    let clamped = clamp_i32(ColumnViewImpl::array(&input), lower, upper).unwrap();
+    assert_eq!(i32_values(clamped), vec![Some(2), None, Some(0)]);
+}
+
+#[test]
+fn indexed_inputs_use_the_same_typed_get_fallback() {
+    let values: ArrayImpl = I32Array::from_slice(&[Some(3), None, Some(8)]).into();
+    let indexed = ColumnViewImpl::indexed(&[2, 0, 1], &values).unwrap();
+    let doubled = evaluate_unary::<i32, i32, _>(indexed, |value| value * 2).unwrap();
+    assert_eq!(i32_values(doubled), vec![Some(16), Some(6), None]);
+
+    let floats: ArrayImpl = F64Array::from_slice(&[Some(1.5), None, Some(2.0)]).into();
+    let indexed = ColumnViewImpl::indexed(&[2, 0, 1], &floats).unwrap();
+    let summed = evaluate_binary::<f64, f64, f64, _>(
+        indexed,
+        ColumnViewImpl::constant(ScalarRefImpl::Float64(0.5), 3),
+        |left, right| left + right,
+    )
+    .unwrap();
     assert_eq!(
-        (0..constant.len())
-            .map(|row| constant.get(row))
+        F64Array::try_from(summed)
+            .unwrap()
+            .iter()
             .collect::<Vec<_>>(),
-        vec![Some("a"), Some("a"), Some("a")]
-    );
-
-    let values: ArrayImpl = StringArray::from_slice(&[Some("red"), None, Some("green")]).into();
-    let indices = [2, 1, 1, 0, 2];
-    let erased_indexed = ColumnViewImpl::indexed(&indices, &values).unwrap();
-    assert_eq!(erased_indexed.get(0), Some(ScalarRefImpl::String("green")));
-    assert_eq!(erased_indexed.get(1), None);
-    let indexed = ColumnView::<String>::try_from(erased_indexed).unwrap();
-    assert_eq!(
-        (0..indexed.len())
-            .map(|row| indexed.get(row))
-            .collect::<Vec<_>>(),
-        vec![Some("green"), None, None, Some("red"), Some("green")]
+        vec![Some(2.5), Some(2.0), None]
     );
 }
 
 #[test]
-fn reads_expanded_families_through_array_constant_and_indexed_views() {
-    let doubles: ArrayImpl = F64Array::from_slice(&[Some(-0.0), None, Some(f64::INFINITY)]).into();
-    let double_indices = [2, 0, 1];
-    let double_indexed =
-        ColumnView::<f64>::try_from(ColumnViewImpl::indexed(&double_indices, &doubles).unwrap())
-            .unwrap();
-    assert_eq!(double_indexed.get(0), Some(f64::INFINITY));
-    assert_eq!(
-        double_indexed.get(1).unwrap().to_bits(),
-        (-0.0_f64).to_bits()
-    );
-    assert_eq!(double_indexed.get(2), None);
-
-    let boolean =
-        ColumnView::<bool>::try_from(ColumnViewImpl::constant(ScalarRefImpl::Bool(true), 2))
-            .unwrap();
-    assert_eq!(boolean.get(0), Some(true));
-    assert_eq!(boolean.get(1), Some(true));
-
-    let smallints: ArrayImpl = I16Array::from_slice(&[Some(-1), None]).into();
-    let smallints = ColumnView::<i16>::try_from(ColumnViewImpl::array(&smallints)).unwrap();
-    assert_eq!(smallints.get(0), Some(-1));
-    assert_eq!(smallints.get(1), None);
-
-    let null = ColumnView::<f64>::try_from(ColumnViewImpl::null(PhysicalType::Float64, 2)).unwrap();
-    assert_eq!(null.get(0), None);
-    assert_eq!(null.get(1), None);
-
-    let booleans: ArrayImpl = BoolArray::from_slice(&[Some(false)]).into();
-    assert_eq!(booleans.physical_type(), PhysicalType::Bool);
-}
-
-#[test]
-fn preserves_the_type_and_length_of_null_and_empty_views() {
-    let null =
-        ColumnView::<String>::try_from(ColumnViewImpl::null(PhysicalType::String, 2)).unwrap();
-    assert_eq!(null.len(), 2);
-    assert_eq!(null.get(0), None);
-    assert_eq!(null.get(1), None);
-
-    let empty = ColumnViewImpl::null(PhysicalType::Int32, 0);
-    assert!(empty.is_empty());
-    assert_eq!(empty.physical_type(), PhysicalType::Int32);
-
-    let values: ArrayImpl = I32Array::from_slice(&[Some(1)]).into();
-    let no_indices: [u32; 0] = [];
-    let indexed = ColumnViewImpl::indexed(&no_indices, &values).unwrap();
-    assert!(indexed.is_empty());
-}
-
-#[test]
-fn rejects_every_invalid_index_before_exposing_a_view() {
-    let values: ArrayImpl = I32Array::from_slice(&[Some(1)]).into();
-    let error = ColumnViewImpl::indexed(&[0, 1], &values).err().unwrap();
-    assert_eq!(
-        error.to_string(),
-        "index 1 at row 1 is out of bounds for a values array of length 1"
+fn rejects_type_and_length_mismatches_before_evaluation() {
+    let integers: ArrayImpl = I32Array::from_slice(&[Some(1), Some(2)]).into();
+    let short = ColumnViewImpl::constant(ScalarRefImpl::Int32(1), 1);
+    assert!(
+        evaluate_binary::<i32, i32, i32, _>(
+            ColumnViewImpl::array(&integers),
+            short,
+            |left, right| left + right
+        )
+        .is_err()
     );
 
-    let empty_values: ArrayImpl = I32Array::from_slice(&[]).into();
-    let error = ColumnViewImpl::indexed(&[0], &empty_values).err().unwrap();
-    assert_eq!(
-        error.to_string(),
-        "index 0 at row 0 is out of bounds for a values array of length 0"
-    );
-}
-
-#[test]
-fn rejects_a_physical_type_mismatch_before_reading_rows() {
-    let integers: ArrayImpl = I32Array::from_slice(&[Some(1)]).into();
-    assert!(ColumnView::<String>::try_from(ColumnViewImpl::array(&integers)).is_err());
-
-    assert!(ColumnView::<String>::try_from(ColumnViewImpl::null(PhysicalType::Int32, 1)).is_err());
+    let wrong = ColumnViewImpl::null(PhysicalType::Float64, 2);
+    assert!(evaluate_unary::<i32, i32, _>(wrong, |value| value).is_err());
 }

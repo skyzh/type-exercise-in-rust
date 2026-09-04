@@ -4,23 +4,12 @@ use std::fmt::{Display, Formatter};
 
 use crate::{
     ArithmeticOperator, ArrayImpl, AsyncExpression, BatchFuture, BooleanOperator, ColumnViewImpl,
-    ComparisonOperator, DataType, Expression, I32Add, PhysicalType, PrimitiveBinaryExpression,
-    PrimitiveLoop, build_bool_comparison_expression, build_boolean_expression,
-    build_numeric_binary_expression, build_numeric_clamp_expression,
-    build_numeric_comparison_expression, build_numeric_neg_expression,
-    build_string_comparison_expression, build_string_contains_expression, promote_numeric,
+    ComparisonOperator, DataType, Expression, PhysicalType, build_bool_comparison_expression,
+    build_boolean_binary_expression, build_boolean_not_expression, build_numeric_binary_expression,
+    build_numeric_clamp_expression, build_numeric_comparison_expression,
+    build_numeric_neg_expression, build_string_comparison_expression,
+    build_string_concat_expression, build_string_contains_expression, promote_numeric,
 };
-
-/// The two physical expressions available before logical binding is introduced.
-pub const BUILTIN_EXPRESSION_NAMES: &[&str] = &["i32_add", "string_concat"];
-
-pub fn build_builtin_expression(name: &str) -> Option<Box<dyn Expression>> {
-    match name {
-        "i32_add" => Some(Box::new(PrimitiveBinaryExpression::new("i32_add", I32Add))),
-        "string_concat" => Some(Box::new(crate::string::build_string_concat_expression())),
-        _ => None,
-    }
-}
 
 /// A checked failure while selecting one physical expression.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -36,9 +25,6 @@ pub enum BindError {
     UnsupportedArguments {
         name: String,
         inputs: Vec<DataType>,
-    },
-    MissingPhysicalExpression {
-        name: &'static str,
     },
     PhysicalSignatureMismatch {
         name: &'static str,
@@ -63,9 +49,6 @@ impl Display for BindError {
             ),
             Self::UnsupportedArguments { name, inputs } => {
                 write!(formatter, "function `{name}` does not support {inputs:?}")
-            }
-            Self::MissingPhysicalExpression { name } => {
-                write!(formatter, "physical expression `{name}` is not registered")
             }
             Self::PhysicalSignatureMismatch {
                 name,
@@ -135,13 +118,6 @@ impl BoundExpression {
 
     pub fn evaluate(&self, inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
         self.expression.evaluate(inputs)
-    }
-
-    pub fn evaluate_with_loop(
-        &self,
-        inputs: &[ColumnViewImpl<'_>],
-    ) -> anyhow::Result<(ArrayImpl, PrimitiveLoop)> {
-        self.expression.evaluate_with_loop(inputs)
     }
 }
 
@@ -318,10 +294,6 @@ impl FunctionRegistry {
     }
 }
 
-fn build_physical(name: &'static str) -> Result<Box<dyn Expression>, BindError> {
-    build_builtin_expression(name).ok_or(BindError::MissingPhysicalExpression { name })
-}
-
 fn unsupported(name: &str, inputs: impl IntoIterator<Item = DataType>) -> BindError {
     BindError::UnsupportedArguments {
         name: name.to_owned(),
@@ -337,25 +309,18 @@ fn bind_arithmetic(
 ) -> Result<BoundExpression, BindError> {
     let output = promote_numeric(&left, &right)
         .ok_or_else(|| unsupported(name, [left.clone(), right.clone()]))?;
-    let expression = if operator == ArithmeticOperator::Add
-        && left == DataType::Integer
-        && right == DataType::Integer
-    {
-        build_physical("i32_add")?
-    } else {
-        Box::new(build_numeric_binary_expression(
-            match operator {
-                ArithmeticOperator::Add => "numeric_add",
-                ArithmeticOperator::Subtract => "numeric_subtract",
-                ArithmeticOperator::Multiply => "numeric_multiply",
-                ArithmeticOperator::Divide => "numeric_divide",
-            },
-            operator,
-            left.physical_type(),
-            right.physical_type(),
-            output.physical_type(),
-        ))
-    };
+    let expression = Box::new(build_numeric_binary_expression(
+        match operator {
+            ArithmeticOperator::Add => "numeric_add",
+            ArithmeticOperator::Subtract => "numeric_subtract",
+            ArithmeticOperator::Multiply => "numeric_multiply",
+            ArithmeticOperator::Divide => "numeric_divide",
+        },
+        operator,
+        left.physical_type(),
+        right.physical_type(),
+        output.physical_type(),
+    ));
     BoundExpression::new(expression, [left, right], output)
 }
 
@@ -461,11 +426,13 @@ fn bind_boolean(
     if !inputs.iter().all(|input| *input == DataType::Boolean) {
         return Err(unsupported(name, inputs));
     }
-    BoundExpression::new(
-        Box::new(build_boolean_expression(operator)),
-        inputs,
-        DataType::Boolean,
-    )
+    let expression: Box<dyn Expression> = match operator {
+        BooleanOperator::Not => Box::new(build_boolean_not_expression(name)),
+        BooleanOperator::And | BooleanOperator::Or => {
+            Box::new(build_boolean_binary_expression(name, operator))
+        }
+    };
+    BoundExpression::new(expression, inputs, DataType::Boolean)
 }
 
 fn bind_contains(left: DataType, right: DataType) -> Result<BoundExpression, BindError> {
@@ -487,7 +454,7 @@ fn bind_concat(left: DataType, right: DataType) -> Result<BoundExpression, BindE
         });
     }
     BoundExpression::new(
-        build_physical("string_concat")?,
+        Box::new(build_string_concat_expression()),
         [left, right],
         DataType::Varchar,
     )

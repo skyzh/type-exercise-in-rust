@@ -1,12 +1,8 @@
 https://skyzh.github.io/type-exercise-in-rust
 https://skyzh.github.io/type-exercise-in-rust/chapter-1-type-family
 https://skyzh.github.io/type-exercise-in-rust/chapter-10-primitive-loops
-https://skyzh.github.io/type-exercise-in-rust/chapter-11-list
-https://skyzh.github.io/type-exercise-in-rust/chapter-12-rust-boundaries
-https://skyzh.github.io/type-exercise-in-rust/chapter-13-async-boundary
-https://skyzh.github.io/type-exercise-in-rust/chapter-14-async-boundary
-https://skyzh.github.io/type-exercise-in-rust/chapter-2-type-catalog
-https://skyzh.github.io/type-exercise-in-rust/chapter-3-column-views
+https://skyzh.github.io/type-exercise-in-rust/chapter-2-column-views
+https://skyzh.github.io/type-exercise-in-rust/chapter-3-shared-evaluation
 https://skyzh.github.io/type-exercise-in-rust/chapter-4-concrete-loops
 https://skyzh.github.io/type-exercise-in-rust/chapter-5-generic-arithmetic
 https://skyzh.github.io/type-exercise-in-rust/chapter-6-systematic-arity

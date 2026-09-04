@@ -1,11 +1,9 @@
 # Course Starter
 
-This is the only learner implementation workspace. It compiles before any exercise work. The
-published course requires Day 1–14 checkpoints at their implementation locations under
-`expr/src/` and `core/src/`: existing declarations have concise Day/checkpoint documentation, while future declarations
-and signatures stay commented until their chapter tells you to uncomment and implement them.
-The sibling facade and core packages exist from Day 1; Day 14 async scaffolds stay commented until
-the final chapter tells you to implement them.
+This is the only learner implementation workspace, and it compiles before any exercise work. The
+course has ten chapter checkpoints grouped into seven teaching days. Learner-owned declarations
+carry short chapter comments at their implementation locations under `core/src/` and `expr/src/`;
+future declarations stay commented until their chapter introduces them.
 
 From the repository root, verify the untouched baseline:
 
@@ -24,7 +22,7 @@ cargo test -p type-exercise-starter-supplied-tests chapter_1 --locked
 ```
 
 The copy is cumulative and changes supplied tests only; it never parses or rewrites learner-owned
-source. Follow the chapter to the local Day/checkpoint comment, uncomment the named skeleton when
+source. Follow the chapter to the local ownership comment, uncomment the named skeleton when
 needed, and implement it. You may read the copied file under `supplied-tests/src/`, but do not edit it or
 `supplied-tests/src/lib.rs`. Work in the other files under `expr/src/` and `core/src/`, keep earlier tests green, and do not inspect
 `../type-exercise/` or `../archived/` for solutions.

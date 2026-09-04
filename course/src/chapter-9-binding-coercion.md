@@ -1,81 +1,43 @@
 {{#include wip-banner.md}}
 
-# Chapter 9: Erase Typed Expressions at Runtime
+# Chapter 9: Build a One-Level List Column
 
-The evaluator families are generic so Rust can specialize their scalar and row work. A query plan,
-however, needs one collection containing expressions with different concrete types and arities.
-Erasure belongs around the complete batch expression—not around each scalar operation.
-
-This chapter introduces that boundary in three stages. The typed evaluator remains responsible for
-validation, nulls, row errors, and output construction. The erased shell exposes stable metadata
-and delegates one whole batch.
-
-## Checkpoint 1: one object-safe expression boundary
+A List column combines outer rows with one contiguous child array. Offsets delimit each row's child
+slice; outer validity distinguishes null from valid-empty; and the child array keeps its own
+physical family and nulls. This course supports exactly one List level.
 
 ```console
-cargo x copy-test --chapter 9 --checkpoint 1
+cargo x copy-test --chapter 9
 cargo test -p type-exercise-starter-supplied-tests chapter_9 --locked
 ```
 
-Define the object-safe `Expression: Any + Send + Sync` trait with name, input physical types,
-output type, and `evaluate`. Store the complete input signature as a slice; deriving
-arity from `input_types().len()` keeps unary, binary, and ternary metadata consistent.
+## Preserve the three independent invariants
 
-Chapter 8 already leaves evaluation-only `Expression` implementations on the existing typed shells.
-Publish truthful metadata for each of those implementations when you extend the trait so the
-predecessor still compiles. Adapt only `i32_add` to `Box<dyn Expression>` at this checkpoint; the
-other erased families arrive next. The two focused tests pass here, for 63 cumulative tests.
-Do not place `dyn Fn` inside the row loop.
+Add `List` to `DataType`, `PhysicalType`, `ScalarImpl`, `ScalarRefImpl`, and `ArrayImpl`. The type
+stores the child family. An empty or all-null outer array must still retain that family.
 
-## Checkpoint 2: preserve typed validation through erasure
+Implement owned `ListScalar`, borrowed `ListScalarRef`, `ListArray`, and its builder. For `n`
+outer rows:
 
-```console
-cargo x copy-test --chapter 9 --checkpoint 2
-cargo test -p type-exercise-starter-supplied-tests chapter_9 --locked
-```
+- offsets have length `n + 1`, start at zero, never decrease, and end at the child length;
+- null outer rows contribute no children and repeat the previous offset;
+- valid empty rows have the same equal offsets but a true validity bit; and
+- every appended child slice has the declared physical family.
 
-Add erased adapters for the complete typed evaluator families. Their job is deliberately narrow:
+Validate one complete row before advancing its offset or validity. Reject a nested List child
+explicitly instead of recursing into a type system the course has not defined.
 
-1. publish name and physical metadata;
-2. pass borrowed erased column views to the selected typed kernel; and
-3. verify that the returned physical family matches the declared output.
-
-Do not repeat arity, type, length, strict-null, or row-context logic in the adapter. The ten
-focused tests cover unary, binary, and ternary shells while preserving errors and nulls at the
-typed boundary, including a deliberately wrong kernel result. This checkpoint
-reaches 71 cumulative tests without requiring the catalog or Boolean erasure from checkpoint 3.
-
-## Checkpoint 3: assemble the fixed builtin catalog
+Extend `ColumnViewImpl` with checked `try_as_list`. Array, Constant, typed null, and Indexed forms
+must preserve the child family and borrow only the selected row's child slice. Slicing rebases
+offsets and cannot expose neighboring rows.
 
 ```console
-cargo x copy-test --chapter 9 --checkpoint 3
 cargo test -p type-exercise-starter-supplied-tests chapter_9 --locked
-cargo check -p type-exercise-starter-core --locked
+cargo test -p type-exercise-starter-supplied-tests --lib --locked
 ```
 
-Build the finite builtin catalog, add Boolean delegation, and confirm safe `Send + Sync` sharing for
-the course. Each catalog entry stores one preselected batch kernel. It may describe arithmetic,
-comparison, or Boolean work, but it does not inspect an operation for every row.
-
-The 13 focused tests cover:
-
-- complete builtin coverage and metadata;
-- typed validation and strict-null behavior through trait objects;
-- unary, binary, and ternary delegation;
-- Boolean delegation through the same erased surface; and
-- safe sharing of erased expressions across threads.
-
-The core-only command is the architectural control: storage, views, generic evaluators, and
-erasure compile without importing the facade's concrete function catalog.
-
-## Why erasure comes after specialization
-
-Erasing `i32`, `f64`, or the scalar operation in every row would replace compile-time selection
-with repeated runtime matching. Erasing the whole `Expression` lets a planner keep heterogeneous
-objects while each object still owns a monomorphized batch kernel. Runtime flexibility and typed
-inner loops are complementary when the boundary is placed at batch granularity.
-
-The runtime boundary is now complete. Chapter 10 uses it for a result whose physical storage must
-be published transactionally: [variable-width strings](./chapter-10-primitive-loops.md).
+The tests cover null/empty/nonempty rows, child nulls, slicing, all four column representations,
+wrong child types, invalid raw parts, and explicit nested rejection. [Chapter 10](./chapter-10-primitive-loops.md)
+keeps these borrows intact across thread-safe factories and one batch future.
 
 {{#include copyright.md}}
