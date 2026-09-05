@@ -7,3 +7,7 @@
 //! Keep all row traversal in core. Do not inspect Array, Constant, or Indexed representations in
 //! this facade module. Numeric operator metadata, promotion tables, fallible arithmetic, and
 //! runtime factories belong to later checkpoints.
+//!
+//! Checkpoint 8 expands this module with concrete whole-batch builders for lossless numeric
+//! arithmetic, negation, fallible clamp, and comparisons. The builders choose a typed kernel once
+//! from the exact physical signature and return `BatchExpression<N>`; they never traverse rows.

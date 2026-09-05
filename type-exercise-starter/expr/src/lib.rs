@@ -9,16 +9,16 @@ pub use type_exercise_starter_core::*;
 // mod numeric;
 // pub use numeric::*;
 
-// Day 8, checkpoint 1: enable the private module, implement scalar NOT/AND/OR, and expose the
-// public Boolean expression surface.
+// Checkpoint 8: enable Boolean and String scalar semantics together with the physical catalog.
 // mod boolean;
 // pub use boolean::*;
-// Checkpoint 2: add public metadata and verify array-backed and invalid batches.
 
-// Day 10: enable variable-width scalar operations after the core writer evaluator exists.
 // mod string;
 // pub use string::*;
 
-// Day 11: enable logical binding and the builtin catalog.
+// mod catalog;
+// pub use catalog::*;
+
+// Checkpoint 9: enable logical binding and coercion after physical selection is complete.
 // mod binder;
 // pub use binder::*;
