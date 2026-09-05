@@ -6,7 +6,7 @@ pub enum PhysicalType {
     Int32,
     String,
     // Add Int16, Int64, Bool, Float32, Float64, and `Decimal(DecimalType)`.
-    // A later checkpoint adds List.
+    // Checkpoint 10 adds List.
 }
 
 /// Checkpoint 1: extend this descriptor-free inventory in the same order.

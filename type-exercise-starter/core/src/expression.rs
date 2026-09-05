@@ -74,5 +74,30 @@
 //!     E: std::fmt::Display;
 //! ```
 //!
-//! Keep raw representation support private. Logical registries, List evaluation, and asynchronous
-//! evaluation belong to later checkpoints.
+//! Keep raw representation support private. Checkpoint 10 adds one-level List values and a
+//! whole-batch asynchronous boundary over this existing synchronous expression contract.
+//!
+//! Before adding the four APIs below, strengthen the existing declaration to
+//! `pub trait Expression: Send + Sync`. The borrowing future is `Send`, so both the referenced
+//! expression and the erased child in `Box<dyn Expression>` must be safe to share across threads.
+//!
+//! ```rust,ignore
+//! pub type BatchFuture<'a> =
+//!     Pin<Box<dyn Future<Output = anyhow::Result<ArrayImpl>> + Send + 'a>>;
+//!
+//! pub fn evaluate_static<'a, E>(
+//!     expression: &'a E,
+//!     inputs: &'a [ColumnViewImpl<'a>],
+//! ) -> impl Future<Output = anyhow::Result<ArrayImpl>> + Send + 'a
+//! where
+//!     E: Expression + ?Sized;
+//!
+//! pub trait AsyncExpression: Send + Sync {
+//!     fn evaluate_async<'a>(&'a self, inputs: &'a [ColumnViewImpl<'a>]) -> BatchFuture<'a>;
+//! }
+//!
+//! pub struct AsyncExpressionAdapter { /* owns one Box<dyn Expression> */ }
+//! impl AsyncExpressionAdapter {
+//!     pub fn new(expression: Box<dyn Expression>) -> Self;
+//! }
+//! ```

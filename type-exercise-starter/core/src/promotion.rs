@@ -1,4 +1,4 @@
-//! Day 5, checkpoint 1: uncomment and implement the lossless numeric-promotion table here.
-// pub struct NumericPromotion { /* left, right, and output logical types */ }
-// pub const NUMERIC_PROMOTIONS: &[NumericPromotion];
-// pub fn promote_numeric(left: impl Borrow<DataType>, right: impl Borrow<DataType>) -> Option<DataType>;
+//! Checkpoint 9 keeps its lossless logical-promotion policy inside the binder.
+//!
+//! The ten-checkpoint course does not enable this module or require an additional public promotion
+//! API. Follow the Chapter 9 binder surface instead.

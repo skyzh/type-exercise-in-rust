@@ -1,5 +1,3 @@
-{{#include wip-banner.md}}
-
 # Checkpoint 1: Build Physical Types and Arrays
 
 Build the values that every later expression will read and write. By the end of this checkpoint,

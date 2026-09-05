@@ -10,32 +10,28 @@ operation, while generic unary, binary, and ternary adapters reuse the checked b
 
 ## Read the course
 
-The complete [published course](https://skyzh.github.io/type-exercise-in-rust/) contains seven
-modules and fourteen independently testable labs. Work through the labs in order; each extends the
-same starter and keeps the earlier supplied tests green. Plan roughly half a day for each lab. An
-experienced Rust learner can finish in about seven working days, while newer learners should
-expect to take longer.
+The complete [published course](https://skyzh.github.io/type-exercise-in-rust/) contains five
+modules and ten cumulative, independently testable checkpoints. Work through them in order; each
+extends the same starter and keeps the earlier supplied tests green. Plan roughly half a day for
+each checkpoint. An experienced Rust learner can finish in about five working days, while newer
+learners should expect to take longer.
 
 ## What you will build
 
-The seven modules follow the engine from physical values to its outer async boundary:
+The five modules follow the engine from physical values to its outer async boundary:
 
-- **Type families** (Chapters 1–2): connect owned and borrowed scalars, arrays, builders,
-  logical types, and checked erased values.
-- **Borrowed columns and first batch evaluation** (Chapters 3–4): read arrays, constants,
-  typed nulls, and Indexed views without materializing another column, then lift one scalar
-  operation over a batch.
-- **Generic numeric evaluation** (Chapters 5–6): separate lossless promotion from typed kernel
-  selection and share unary, binary, and ternary vectorization.
-- **Specialized execution and Boolean nulls** (Chapters 7–8): select a dense fixed-width path
-  once per batch while preserving the general fallback, then implement SQL three-valued Boolean
-  logic.
-- **Runtime expressions and variable-width output** (Chapters 9–10): erase whole typed
-  expressions and build string results transactionally.
-- **Logical binding and nested storage** (Chapters 11–12): bind runtime names to physical
-  expressions and extend the storage model to one-level Lists.
-- **Thread-safe and async boundaries** (Chapters 13–14): share logical factories across threads
-  and expose one future per batch without moving asynchronous work into the row loop.
+- **Type families and nullable views** (Checkpoints 1–2): connect owned and borrowed scalars,
+  arrays, builders, logical types, and checked Array, Constant, Indexed, and typed-null views.
+- **Shared evaluation and transactional strings** (Checkpoints 3–4): lift scalar operations over
+  batches and publish variable-width rows without exposing partial writes.
+- **Shape specialization and binary semantics** (Checkpoints 5–6): specialize common column
+  shapes while preserving fallback behavior, then separate total, fallible, and nullable-aware
+  binary evaluation.
+- **Runtime erasure and the physical catalog** (Checkpoints 7–8): erase whole typed expressions
+  behind a checked batch boundary and build a discoverable catalog of concrete operations.
+- **Logical binding, one-level Lists, and batch async** (Checkpoints 9–10): bind logical calls to
+  physical expressions, add checked nullable List storage, and defer one complete batch in a
+  borrowing future.
 
 The course deliberately stops short of Decimal arithmetic, casts and rounding, lossy coercions,
 nested or list-producing functions, exhaustive fast paths, an aggregate engine, and per-row
@@ -69,6 +65,9 @@ The first focused run should fail because the new behavior is missing. Read the 
 under `type-exercise-starter/supplied-tests/src/`, implement the named API in other starter files, and rerun
 the same command until it passes. Never edit copied tests or `supplied-tests/src/lib.rs`; keep all earlier copied
 chapters green.
+
+Checkpoint 10 is the terminal unit. After completing it, `cargo x copy-test --chapter 10` copies
+the complete cumulative supplied contract.
 
 ## Questions and feedback
 

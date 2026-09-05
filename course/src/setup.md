@@ -1,5 +1,3 @@
-{{#include wip-banner.md}}
-
 # Environment Setup
 
 Install [rustup](https://rustup.rs/), update stable Rust, and install
@@ -65,6 +63,6 @@ framework witnesses.
 mdbook serve course --open
 ```
 
-Continue to [Chapter 1: Connect One Type Family by Hand](./chapter-1-type-family.md).
+Continue to [Checkpoint 1: Build Physical Types and Arrays](./chapter-1-type-family.md).
 
 {{#include copyright.md}}

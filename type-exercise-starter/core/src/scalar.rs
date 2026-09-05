@@ -22,7 +22,7 @@ pub enum ScalarImpl {
     Int32(i32),
     String(String),
     // Add the remaining primitive and Decimal variants.
-    // A later checkpoint adds List.
+    // Checkpoint 10 adds List.
 }
 
 /// Checkpoint 1: extend this borrowed inventory to match `ScalarImpl`.
@@ -31,7 +31,7 @@ pub enum ScalarRefImpl<'a> {
     Int32(i32),
     String(&'a str),
     // Add the remaining primitive and Decimal variants.
-    // A later checkpoint adds List.
+    // Checkpoint 10 adds List.
 }
 
 // Checkpoint 1: use the physical-family catalog to connect every scalar family to its array.

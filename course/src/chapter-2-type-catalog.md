@@ -1,5 +1,3 @@
-{{#include wip-banner.md}}
-
 # Checkpoint 2: Add Nullable Column Views
 
 Checkpoint 1 gave you owned arrays. Now borrow those arrays in three useful shapes without copying

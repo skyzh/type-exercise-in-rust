@@ -1,5 +1,6 @@
 https://skyzh.github.io/type-exercise-in-rust
 https://skyzh.github.io/type-exercise-in-rust/chapter-1-type-family
+https://skyzh.github.io/type-exercise-in-rust/chapter-10-primitive-loops
 https://skyzh.github.io/type-exercise-in-rust/chapter-2-type-catalog
 https://skyzh.github.io/type-exercise-in-rust/chapter-3-shared-evaluation
 https://skyzh.github.io/type-exercise-in-rust/chapter-4-concrete-loops

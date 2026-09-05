@@ -12,8 +12,6 @@ mod variant_catalog;
 // mod column;
 // Checkpoint 3:
 // mod expression;
-// A later checkpoint:
-// mod promotion;
 
 pub use array::*;
 pub use physical_type::*;
@@ -25,5 +23,3 @@ pub use scalar::*;
 // pub use column::*;
 // Checkpoint 3:
 // pub use expression::*;
-// A later checkpoint:
-// pub use promotion::*;
