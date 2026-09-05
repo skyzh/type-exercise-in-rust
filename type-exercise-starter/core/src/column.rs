@@ -33,5 +33,7 @@
 //! }
 //! ```
 //!
-//! Shared evaluation, shape-specific execution, raw-buffer observations, and List views belong to
-//! later checkpoints.
+//! Checkpoint 5: let the core expression module inspect the typed Array/Constant/Indexed kind
+//! without making that representation public. Callers must continue using the checked view API.
+//!
+//! Raw-buffer observations and List views belong to later checkpoints.
