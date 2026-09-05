@@ -77,6 +77,10 @@
 //! Keep raw representation support private. Checkpoint 10 adds one-level List values and a
 //! whole-batch asynchronous boundary over this existing synchronous expression contract.
 //!
+//! Before adding the four APIs below, strengthen the existing declaration to
+//! `pub trait Expression: Send + Sync`. The borrowing future is `Send`, so both the referenced
+//! expression and the erased child in `Box<dyn Expression>` must be safe to share across threads.
+//!
 //! ```rust,ignore
 //! pub type BatchFuture<'a> =
 //!     Pin<Box<dyn Future<Output = anyhow::Result<ArrayImpl>> + Send + 'a>>;
