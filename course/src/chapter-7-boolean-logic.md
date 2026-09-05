@@ -1,146 +1,104 @@
 {{#include wip-banner.md}}
 
-# Chapter 7: Select Dense Fixed-Width Loops
+# Checkpoint 7: Erase Whole-Batch Expressions
 
-Chapter 6 gave strict scalar functions one reusable evaluator. Its general loop must support
-nullable arrays, constants, typed nulls, and Indexed views, so every row asks each typed view for
-an `Option`. A fixed-width array already stores raw values and a packed validity bitmap. We can
-select that representation once per batch, run a simple typed value loop, and compose validity
-separately.
+Checkpoint 6 can evaluate complete batches, but callers still choose each evaluator directly.
+Build one value that carries a batch function together with its physical contract, then make that
+value usable through one runtime-erased interface.
 
-This chapter specializes only strict, total, infallible `i32` operations. Checked division and
-other fallible functions must keep the Chapter 6 loop so an invalid raw lane cannot manufacture an
-error. SQL Boolean logic has its own non-strict null semantics in Chapter 8. Indexed columns keep
-the general gather loop because their keys change which source row is read.
-
-## What is in the starter
-
-Begin from completed Chapter 6 and copy the first cumulative checkpoint:
+Begin from completed Checkpoint 6 and copy the cumulative tests:
 
 ```console
-cargo x copy-test --chapter 7 --checkpoint 1
+cargo x copy-test --chapter 7
 cargo test -p type-exercise-starter-supplied-tests chapter_7 --locked
 ```
 
-The representation observation and traversal belong in the core package. The concrete `I32Add`
-operation remains in the expression facade. You will add:
+The focused run should fail only because `BatchKernel`, `BatchExpression`, and `Expression` are
+missing from `core/src/expression.rs`.
 
-- a public `PrimitiveBinaryExpression` boundary whose ordinary `evaluate` method returns results;
-- a crate-private raw view over an `i32` array's values and validity;
-- a raw value/validity representation for value and typed-null constants;
-- explicit detection of Indexed inputs;
-- four raw input-shape loops; and
-- word-wise validity composition plus raw-result construction.
+## Give a complete batch one function type
 
-No raw representation becomes public. The existing public view constructors and error messages
-stay unchanged.
-
-## Checkpoint 1: establish the public evaluation boundary
-
-Add `PrimitiveBinaryExpression<F>` for a strict, total
-`BinaryScalarFunction<Left = i32, Right = i32, Output = i32>`. Validate arity, physical types, and
-lengths once. For this checkpoint, its public `evaluate` method can delegate every input shape to
-the Chapter 6 `evaluate_binary` traversal. That baseline is already correct for arrays, constants,
-typed nulls, and Indexed inputs; the next checkpoint changes how dense inputs are traversed.
-
-Run the first checkpoint again. Before the new public type exists, both tests fail to compile. Once
-it evaluates dense, typed-null, and Indexed inputs through ordinary public results, the cumulative
-suite has 48 passing tests. Keep the representation choices private; only the evaluation result
-belongs to the public API.
-
-## Checkpoint 2: bind the physical representation
-
-Now add a crate-private observation with these two shapes:
+Start with a function pointer that accepts any lifetime used by the borrowed input views:
 
 ```rust,ignore
-enum RawI32Column<'a> {
-    Array {
-        values: &'a [i32],
-        validity: &'a BitVec,
-    },
-    Constant {
-        value: i32,
-        valid: bool,
-        len: usize,
-    },
+pub type BatchKernel =
+    for<'a> fn(&[ColumnViewImpl<'a>]) -> anyhow::Result<ArrayImpl>;
+```
+
+The higher-ranked lifetime means the function works with the batch borrowed by each call. A plain
+function pointer also keeps this checkpoint focused on evaluation: it cannot capture a catalog,
+binder, or per-row state.
+
+For example, an already-earned evaluator becomes a kernel without rebuilding its loop:
+
+```rust,ignore
+fn i32_add(inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
+    auto_vectorize_binary::<i32, i32, i32, _>(
+        inputs[0].clone(),
+        inputs[1].clone(),
+        i32::wrapping_add,
+    )
 }
 ```
 
-`ColumnViewImpl::as_raw_i32` returns an array even when its validity contains nulls. A value
-constant carries `valid = true`; a typed-null `i32` constant uses a harmless raw zero with
-`valid = false`. Non-`i32` and Indexed inputs return `None`. Keep a separate crate-private
-`is_indexed` observation so the evaluator can route Indexed inputs before matching raw shapes.
+The expression shell will validate the inputs before this function can index them.
 
-Copy the second stage:
+## Keep fixed arity while it is known
 
-```console
-cargo x copy-test --chapter 7 --checkpoint 2
-cargo test -p type-exercise-starter-supplied-tests chapter_7 --locked
-```
+Add `BatchExpression<const N: usize>`. It owns:
 
-Route Indexed inputs to `evaluate_binary`. Otherwise match the two raw inputs once and choose
-array/array, array/constant, constant/array, or constant/constant. Keep the raw representation
-crate-private; the existing loop diagnostic may report which route was selected, but supplied
-tests use only the public `evaluate` result.
+- a `&'static str` name;
+- exactly `[PhysicalType; N]` input types;
+- one output `PhysicalType`; and
+- one `BatchKernel`.
 
-Each raw helper computes only values and is source-equivalent to this traversal:
+Provide `new`, `name`, `input_types`, `output_type`, and `evaluate`. Its direct API keeps the input
+arity in the type and makes the physical contract inspectable:
 
 ```rust,ignore
-for row in 0..len {
-    output.push(function(left[row], right[row]));
-}
+let add = BatchExpression::new(
+    "i32_add",
+    [PhysicalType::Int32, PhysicalType::Int32],
+    PhysicalType::Int32,
+    i32_add,
+);
+
+assert_eq!(add.input_types().len(), 2);
+let output = add.evaluate(&[left, right])?;
 ```
 
-Do not call `get`, inspect validity, match an operation, or construct `Option` inside those loops.
-For constant/constant, call the scalar function once for a non-empty batch and fill the owned raw
-result; an empty batch calls it zero times.
+`evaluate` has two validation boundaries. First call `validate_expression_inputs` with the stored
+input types. Only after arity, physical types, and row counts pass may the kernel run. Then reject
+a returned array whose physical type differs from `output_type` or whose length differs from the
+validated input length. A successful call returns the owned array unchanged.
 
-After values are computed, combine the two validity sources by `BitVec` storage word and truncate
-the final word to the exact row count. A valid constant behaves like virtual all-ones; a typed-null
-constant behaves like virtual all-zeros. Build the output through `I32Array::from_raw_parts`.
+## Erase the shell, not each row
 
-The first two tests retain the public evaluation boundary. Two more cases exercise nullable arrays
-across multiple storage words and require constant/constant evaluation to call the scalar function
-once for a non-empty batch and zero times for an empty batch. After the dense path is connected,
-the cumulative suite has 50 passing tests. The raw binding and loop selection remain private
-implementation details.
+Different fixed arities cannot share one collection directly. Define a dyn-compatible
+`Expression` trait with `name`, `input_types`, `arity`, `output_type`, and `evaluate`. `arity` can
+default to the length of `input_types`.
 
-## Checkpoint 3: prove the safety boundaries
+Implement the trait for every `BatchExpression<N>`. The erased path delegates to the same checked
+whole-batch evaluation:
 
-Copy the completed Chapter 7 test:
+```rust,ignore
+let expression: Box<dyn Expression> = Box::new(add);
+assert_eq!(expression.arity(), 2);
+let output = expression.evaluate(&[left, right])?;
+```
+
+The dynamic choice happens once for the complete batch. Rows still run inside the existing typed
+evaluators, so this boundary does not introduce a virtual call or erased scalar value per row.
+
+Run the focused and cumulative checks:
 
 ```console
-cargo x copy-test --chapter 7 --checkpoint 3
 cargo test -p type-exercise-starter-supplied-tests chapter_7 --locked
-cargo check -p type-exercise-starter-core --locked
+cargo test -p type-exercise-starter-supplied-tests --locked
 ```
 
-The seven focused tests now cover dense and Indexed results, word-wise validity, one-call constant
-filling, non-commutative operand order, unchanged arity/type/length errors, and the fallible safety
-boundary. An invalid zero divisor must remain unobserved by checked division, while the same zero
-under a valid bit still reports the existing row error. The cumulative suite has 53 passing tests.
-
-Install `cargo-expand` if needed, then inspect the selected implementation:
-
-```console
-cargo expand -p type-exercise-starter-expr --lib numeric
-```
-
-The expanded facade contains only operation selection and scalar callbacks. All batch traversal is
-in core. In `raw_array_array`, `raw_array_constant`, and `raw_constant_array`, confirm that the hot
-loop performs typed loads, one preselected scalar call, and a push. This is a source-level
-ownership guarantee, not a promise that LLVM vectorizes every target identically.
-
-## Why the general loop stays
-
-The strict raw loop is deliberately narrow. General `ColumnView::get` must choose whether a row is
-null, Indexed views must gather through keys, fallible operations must not observe invalid raw
-lanes, and SQL Boolean operators have non-strict three-valued semantics. Selecting the raw route
-once gives the total fixed-width case an honest simple loop without disguising those required
-branches elsewhere.
-
-[Chapter 8 completes this module with three-valued Boolean
-logic](./chapter-8-runtime-erasure.md), where null is part of the scalar semantics rather than a
-reason to skip the operation.
+Passing means metadata and direct evaluation survive erasure, invalid inputs never reach the
+kernel, and invalid kernel outputs are rejected. Concrete expression factories and a physical
+function catalog arrive later; this checkpoint stops at the reusable whole-batch boundary.
 
 {{#include copyright.md}}

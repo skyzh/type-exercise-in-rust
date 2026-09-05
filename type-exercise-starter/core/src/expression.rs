@@ -51,5 +51,11 @@
 //! - `evaluate_nullable_binary` calls a fallible callback with both `Option` values on every row,
 //!   enabling SQL three-valued Boolean logic.
 //!
-//! Keep raw representation support private. Concrete expression facades, runtime erasure,
-//! registries, List evaluation, and asynchronous evaluation belong to later checkpoints.
+//! Checkpoint 7 adds a public `BatchKernel` function-pointer alias, a fixed-arity
+//! `BatchExpression<const N: usize>`, and a dyn-compatible `Expression` trait. The fixed-arity
+//! value owns its name and physical input/output contract. Validate every input before calling
+//! its whole-batch kernel, then validate the returned array's physical type and row count.
+//! Erasing the value behind `Box<dyn Expression>` must preserve the same metadata and evaluation.
+//!
+//! Keep raw representation support private. Concrete expression factories, registries, List
+//! evaluation, and asynchronous evaluation belong to later checkpoints.
