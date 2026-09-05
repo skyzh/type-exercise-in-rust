@@ -32,5 +32,10 @@
 //! skip the scalar function when any input is null, and build a fresh `O::ArrayType`. Do not match
 //! on Array, Constant, or Indexed representations here.
 //!
-//! Writers, shape and raw-buffer specializations, semantic exceptions, runtime expression erasure,
+//! Checkpoint 4 adds `evaluate_writer_binary`. Validate two String inputs, convert them to typed
+//! borrowed views once, and give each non-null pair a fresh consumed `Writer`; publish a null row
+//! directly when either input is null. The callback must return `WriterUsed`, so it cannot skip or
+//! repeat publication.
+//!
+//! Shape and raw-buffer specializations, semantic exceptions, runtime expression erasure,
 //! registries, List evaluation, and asynchronous evaluation belong to later checkpoints.
