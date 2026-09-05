@@ -31,6 +31,8 @@ jobs:
         run: cargo fmt --package type-exercise-checkpoint-04-core --package type-exercise-checkpoint-04-expr --package type-exercise-checkpoint-04-supplied-tests -- --check
       - name: Check Checkpoint 5 format
         run: cargo fmt --package type-exercise-checkpoint-05-core --package type-exercise-checkpoint-05-expr --package type-exercise-checkpoint-05-supplied-tests -- --check
+      - name: Check Checkpoint 6 format
+        run: cargo fmt --package type-exercise-checkpoint-06-core --package type-exercise-checkpoint-06-expr --package type-exercise-checkpoint-06-supplied-tests -- --check
       - name: Clippy maintained final artifact
         run: cargo clippy --package type-exercise-core --package type-exercise-expr --all-targets --locked -- -D warnings
       - name: Clippy Checkpoint 1
@@ -43,6 +45,8 @@ jobs:
         run: cargo clippy --package type-exercise-checkpoint-04-core --package type-exercise-checkpoint-04-expr --package type-exercise-checkpoint-04-supplied-tests --all-targets --locked -- -D warnings
       - name: Clippy Checkpoint 5
         run: cargo clippy --package type-exercise-checkpoint-05-core --package type-exercise-checkpoint-05-expr --package type-exercise-checkpoint-05-supplied-tests --all-targets --locked -- -D warnings
+      - name: Clippy Checkpoint 6
+        run: cargo clippy --package type-exercise-checkpoint-06-core --package type-exercise-checkpoint-06-expr --package type-exercise-checkpoint-06-supplied-tests --all-targets --locked -- -D warnings
       - name: Test maintained final artifact
         run: cargo nextest run --package type-exercise-core --package type-exercise-expr --locked
       - name: Test Checkpoint 1
@@ -55,6 +59,8 @@ jobs:
         run: cargo nextest run --package type-exercise-checkpoint-04-core --package type-exercise-checkpoint-04-expr --package type-exercise-checkpoint-04-supplied-tests --locked
       - name: Test Checkpoint 5
         run: cargo nextest run --package type-exercise-checkpoint-05-core --package type-exercise-checkpoint-05-expr --package type-exercise-checkpoint-05-supplied-tests --locked
+      - name: Test Checkpoint 6
+        run: cargo nextest run --package type-exercise-checkpoint-06-core --package type-exercise-checkpoint-06-expr --package type-exercise-checkpoint-06-supplied-tests --locked
       - name: Test maintained final artifact documentation
         run: cargo test --package type-exercise-core --package type-exercise-expr --doc --locked
       - name: Test Checkpoint 1 documentation
@@ -67,3 +73,5 @@ jobs:
         run: cargo test --package type-exercise-checkpoint-04-core --package type-exercise-checkpoint-04-expr --doc --locked
       - name: Test Checkpoint 5 documentation
         run: cargo test --package type-exercise-checkpoint-05-core --package type-exercise-checkpoint-05-expr --doc --locked
+      - name: Test Checkpoint 6 documentation
+        run: cargo test --package type-exercise-checkpoint-06-core --package type-exercise-checkpoint-06-expr --doc --locked

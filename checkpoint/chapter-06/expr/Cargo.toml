@@ -1,0 +1,13 @@
+[package]
+name = "type-exercise-checkpoint-06-expr"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+anyhow = "1"
+type-exercise-checkpoint-06-core = { path = "../core" }
