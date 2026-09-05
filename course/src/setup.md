@@ -15,9 +15,6 @@ cargo expand --version
 The repository selects rolling `stable` and Rust Edition 2024. It does not claim an older minimum
 supported Rust version.
 
-Chapter 6 uses `cargo expand` to inspect the generated generic adapters. Install and verify it now
-so that chapter's first inspection command works without an unannounced tool prerequisite.
-
 ## Check out the starting state
 
 Clone the repository, then create a working branch from `main`:

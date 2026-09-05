@@ -42,5 +42,14 @@
 //! cross-product, and ternary Array/Array/Array; send Indexed and every other ternary combination
 //! through the existing typed-`get` fallback with identical validation and null behavior.
 //!
-//! Raw-buffer specialization, semantic exceptions, runtime expression erasure,
+//! Checkpoint 6 adds three public binary boundaries in this core module:
+//!
+//! - `auto_vectorize_primitive_i32` may combine raw values and validity for non-Indexed Int32
+//!   Array/Constant shapes, while Indexed inputs keep the typed fallback;
+//! - `try_evaluate_binary` validates first, skips null rows, and reports the first scalar error
+//!   with row and function context; and
+//! - `evaluate_nullable_binary` calls a fallible callback with both `Option` values on every row,
+//!   enabling SQL three-valued Boolean logic.
+//!
+//! Keep raw representation support private. Concrete expression facades, runtime erasure,
 //! registries, List evaluation, and asynchronous evaluation belong to later checkpoints.

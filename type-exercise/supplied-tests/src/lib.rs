@@ -32,3 +32,5 @@ mod chapter_3;
 mod chapter_4;
 #[cfg(test)]
 mod chapter_5;
+#[cfg(test)]
+mod chapter_6;
