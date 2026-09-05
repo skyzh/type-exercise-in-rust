@@ -1,3 +1,5 @@
+![Type Exercise — Build a Database Expression Framework in Rust](./course/src/type-exercise-social.png)
+
 # Build a Typed Database Expression Engine in Rust
 
 A hand-written loop for one integer function is easy. A database expression engine also has to
