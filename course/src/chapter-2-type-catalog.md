@@ -63,7 +63,8 @@ and its physical type is the values array's type. Output row `r` reads
 
 Validate every index in `ColumnViewImpl::indexed`. If an index falls outside the values array,
 return an error that identifies the bad index and its output row. Once construction succeeds,
-every output row is safe to read without another bounds check or a gathered array.
+every output row is safe to read without repeating index validation or materializing a gathered
+array.
 
 For example, values `["zero", NULL, "two"]` with indices `[2, 1, 2, 0]` read as
 `["two", NULL, "two", "zero"]`. The two appearances of `"two"` borrow the same underlying

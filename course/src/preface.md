@@ -57,7 +57,7 @@ be able to explain why the new boundary exists and which failure it prevents.
 The ten cumulative checkpoints form five modules:
 
 1. **Type families and nullable views** (Checkpoints 1–2) connect owned and borrowed values,
-   then normalizes Array, Constant, Indexed, and typed-null inputs.
+   then normalize Array, Constant, Indexed, and typed-null inputs.
 2. **Shared evaluation and transactional strings** (Checkpoints 3–4) lift scalar operations over
    batches and publish variable-width rows without partial writes.
 3. **Shape specialization and binary semantics** (Checkpoints 5–6) specialize common column
