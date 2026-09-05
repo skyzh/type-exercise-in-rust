@@ -1,20 +1,34 @@
+use std::error::Error;
+use std::fmt::{Display, Formatter};
+
+use crate::DecimalType;
 use crate::variant_catalog::for_each_physical_family;
 
-/// Checkpoint 1: extend this starter pair to every non-List physical type.
+/// The in-memory representation selected for a value at runtime.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum PhysicalType {
+    Int16,
     Int32,
+    Int64,
+    Bool,
+    Float32,
+    Float64,
     String,
-    // Add Int16, Int64, Bool, Float32, Float64, and `Decimal(DecimalType)`.
-    // Checkpoint 10 adds List.
+    Decimal(DecimalType),
+    List(Box<PhysicalType>),
 }
 
-/// Checkpoint 1: extend this descriptor-free inventory in the same order.
+/// A descriptor-free tag for each supported physical family.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum PhysicalFamily {
+    Int16,
     Int32,
+    Int64,
+    Bool,
+    Float32,
+    Float64,
     String,
-    // Add Int16, Int64, Bool, Float32, Float64, and Decimal.
+    Decimal,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -36,11 +50,21 @@ macro_rules! define_family_catalog {
 
 for_each_physical_family!(define_family_catalog);
 
-/// Checkpoint 1: use this value for checked erased-to-typed failures.
+/// A checked erased-to-typed conversion encountered another physical family.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TypeMismatch {
     pub expected: PhysicalType,
     pub actual: PhysicalType,
 }
 
-// Checkpoint 1: implement `Display` and `std::error::Error` for `TypeMismatch`.
+impl Display for TypeMismatch {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "type mismatch: expected {:?}, got {:?}",
+            self.expected, self.actual
+        )
+    }
+}
+
+impl Error for TypeMismatch {}

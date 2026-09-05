@@ -1,92 +1,107 @@
-{{#include wip-banner.md}}
+# Checkpoint 10: Add One-Level Lists and Batch Async
 
-# Chapter 10: Build Variable-Width Strings Transactionally
+The final checkpoint adds two boundaries without changing the scalar functions you already built:
 
-Fixed-width evaluators can compute a scalar and then push its copied value. A string result has no
-fixed-size scalar to return: its UTF-8 bytes and ending offset must be appended together, and the
-validity buffer must gain exactly one row. Publishing only part of that state would corrupt the
-array.
+1. a checked, nullable, one-level `List` value family; and
+2. a future that defers one complete, already-bound batch expression.
 
-This chapter introduces variable-width output only after the fixed-width evaluator model is
-settled. A consumed writer typestate makes one successful callback correspond to one complete row.
-
-## Checkpoint 1: pin the physical representation
+Start from your completed Checkpoint 9 workspace. Copy the cumulative public contract without
+opening its source first:
 
 ```console
-cargo x copy-test --chapter 10 --checkpoint 1
+cargo x copy-test --chapter 10
 cargo test -p type-exercise-starter-supplied-tests chapter_10 --locked
 ```
 
-Review the Chapter 1 `StringArray` representation:
+That focused test should initially fail only because the new List and async names do not exist.
+Keep every earlier checkpoint green as you work.
 
-- `data` is one contiguous UTF-8 byte buffer;
-- `offsets` has one more entry than the row count, and row `i` uses
-  `data[offsets[i]..offsets[i + 1]]`;
-- `validity` has one bit per logical row; and
-- a null row repeats the previous offset because it contributes no bytes.
+## Stage 1: represent nullable one-level Lists
 
-The first test pins those buffers directly. It distinguishes an empty string—a valid row whose
-two offsets are equal—from a null row with the same byte span but a false validity bit.
+Add `PhysicalType::List(Box<PhysicalType>)`, then extend the erased array, scalar-reference, and
+column-view families with checked List variants. Implement public equivalents of `ListScalar`,
+`ListScalarRef`, `ListArray`, and `ListColumnView` at the Checkpoint 10 comments in the starter.
 
-## Checkpoint 2: consume the writer exactly once
+A List has two independent layers of nullability. The outer validity says whether the row itself
+is null. For a present row, the child array may still contain null elements. Empty and all-null
+Lists therefore cannot infer their child type: callers always provide an explicit non-List child
+`PhysicalType`, including the complete Decimal descriptor when the child is Decimal.
 
-```console
-cargo x copy-test --chapter 10 --checkpoint 2
-cargo test -p type-exercise-starter-supplied-tests chapter_10 --locked
-```
+For a raw List array, validate all of these invariants before publishing the value:
 
-Add `Writer<'a>` and `WriterUsed<'a>` around a borrowed `StringArrayBuilder`. The public operation
-is shaped like this:
+- nested List and Map children are rejected;
+- the child array has exactly the declared physical type;
+- there is one more offset than outer rows, the first offset is zero, offsets never decrease,
+  and the final offset equals the child length;
+- a null row repeats its preceding offset; and
+- row and slice ranges are checked.
+
+A failed constructor, append, or slice must not expose partial state. Array, Constant, and Indexed
+column views must yield equivalent safe borrowed List rows through the usual checked access path.
+Do not prescribe a field layout in your public API; preserve these observable semantics instead.
+
+Exercise the boundary directly before moving on:
 
 ```rust,ignore
-impl<'a> Writer<'a> {
-    pub fn write(
-        self,
-        write: impl FnOnce(&mut StringValueWriter<'_>),
-    ) -> WriterUsed<'a>;
-}
+let child = StringArray::from_slice(&[Some("left"), None, Some("right")]);
+let row = ListScalar::try_new(ArrayImpl::String(child))?;
+let lists = ListArray::try_from_rows(
+    PhysicalType::String,
+    [Some(row.as_list_ref()), None],
+)?;
+
+assert_eq!(lists.get(0)?.unwrap().len(), 3);
+assert!(lists.get(0)?.unwrap().get(1)?.is_none()); // null child element
+assert!(lists.get(1)?.is_none());                  // null List row
+assert_eq!(lists.slice(0, 1)?.len(), 1);
+# Ok::<(), ListError>(())
 ```
 
-The closure may append several borrowed fragments directly to the pending value. When it returns,
-`write` appends the ending offset and valid bit, then returns proof that this row has been
-published. Only the core evaluator may recover the builder from `WriterUsed` to begin the next
-row.
+## Stage 2: defer one already-bound batch
 
-The type transition prevents a callback from returning without publishing or calling `write`
-twice through the same value. It does not make partial mutation magically reversible; instead, the
-facade operation must prepare any fallible work before it consumes the writer. This is why the
-public callback has no path that returns an arbitrary builder.
+Keep the Checkpoint 9 binder and all synchronous expression behavior unchanged. Add public
+equivalents of these four boundaries in the expression core:
 
-## Checkpoint 3: lift borrowed string work without allocation
+- `BatchFuture<'a>`: a `Send` future borrowing the expression and input views;
+- `evaluate_static`: a compiler-known async entry point;
+- dyn-compatible `AsyncExpression`; and
+- `AsyncExpressionAdapter` over the existing `Box<dyn Expression>`.
+
+Creating the future must not evaluate anything. When driven, it evaluates the child exactly once
+for the complete batch and preserves the same owned array or error as synchronous evaluation.
+The future may borrow the expression and views and makes no `Unpin` promise.
+
+Bind the logical call you built in Checkpoint 9, then run the same complete batch through all three
+paths:
+
+```rust,ignore
+let left: ArrayImpl = I16Array::from_slice(&[Some(2), None, Some(-4)]).into();
+let inputs = [
+    ColumnViewImpl::array(&left),
+    ColumnViewImpl::constant(ScalarRefImpl::Int32(5), 3),
+];
+
+let bound = bind_logical_call(LogicalCall::new(
+    "+",
+    [DataType::SmallInt, DataType::Integer],
+))?;
+
+let sync = bound.evaluate(&inputs)?;
+let static_async = evaluate_static(bound.physical_expression(), &inputs).await?;
+let erased = AsyncExpressionAdapter::new(bound.into_physical_expression());
+let erased_async = erased.evaluate_async(&inputs).await?;
+
+assert_eq!(sync, static_async);
+assert_eq!(sync, erased_async);
+# Ok::<(), anyhow::Error>(())
+```
+
+This is an ownership and API boundary, not a scheduler. Do not add an executor, runtime, I/O,
+retries, cancellation policy, locks, per-row futures, recursive Lists, Maps, or new scalar
+semantics. Your implementation only defers one existing whole-batch computation.
+
+Finish by running the cumulative contract:
 
 ```console
-cargo x copy-test --chapter 10 --checkpoint 3
-cargo test -p type-exercise-starter-supplied-tests chapter_10 --locked
-cargo check -p type-exercise-starter-core --locked
+cargo test -p type-exercise-starter-supplied-tests --locked
 ```
-
-Enable `expr/src/string.rs` and implement the borrowed concatenation scalar operation. It receives two
-`&str` values plus a `Writer`, writes each input directly into the builder's bytes, publishes one
-offset and validity bit, and returns `WriterUsed`. Do not allocate a temporary `String` with
-`format!`, and do not write an operation-specific batch loop.
-
-The core variable-width evaluator validates and recovers both typed string views once, propagates
-strict nulls itself, and constructs a fresh writer only for a non-null row. Array, constant, and
-Indexed inputs therefore share the same borrowed scalar operation.
-
-The three focused tests pin the physical bytes/offsets/validity layout, the consumed public writer
-surface, and concatenation across borrowed representations. Core still compiles independently of
-the concrete concatenation function.
-
-## The ownership proof
-
-`Writer<'a> -> WriterUsed<'a>` is a small typestate machine. The lifetime keeps both values tied to
-the evaluator's builder; the move prevents reuse; and the distinct return type proves a row was
-published before the evaluator continues. The compiler checks the transaction boundary that a
-runtime `wrote: bool` flag would only check after the fact.
-
-The evaluator can now publish both fixed-width and variable-width results without changing its
-batch boundary. The next module begins where a SQL planner meets that boundary:
-[binding logical calls to physical expressions](./chapter-11-list.md).
-
-{{#include copyright.md}}

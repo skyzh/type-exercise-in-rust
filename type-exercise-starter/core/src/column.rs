@@ -36,4 +36,4 @@
 //! Checkpoint 5: let the core expression module inspect the typed Array/Constant/Indexed kind
 //! without making that representation public. Callers must continue using the checked view API.
 //!
-//! Raw-buffer observations and List views belong to later checkpoints.
+//! Raw-buffer observations stay private; Checkpoint 10 adds checked one-level List views.

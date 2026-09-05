@@ -14,3 +14,4 @@
 - [Checkpoint 7: Erase Whole-Batch Expressions](./chapter-7-boolean-logic.md)
 - [Checkpoint 8: Build the Physical Expression Catalog](./chapter-8-runtime-erasure.md)
 - [Checkpoint 9: Bind Logical Calls to Physical Expressions](./chapter-9-binding-coercion.md)
+- [Checkpoint 10: Add One-Level Lists and Batch Async](./chapter-10-primitive-loops.md)

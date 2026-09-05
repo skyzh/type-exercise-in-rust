@@ -5,7 +5,7 @@ mod string_array;
 // mod decimal_array;
 // pub use decimal_array::{DecimalArray, DecimalArrayBuilder};
 
-// A later checkpoint introduces List storage; keep `ListArrayBuilder` private to that module.
+// Checkpoint 10 introduces List storage; keep `ListArrayBuilder` private to that module.
 // mod list_array;
 // pub use list_array::{ListArray, ListError, ListScalar, ListScalarRef};
 
@@ -44,7 +44,7 @@ pub enum ArrayImpl {
     Int32(I32Array),
     String(StringArray),
     // Add the remaining primitive and Decimal variants.
-    // A later checkpoint adds List.
+    // Checkpoint 10 adds List.
 }
 
 // Checkpoint 1: add erased dispatch plus owned From/TryFrom and borrowed TryFrom conversions.
