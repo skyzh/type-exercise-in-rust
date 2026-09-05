@@ -1,8 +1,8 @@
 # Checkpoint 7: Erase Whole-Batch Expressions
 
-Checkpoint 6 can evaluate complete batches, but callers still choose each evaluator directly.
-Build one value that carries a batch function together with its physical contract, then make that
-value usable through one runtime-erased interface.
+Checkpoint 6 can evaluate complete batches, but callers still choose each evaluator directly. In
+this checkpoint, you will package a batch function with its physical contract and expose it through
+one runtime-erased interface.
 
 Begin from completed Checkpoint 6 and copy the cumulative tests:
 
@@ -41,7 +41,7 @@ fn i32_add(inputs: &[ColumnViewImpl<'_>]) -> anyhow::Result<ArrayImpl> {
 
 The expression shell will validate the inputs before this function can index them.
 
-## Keep fixed arity while it is known
+## Preserve fixed arity while it is known
 
 Add `BatchExpression<const N: usize>`. It owns:
 
@@ -95,8 +95,8 @@ cargo test -p type-exercise-starter-supplied-tests chapter_7 --locked
 cargo test -p type-exercise-starter-supplied-tests --locked
 ```
 
-Passing means metadata and direct evaluation survive erasure, invalid inputs never reach the
-kernel, and invalid kernel outputs are rejected. Concrete expression factories and a physical
-function catalog arrive later; this checkpoint stops at the reusable whole-batch boundary.
+You are done when metadata and direct evaluation survive erasure, invalid inputs never reach the
+kernel, and invalid kernel outputs are rejected. The next checkpoint will use this whole-batch
+boundary to build a catalog of concrete expressions.
 
 {{#include copyright.md}}

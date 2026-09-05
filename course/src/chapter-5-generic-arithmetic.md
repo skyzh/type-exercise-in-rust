@@ -1,9 +1,9 @@
 # Checkpoint 5: Specialize Common Column Shapes
 
-The Checkpoint 3 fallback calls `ColumnView::get(row)` so Array, Constant, and Indexed inputs all
-behave correctly. That generality also asks the view to select its representation for every input
-on every row. This checkpoint moves only common shapes into concrete loops while keeping the typed
-fallback as the behavior to preserve.
+The Checkpoint 3 fallback calls `ColumnView::get(row)`, so Array, Constant, and Indexed inputs all
+behave correctly. Its flexibility has a cost: every input selects its representation again on
+every row. In this checkpoint, you will choose the common shapes once per batch and keep the typed
+fallback for everything else.
 
 Start from your completed Checkpoint 4 workspace, copy the cumulative tests, and run the focused
 test before editing:
@@ -23,7 +23,7 @@ cannot bypass validation.
 
 Add private Array and Constant accessors in `core/src/expression.rs`. Each accessor exposes the same
 typed `len` and nullable `get` operations, but its concrete type is selected before the loop begins.
-The loop can then remain generic over the accessor without matching a representation at every row.
+The loop remains generic over the accessor and no longer matches a representation at every row.
 
 Build these public adapters around those loops:
 
@@ -46,10 +46,10 @@ A concrete loop must keep the fallback's semantics:
 3. append null otherwise; and
 4. return a new owned output array.
 
-Do not remove or duplicate the fallback. Indexed inputs still need their indirect lookup, and
-specializing all 27 ternary Array/Constant/Indexed combinations would add code without establishing
-a new learner-visible behavior. The selective boundary here is Array and Constant for unary and
-binary work, plus the common all-Array ternary case.
+Keep the fallback because Indexed inputs still need indirect lookup. Specialize Array and Constant
+inputs for unary and binary expressions, along with the common ternary case where all three inputs
+are Arrays. Covering all 27 Array/Constant/Indexed ternary combinations would add a lot of code
+without introducing new behavior.
 
 Run the focused and cumulative contracts:
 
@@ -60,10 +60,11 @@ cargo test -p type-exercise-starter-supplied-tests --lib --locked
 
 The three Checkpoint 5 tests compare nullable owned results across Array and Constant combinations,
 mixed scalar families, Indexed and non-dense ternary fallback, and invalid types and lengths.
-Together with Checkpoints 1–4, the cumulative suite has 17 tests. The tests observe results and
-errors, not which internal route produced them.
+Together with Checkpoints 1–4, the cumulative suite has 17 tests. Because callers see results and
+errors rather than an internal route, both specialized and fallback paths must keep the same
+contract.
 
-Raw-buffer specialization, exceptional scalar semantics and concrete facades, runtime expression
-erasure, the binder and registry, List evaluation, and asynchronous evaluation remain future work.
+The next checkpoint keeps that contract while separating operations that are total, fallible, or
+nullable-aware.
 
 {{#include copyright.md}}

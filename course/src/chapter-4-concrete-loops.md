@@ -12,8 +12,8 @@ cargo x copy-test --chapter 4
 cargo test -p type-exercise-starter-supplied-tests chapter_4 --locked
 ```
 
-The first run should fail on the missing writer surface. Leave later shape specialization and
-runtime expression types absent.
+The first run should fail on the missing writer surface. Shape specialization and runtime
+expression types are not needed for this change.
 
 ## Consume the only unpublished handle
 
@@ -34,8 +34,9 @@ offset and one true validity bit. A null row appends no bytes, repeats the termi
 commits one false bit. If a fallible builder callback stops before publication, truncate the bytes
 back to their starting length and leave offsets and validity unchanged.
 
-Consuming `Writer` prevents a scalar callback from skipping publication or publishing twice. Only
-the core evaluator may recover the builder from `WriterUsed` and begin the next row.
+Consuming `Writer` prevents a scalar callback from skipping publication or publishing twice. The
+core evaluator recovers the builder from `WriterUsed` only after that row is complete, then begins
+the next row.
 
 ## Lift one borrowed string operation
 
@@ -44,8 +45,8 @@ lengths before reading a row, converts both inputs to typed borrowed views once,
 batch loop. For a non-null pair it passes `&str`, `&str`, and a fresh `Writer` to the callback. For
 a null pair it publishes one null directly.
 
-Keep this boundary in core. The supplied test passes its borrowed concatenation callback directly;
-do not enable the concrete String facade yet.
+Keep this boundary in core. The supplied test passes its borrowed concatenation callback directly,
+so the concrete String facade is not needed yet.
 
 The callback can concatenate two borrowed strings without allocating a temporary `String`:
 
@@ -64,8 +65,8 @@ cargo test -p type-exercise-starter-supplied-tests --lib --locked
 ```
 
 The two Checkpoint 4 tests distinguish empty from null strings, pin bytes and offsets, and prove
-failed writes do not leak partial bytes. Together with Checkpoints 1–3, the cumulative suite has 14
-tests. Shape specialization, semantic exceptions, concrete String factories, runtime erasure, and
-the registry remain future work.
+failed writes do not leak partial bytes. Together with Checkpoints 1–3, the cumulative suite has
+14 tests. With publication now transactional, the next checkpoint can change the loop shape
+without changing its visible results.
 
 {{#include copyright.md}}

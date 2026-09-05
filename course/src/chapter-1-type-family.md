@@ -1,8 +1,8 @@
 # Checkpoint 1: Build Physical Types and Arrays
 
-Build the values that every later expression will read and write. By the end of this checkpoint,
-the starter will know eight physical families and will store nullable fixed-width, string, and
-Decimal values in dense arrays.
+Every later expression needs values it can read and arrays it can write. In this checkpoint, you
+will connect eight physical families and give nullable fixed-width, string, and Decimal values
+their dense array storage.
 
 Start by copying the public checkpoint test into your starter and running it:
 
@@ -11,8 +11,9 @@ cargo x copy-test --chapter 1
 cargo test -p type-exercise-starter-supplied-tests chapter_1 --locked
 ```
 
-The copied test should not compile yet. Its missing names and trait implementations are your work
-list. Do not edit the copied test; work in `type-exercise-starter/core/src` instead.
+The copied test should not compile yet. Let its missing names and trait implementations become
+your work list, and make the changes under `type-exercise-starter/core/src` rather than in the
+test.
 
 ## Connect the physical families
 
@@ -30,9 +31,10 @@ An execution engine needs both compile-time Rust types and runtime tags. Define 
 | `String` | `String` | `&str` | `StringArray` |
 | `Decimal` | `Decimal` | `Decimal` | `DecimalArray` |
 
-`PhysicalType` carries runtime information. Most variants are simple tags, while
-`Decimal(DecimalType)` also carries precision and scale. `PhysicalFamily` is descriptor-free and
-exists so `PHYSICAL_FAMILY_CATALOG` can audit the eight supported rows.
+`PhysicalType` carries runtime information. Most variants are simple tags;
+`Decimal(DecimalType)` also carries precision and scale. The descriptor-free `PhysicalFamily`
+lets `PHYSICAL_FAMILY_CATALOG` list the same eight supported rows without inventing Decimal
+metadata.
 
 In `scalar.rs`, complete the reciprocal relationships among `Scalar`, `ScalarRef`, and `Array`.
 The generic relationship should be strong enough that code with only `S: Scalar` can discover
@@ -47,16 +49,16 @@ fn first_value<S: Scalar>(array: &S::ArrayType) -> Option<S> {
 }
 ```
 
-Use the catalog callback to generate the repeated scalar and array connections. Implement the
-erased `ScalarImpl`, `ScalarRefImpl`, and `ArrayImpl` boundaries too. Upcasts through `From` cannot
-fail; downcasts through `TryFrom` must report the actual and expected physical types instead of
+Use the catalog callback to generate the repeated scalar and array connections, then implement the
+erased `ScalarImpl`, `ScalarRefImpl`, and `ArrayImpl` boundaries. Upcasts through `From` cannot
+fail. Downcasts through `TryFrom` must report the actual and expected physical types instead of
 panicking or reinterpreting bytes.
 
 ## Map logical types to storage
 
 Define `DecimalType` and `Decimal` in `decimal.rs`. Check precision and scale when the descriptor
-is created, and reject an unscaled coefficient that cannot fit its precision. A Decimal array has
-one descriptor shared by every row; it does not repeat precision and scale beside each `i128`.
+is created, and reject an unscaled coefficient that cannot fit its precision. One descriptor
+belongs to the whole Decimal array, so precision and scale are not repeated beside each `i128`.
 
 Define the planner-facing `DataType` in `data_type.rs`. Map SQL names such as `SmallInt`,
 `Integer`, `Varchar`, and `Decimal` to the physical families above. Add the string and numeric
@@ -86,14 +88,14 @@ Row `i` occupies `offsets[i]..offsets[i + 1]`. Null and empty strings may repeat
 validity bit distinguishes them. `get` should return an `&str` borrowed directly from the byte
 buffer.
 
-Do not add a transactional string writer, slicing API, or column view here. Those capabilities are
-owned by later checkpoints.
+This checkpoint stops at storage and borrowed reads. Transactional string writing, slicing, and
+column views arrive when the evaluator needs them.
 
 ## Keep Decimal metadata stable
 
 In `array/decimal_array.rs`, wrap dense `i128` storage with one `DecimalType`. Validate raw-part
-lengths and every non-null coefficient. A builder must reject a row with different Decimal
-metadata before changing its length or buffers.
+lengths and every non-null coefficient. If a new row carries different Decimal metadata, reject it
+before changing the builder's length or buffers.
 
 ## Run the checkpoint
 
@@ -111,9 +113,9 @@ cargo test -p type-exercise-checkpoint-01-supplied-tests --locked
 cargo check -p type-exercise-checkpoint-01-core --locked
 ```
 
-Checkpoint 1 is complete when the catalog has all eight rows, dense arrays preserve values and
-null positions, string reads borrow from the shared bytes, Decimal builders reject incompatible
-metadata without mutation, and erased downcasts fail safely for the wrong family.
+You are done when the catalog has all eight rows, dense arrays preserve values and null positions,
+string reads borrow from the shared bytes, Decimal builders reject incompatible metadata without
+mutation, and erased downcasts fail safely for the wrong family.
 
 The next checkpoint will add nullable `Array`, `Constant`, and `Indexed` column views. It will use
 these arrays rather than replacing them.
