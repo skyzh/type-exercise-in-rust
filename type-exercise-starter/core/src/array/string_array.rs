@@ -8,3 +8,7 @@ pub struct StringArrayBuilder;
 
 // Checkpoint 1: add `data`/`offsets`/`validity`, implement Array for StringArray, and
 // implement its builder. String reads borrow `&str` directly from the shared byte buffer.
+//
+// Checkpoint 4: add a transactional value writer plus consumed `Writer` -> `WriterUsed` row
+// transition. A successful write publishes its bytes, terminal offset, and validity together;
+// a failed callback truncates its bytes and publishes no row metadata.
