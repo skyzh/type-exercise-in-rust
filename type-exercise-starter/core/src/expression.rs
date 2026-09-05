@@ -37,5 +37,10 @@
 //! directly when either input is null. The callback must return `WriterUsed`, so it cannot skip or
 //! repeat publication.
 //!
-//! Shape and raw-buffer specializations, semantic exceptions, runtime expression erasure,
+//! Checkpoint 5 adds public `auto_vectorize_unary`, `auto_vectorize_binary`, and
+//! `auto_vectorize_ternary` adapters. Specialize unary Array/Constant, the binary Array/Constant
+//! cross-product, and ternary Array/Array/Array; send Indexed and every other ternary combination
+//! through the existing typed-`get` fallback with identical validation and null behavior.
+//!
+//! Raw-buffer specialization, semantic exceptions, runtime expression erasure,
 //! registries, List evaluation, and asynchronous evaluation belong to later checkpoints.

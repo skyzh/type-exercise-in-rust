@@ -798,6 +798,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "type-exercise-checkpoint-05-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitvec",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-05-expr"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "type-exercise-checkpoint-05-core",
+]
+
+[[package]]
+name = "type-exercise-checkpoint-05-supplied-tests"
+version = "0.1.0"
+dependencies = [
+ "bitvec",
+ "type-exercise-checkpoint-05-core",
+ "type-exercise-checkpoint-05-expr",
+]
+
+[[package]]
 name = "type-exercise-core"
 version = "0.1.0"
 dependencies = [
