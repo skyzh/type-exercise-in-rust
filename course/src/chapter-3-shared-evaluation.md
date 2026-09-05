@@ -1,9 +1,9 @@
 # Checkpoint 3: Build Shared Typed Evaluation
 
-You now have owned nullable arrays and borrowed Array, Constant, Null, and Indexed views. Build the
-fallback that every later execution path must preserve: validate a batch once, read typed rows
+You now have owned nullable arrays and borrowed Array, Constant, Null, and Indexed views. This
+checkpoint turns them into one complete evaluation path: validate a batch once, read typed rows
 through `ColumnView::get`, call one scalar function when its inputs are present, and append a newly
-owned output array.
+owned output array. Later optimizations will still fall back to this path.
 
 Begin from your completed Checkpoint 2 workspace. Copy the cumulative tests, then run only the new
 Chapter 3 cases:
@@ -14,7 +14,8 @@ cargo test -p type-exercise-starter-supplied-tests chapter_3 --locked
 ```
 
 The focused test should fail because the shared evaluators and the three numeric facade functions
-do not exist yet. The inherited Chapter 1 and 2 APIs should compile. Do not edit the copied tests.
+do not exist yet. The inherited Chapter 1 and 2 APIs should still compile; keep the copied tests
+unchanged.
 
 ## Validate before traversing rows
 
@@ -32,8 +33,8 @@ Reject an arity mismatch first. Then compare each input's physical type with its
 check that every input has the same length as the first. Return that common length; an empty input
 list has length zero.
 
-Keeping validation outside the row loop gives the evaluator a simple contract: each typed view has
-the requested family, and every input can be read at each output row.
+After validation, the row loop can rely on two facts: each typed view has the requested family,
+and every input can be read at each output row.
 
 ## Lift scalar functions through typed views
 
@@ -57,9 +58,9 @@ Use `Option::map` for unary input and `Option::zip` for binary and ternary input
 null propagation part of the shared traversal: a null input produces a null output without calling
 the scalar function.
 
-Do not match on Array, Constant, or Indexed variants. `ColumnView::get` is the permanent
-representation-generic fallback. Later checkpoints may add faster paths in front of it, while
-Indexed inputs can continue to use this same implementation.
+Let `ColumnView::get` hide the Array, Constant, and Indexed variants. It is the
+representation-generic path that remains correct when later checkpoints place faster loops in
+front of it, and Indexed inputs can continue to use it unchanged.
 
 ## Choose numeric meaning in the facade
 
@@ -86,8 +87,8 @@ pub fn clamp_i32(
 
 `add_i16_i32` instantiates `i16 + i32 -> i32`, converting the left scalar with `i32::from`.
 `negate_i32` uses wrapping negation. `clamp_i32` instantiates the ternary evaluator with
-`i32::clamp`. Each function delegates the complete batch to one core evaluator; the facade needs
-no row loop and no knowledge of column representations.
+`i32::clamp`. Each function delegates the complete batch to one core evaluator. The facade chooses
+the numeric meaning without owning a row loop or knowing how the columns are represented.
 
 ## Run the cumulative contract
 
@@ -111,9 +112,8 @@ cargo test -p type-exercise-checkpoint-03-expr --lib --locked
 cargo check -p type-exercise-checkpoint-03-core --locked
 ```
 
-Checkpoint 3 is complete when all three scalar arities share one typed-get fallback and the facade
-contains only concrete numeric choices. Output writers, shape and raw-buffer specializations,
-semantic exceptions, runtime expression erasure, registries, List evaluation, and asynchronous
-work belong to later checkpoints.
+You are done when all three scalar arities share one typed-`get` path and the facade contains only
+the concrete numeric choices. The next checkpoint tackles the different publication rule needed
+by variable-width output.
 
 {{#include copyright.md}}

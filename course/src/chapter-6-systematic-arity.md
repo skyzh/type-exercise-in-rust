@@ -4,8 +4,8 @@ Checkpoint 5 can lift a strict, infallible scalar function over nullable columns
 not enough for every binary operation. Checked division can fail on a non-null row, while SQL
 Boolean `AND` and `OR` sometimes produce a known answer even when one input is null.
 
-This checkpoint gives each case its own core boundary. Begin from completed Checkpoint 5, then copy
-the cumulative tests:
+You will give each case its own core boundary. Begin from completed Checkpoint 5, then copy the
+cumulative tests:
 
 ```console
 cargo x copy-test --chapter 6
@@ -43,8 +43,8 @@ existing typed auto-vectorizer instead. That preserves one well-tested path for 
 result must have the same visible values and nulls either way; callers do not observe which path
 ran.
 
-This raw contract is deliberately narrow. A callback that can fail or assigns meaning to null
-cannot safely use it.
+The raw path works only for total operations with strict null propagation. A callback that can fail
+or assigns meaning to null still needs a row-aware evaluator.
 
 ## Checked division: strict but fallible
 
@@ -112,10 +112,10 @@ cargo test -p type-exercise-starter-supplied-tests chapter_6 --locked
 cargo test -p type-exercise-starter-supplied-tests --locked
 ```
 
-Passing means the three policies agree on validation and owned output construction while keeping
-their different callback and null contracts. Concrete arithmetic and Boolean expression builders
-arrive later; this checkpoint stops at reusable core lifting.
+When the tests pass, the three policies share validation and owned output construction while
+keeping their different callback and null contracts.
 
-[Checkpoint 7 constructs concrete arithmetic expressions](./chapter-7-boolean-logic.md).
+[Checkpoint 7 wraps these evaluators in a checked whole-batch
+expression](./chapter-7-boolean-logic.md).
 
 {{#include copyright.md}}

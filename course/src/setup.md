@@ -51,11 +51,11 @@ Run it without opening the source test. The command copies the cumulative tests 
 `N`, removes later managed tests, and regenerates the module list. Afterward, you may read the
 copied destination. Its first focused run should be red until you implement the chapter.
 
-Focused chapter commands target `type-exercise-starter-supplied-tests`. Implementation-only checks
-still target the facade package, `type-exercise-starter-expr`, or the reusable framework package,
-`type-exercise-starter-core`. Their sources live separately under `expr/src/` and `core/src/`; the Cargo
-edge is always supplied tests to facade to core, with a direct supplied-tests-to-core edge for
-framework witnesses.
+Focused chapter commands target `type-exercise-starter-supplied-tests`. For an implementation-only
+check, target either the facade package, `type-exercise-starter-expr`, or the reusable framework
+package, `type-exercise-starter-core`. Their sources live separately under `expr/src/` and
+`core/src/`. Dependencies point from supplied tests to the facade to core, with a direct
+supplied-tests-to-core edge for framework witnesses.
 
 ## Preview the course
 

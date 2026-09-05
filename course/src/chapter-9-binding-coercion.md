@@ -1,8 +1,8 @@
 # Checkpoint 9: Bind Logical Calls to Physical Expressions
 
 Checkpoint 8 accepts a physical function and exact physical input types. A query planner begins one
-level earlier: it has a logical function name and logical input types such as `SmallInt`, `Integer`,
-`Char`, or `Varchar`. Build the single binding layer that connects those two worlds.
+level earlier, with a logical function name and logical input types such as `SmallInt`, `Integer`,
+`Char`, or `Varchar`. In this checkpoint, you will connect those two worlds with one binding layer.
 
 Begin from completed Checkpoint 8 and copy the cumulative tests:
 
@@ -16,7 +16,7 @@ names are missing.
 
 ## Describe one logical call
 
-In `expr/src/binder.rs`, add public equivalents of this surface:
+In `expr/src/binder.rs`, implement this public surface:
 
 ```rust,ignore
 pub struct LogicalCall { /* logical name and input DataTypes */ }
@@ -42,9 +42,9 @@ physical expression, a way to take its `Box<dyn Expression>`, and an `evaluate` 
 the entire batch. Its constructor must reject logical metadata whose physical input or output types
 disagree with the expression it wraps.
 
-Enable the binder module from `expr/src/lib.rs`. Keep logical binding in the facade: core continues
-to own arrays, logical and physical representations, validation, generic traversal, writers, and
-the erased batch boundary.
+Enable the binder module from `expr/src/lib.rs`. Logical binding belongs in the facade. Core
+continues to own arrays, logical and physical representations, validation, generic traversal,
+writers, and the erased batch boundary.
 
 ## Resolve only the maintained overloads
 
@@ -100,7 +100,8 @@ let output = expression.evaluate(&[left, right])?;
 
 Binding performs logical overload and coercion selection once. Execution remains physical: the
 same whole-batch expression validates the actual columns and delegates to its specialized kernel.
-Do not add planner trees, casts, scalar dispatch, List types, async work, or Checkpoint 10 behavior.
+Planner trees and casts are outside this course boundary; List storage and async evaluation arrive
+in the final checkpoint.
 
 Run the focused and cumulative checks:
 
@@ -109,8 +110,8 @@ cargo test -p type-exercise-starter-supplied-tests chapter_9 --locked
 cargo test -p type-exercise-starter-supplied-tests --locked
 ```
 
-Passing covers exact and widened numeric calls, mixed logical strings, Boolean and ternary binding,
+The tests cover exact and widened numeric calls, mixed logical strings, Boolean and ternary binding,
 representative rejection paths, checked bound metadata, and evaluation through the returned erased
-expression.
+expression. The result is a complete synchronous path from a logical call to an owned array.
 
 {{#include copyright.md}}

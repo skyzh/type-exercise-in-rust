@@ -14,13 +14,14 @@ cargo test -p type-exercise-starter-supplied-tests chapter_10 --locked
 ```
 
 That focused test should initially fail only because the new List and async names do not exist.
-Keep every earlier checkpoint green as you work.
+Every earlier checkpoint should remain green as you work.
 
 ## Stage 1: represent nullable one-level Lists
 
 Add `PhysicalType::List(Box<PhysicalType>)`, then extend the erased array, scalar-reference, and
-column-view families with checked List variants. Implement public equivalents of `ListScalar`,
-`ListScalarRef`, `ListArray`, and `ListColumnView` at the Checkpoint 10 comments in the starter.
+column-view families with checked List variants. Implement the public `ListScalar`,
+`ListScalarRef`, `ListArray`, and `ListColumnView` surfaces described by the Checkpoint 10 comments
+in the starter.
 
 A List has two independent layers of nullability. The outer validity says whether the row itself
 is null. For a present row, the child array may still contain null elements. Empty and all-null
@@ -38,7 +39,8 @@ For a raw List array, validate all of these invariants before publishing the val
 
 A failed constructor, append, or slice must not expose partial state. Array, Constant, and Indexed
 column views must yield equivalent safe borrowed List rows through the usual checked access path.
-Do not prescribe a field layout in your public API; preserve these observable semantics instead.
+These are observable invariants, not a required public field layout. Choose private fields that
+make the checks and rollback behavior clear.
 
 Exercise the boundary directly before moving on:
 
@@ -59,13 +61,13 @@ assert_eq!(lists.slice(0, 1)?.len(), 1);
 
 ## Stage 2: defer one already-bound batch
 
-Keep the Checkpoint 9 binder and all synchronous expression behavior unchanged. Add public
-equivalents of these four boundaries in the expression core:
+Keep the Checkpoint 9 binder and all synchronous expression behavior unchanged. Add these four
+public boundaries in the expression core:
 
-First strengthen the existing trait declaration to `pub trait Expression: Send + Sync`. This is
-learner-owned work, not a bound supplied elsewhere: the borrowing future is `Send`, so both the
-compiler-known expression reference and the expression erased inside `Box<dyn Expression>` must
-be safe to share across threads.
+First strengthen the existing trait declaration to `pub trait Expression: Send + Sync`. The
+borrowing future is `Send`, so both the compiler-known expression reference and the expression
+erased inside `Box<dyn Expression>` must be safe to share across threads. The starter leaves this
+bound for you to add here.
 
 - `BatchFuture<'a>`: a `Send` future borrowing the expression and input views;
 - `evaluate_static`: a compiler-known async entry point;
@@ -101,12 +103,19 @@ assert_eq!(sync, erased_async);
 # Ok::<(), anyhow::Error>(())
 ```
 
-This is an ownership and API boundary, not a scheduler. Do not add an executor, runtime, I/O,
-retries, cancellation policy, locks, per-row futures, recursive Lists, Maps, or new scalar
-semantics. Your implementation only defers one existing whole-batch computation.
+The async layer ends at one deferred whole-batch computation. It does not need an executor,
+runtime, I/O, retries, locks, per-row futures, or new scalar semantics. Likewise, the List work
+remains one level deep rather than growing into recursive Lists or Maps.
 
 Finish by running the cumulative contract:
 
 ```console
 cargo test -p type-exercise-starter-supplied-tests --locked
 ```
+
+The final suite checks the one-level List invariants and confirms that synchronous, static async,
+and erased async evaluation return the same result or error. You now have the complete path from
+logical binding through typed batch execution, including nullable nested storage and a borrowing
+future around the finished batch.
+
+{{#include copyright.md}}

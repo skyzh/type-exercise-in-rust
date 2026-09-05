@@ -1,8 +1,8 @@
 # Checkpoint 8: Build the Physical Expression Catalog
 
 Checkpoint 7 erased one already-constructed whole-batch expression. A caller still needs to know
-which concrete builder to call. Build one catalog that turns a physical function identifier plus
-exact physical input types into `Box<dyn Expression>`.
+which concrete builder to call. This checkpoint adds a catalog that turns a physical function
+identifier plus exact physical input types into `Box<dyn Expression>`.
 
 Begin from completed Checkpoint 7 and copy the cumulative tests:
 
@@ -50,9 +50,9 @@ an existing core evaluator once for a complete batch:
 - Boolean builders cover three-valued `AND` and `OR`, strict `NOT`, equality, and inequality; and
 - String builders cover writer-backed concatenation, containment, and six comparisons.
 
-Keep physical signature choice outside every kernel. Integer overflow uses the course's wrapping
-arithmetic rule. Division and clamp use fallible core lifts. String concatenation writes directly
-through the consumed `Writer`, so a partially written failing row cannot be published.
+Choose the physical signature before entering any kernel. Integer overflow uses the course's
+wrapping arithmetic rule. Division and clamp use fallible core lifts. String concatenation writes
+directly through the consumed `Writer`, so a partially written failing row cannot be published.
 
 Lossless numeric widening is the same for arithmetic, comparisons, and each step of clamp:
 
@@ -66,7 +66,7 @@ List is not a numeric family here.
 
 ## Build one discoverable physical catalog
 
-In `expr/src/catalog.rs`, add the public equivalents of this surface:
+In `expr/src/catalog.rs`, implement this public surface:
 
 ```rust,ignore
 pub enum PhysicalFunction { /* numeric, Boolean, and String functions */ }
@@ -92,8 +92,9 @@ arity or physical input types before returning an expression. Numeric constructi
 lossless common physical type, then instantiates the matching typed builder. Boolean and String
 construction accept only their exact physical signatures.
 
-Do not add `DataType`, logical names, casts, a binder, or overload resolution. A caller at this
-checkpoint already has physical columns and chooses a physical function deliberately.
+At this boundary, the caller already has physical columns and deliberately chooses a physical
+function. Logical names, casts, and overload resolution belong one level earlier and will enter in
+Checkpoint 9.
 
 ## Use the complete physical loop
 
@@ -122,9 +123,9 @@ cargo test -p type-exercise-starter-supplied-tests chapter_8 --locked
 cargo test -p type-exercise-starter-supplied-tests --locked
 ```
 
-Passing covers every supported and rejected physical signature plus representative mixed numeric,
+The tests cover every supported and rejected physical signature plus representative mixed numeric,
 fallible clamp, nullable Boolean, and transactional String evaluation through `dyn Expression`.
-It still is not logical binding: nothing here decides which physical function a SQL name and
-logical schema should mean. That is Checkpoint 9.
+With physical selection complete, Checkpoint 9 can decide which function a SQL name and logical
+schema should mean.
 
 {{#include copyright.md}}

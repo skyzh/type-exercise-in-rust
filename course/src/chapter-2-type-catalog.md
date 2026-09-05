@@ -1,7 +1,7 @@
 # Checkpoint 2: Add Nullable Column Views
 
-Checkpoint 1 gave you owned arrays. Now borrow those arrays in three useful shapes without copying
-their values:
+Checkpoint 1 gave you owned arrays. Now let an expression borrow those arrays in three useful
+shapes without copying their values:
 
 - an `Array` view reads rows in their original order;
 - a `Constant` repeats one value or typed null for a requested length; and
@@ -15,16 +15,16 @@ cargo x copy-test --chapter 2
 cargo test -p type-exercise-starter-supplied-tests chapter_2 --locked
 ```
 
-That focused test should fail because `ColumnViewImpl` and `ColumnView` do not exist yet. The
-Chapter 1 implementation should still compile. Do not edit the copied tests.
+That focused test should fail because `ColumnViewImpl` and `ColumnView` do not exist yet, while the
+Chapter 1 implementation should still compile. Keep the copied tests unchanged.
 
 ## Enable the learner-owned module
 
 Open `type-exercise-starter/core/src/lib.rs` and enable the existing `column` module and export.
 Then implement `type-exercise-starter/core/src/column.rs`.
 
-The erased view must accept every Checkpoint 1 physical family. Keep its representation private
-and expose checked constructors instead:
+The erased view must accept every Checkpoint 1 physical family. Its representation stays private;
+callers create each shape through checked constructors:
 
 ```rust,ignore
 let values: ArrayImpl = I32Array::from_slice(&[Some(10), None, Some(30)]).into();
@@ -38,7 +38,7 @@ let indexed = ColumnViewImpl::indexed(&indices, &values)?;
 ```
 
 All three forms answer the same questions: `len`, `is_empty`, `physical_type`, and `get`. They
-borrow their inputs for lifetime `'a`; none of the constructors should allocate an output array.
+borrow their inputs for lifetime `'a`, so construction does not allocate another array.
 
 ## Preserve nulls and physical types
 
@@ -48,7 +48,7 @@ constant stores one `Option<ScalarRefImpl<'a>>` and a length:
 - `constant(value, len)` records `value.physical_type()` and returns that same value for every row;
 - `null(physical_type, len)` records the supplied type and returns `None` for every row.
 
-The explicit type on a null constant is essential. `None` carries no scalar variant, but later
+The explicit type on a null constant is essential: `None` carries no scalar variant, but later
 code must still distinguish a null Int64 column from a null String column.
 
 Treat `row < len` as the public precondition for `get`, matching array access in this course.
@@ -61,9 +61,10 @@ An indexed view borrows `&[u32]` and an `&ArrayImpl`. Its output length is the n
 and its physical type is the values array's type. Output row `r` reads
 `values.get(indices[r] as usize)`.
 
-Validate every index in `ColumnViewImpl::indexed`. If an index is outside the values array, return
-an error that identifies the bad index and its output row. A successfully constructed view can
-then read every output row without repeating bounds validation or creating a gathered array.
+Validate every index in `ColumnViewImpl::indexed`. If an index falls outside the values array,
+return an error that identifies the bad index and its output row. Once construction succeeds,
+every output row is safe to read without repeating index validation or materializing a gathered
+array.
 
 For example, values `["zero", NULL, "two"]` with indices `[2, 1, 2, 0]` read as
 `["two", NULL, "two", "zero"]`. The two appearances of `"two"` borrow the same underlying
@@ -81,7 +82,8 @@ TryFrom<ColumnViewImpl<'a>> for ColumnView<'a, S>
 
 Compare the erased view's `physical_type()` with `S::PHYSICAL_TYPE` before converting its private
 state. Then downcast the borrowed array, constant scalar, or indexed values array through the
-checked conversions from Checkpoint 1. A mismatched family returns `TypeMismatch`.
+checked conversions from Checkpoint 1. A mismatched family returns `TypeMismatch` before any row
+is read.
 
 After that one conversion, `ColumnView<'a, S>::get` returns `Option<S::RefType<'a>>` directly. For
 `ColumnView<'_, String>`, the returned `&str` still borrows the original `StringArray` bytes.
@@ -105,11 +107,10 @@ cargo test -p type-exercise-checkpoint-02-supplied-tests --locked
 cargo check -p type-exercise-checkpoint-02-core --locked
 ```
 
-Checkpoint 2 is complete when array views preserve null positions, constants repeat values and
-typed nulls, indexed views validate and remap rows, and typed views reject the wrong family before
-returning borrowed scalar references.
+You are done when array views preserve null positions, constants repeat values and typed nulls,
+indexed views validate and remap rows, and typed views reject the wrong family before returning
+borrowed scalar references.
 
-The next checkpoint will use these views for shared expression evaluation and numeric
-instantiation. Do not add that execution layer yet.
+The next checkpoint will put these views underneath a shared expression loop.
 
 {{#include copyright.md}}
