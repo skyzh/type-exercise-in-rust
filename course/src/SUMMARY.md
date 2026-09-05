@@ -11,3 +11,4 @@
 - [Checkpoint 4: Build Variable-Width Rows Transactionally](./chapter-4-concrete-loops.md)
 - [Checkpoint 5: Specialize Common Column Shapes](./chapter-5-generic-arithmetic.md)
 - [Checkpoint 6: Separate Binary Semantics](./chapter-6-systematic-arity.md)
+- [Checkpoint 7: Erase Whole-Batch Expressions](./chapter-7-boolean-logic.md)
