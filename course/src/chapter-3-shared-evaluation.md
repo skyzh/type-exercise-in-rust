@@ -1,5 +1,3 @@
-{{#include wip-banner.md}}
-
 # Checkpoint 3: Build Shared Typed Evaluation
 
 You now have owned nullable arrays and borrowed Array, Constant, Null, and Indexed views. Build the

@@ -28,3 +28,6 @@ source. Follow the chapter to the local checkpoint comment, uncomment the named 
 needed, and implement it. You may read the copied file under `supplied-tests/src/`, but do not edit it or
 `supplied-tests/src/lib.rs`. Work in the other files under `expr/src/` and `core/src/`, keep earlier tests green, and do not inspect
 `../type-exercise/` or `../archived/` for solutions.
+
+Checkpoint 10 is the terminal unit. Its `cargo x copy-test --chapter 10` command installs the
+complete cumulative supplied contract; there is no later checkpoint or learner API stage.

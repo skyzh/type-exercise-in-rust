@@ -1,5 +1,3 @@
-{{#include wip-banner.md}}
-
 # Checkpoint 8: Build the Physical Expression Catalog
 
 Checkpoint 7 erased one already-constructed whole-batch expression. A caller still needs to know

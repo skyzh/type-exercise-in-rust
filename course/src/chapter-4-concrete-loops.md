@@ -1,5 +1,3 @@
-{{#include wip-banner.md}}
-
 # Checkpoint 4: Build Variable-Width Rows Transactionally
 
 Checkpoint 3 can lift a scalar function when one owned value represents an output row. A string

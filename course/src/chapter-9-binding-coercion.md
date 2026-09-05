@@ -1,5 +1,3 @@
-{{#include wip-banner.md}}
-
 # Checkpoint 9: Bind Logical Calls to Physical Expressions
 
 Checkpoint 8 accepts a physical function and exact physical input types. A query planner begins one

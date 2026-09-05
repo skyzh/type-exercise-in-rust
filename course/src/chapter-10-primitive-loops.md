@@ -62,6 +62,11 @@ assert_eq!(lists.slice(0, 1)?.len(), 1);
 Keep the Checkpoint 9 binder and all synchronous expression behavior unchanged. Add public
 equivalents of these four boundaries in the expression core:
 
+First strengthen the existing trait declaration to `pub trait Expression: Send + Sync`. This is
+learner-owned work, not a bound supplied elsewhere: the borrowing future is `Send`, so both the
+compiler-known expression reference and the expression erased inside `Box<dyn Expression>` must
+be safe to share across threads.
+
 - `BatchFuture<'a>`: a `Send` future borrowing the expression and input views;
 - `evaluate_static`: a compiler-known async entry point;
 - dyn-compatible `AsyncExpression`; and

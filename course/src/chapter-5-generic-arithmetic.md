@@ -1,5 +1,3 @@
-{{#include wip-banner.md}}
-
 # Checkpoint 5: Specialize Common Column Shapes
 
 The Checkpoint 3 fallback calls `ColumnView::get(row)` so Array, Constant, and Indexed inputs all

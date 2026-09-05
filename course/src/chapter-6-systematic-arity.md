@@ -1,5 +1,3 @@
-{{#include wip-banner.md}}
-
 # Checkpoint 6: Separate Binary Semantics
 
 Checkpoint 5 can lift a strict, infallible scalar function over nullable columns. That contract is

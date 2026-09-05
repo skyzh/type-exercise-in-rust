@@ -1,5 +1,3 @@
-{{#include wip-banner.md}}
-
 # Checkpoint 7: Erase Whole-Batch Expressions
 
 Checkpoint 6 can evaluate complete batches, but callers still choose each evaluator directly.
