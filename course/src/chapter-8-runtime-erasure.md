@@ -1,92 +1,132 @@
 {{#include wip-banner.md}}
 
-# Chapter 8: Implement Three-Valued Boolean Logic
+# Checkpoint 8: Build the Physical Expression Catalog
 
-Strict arithmetic can skip its scalar function whenever an input is null. SQL Boolean logic is
-different: `FALSE AND NULL` is false, and `TRUE OR NULL` is true. Null therefore participates in
-the scalar semantics of `AND` and `OR`, while `NOT` remains strict.
+Checkpoint 7 erased one already-constructed whole-batch expression. A caller still needs to know
+which concrete builder to call. Build one catalog that turns a physical function identifier plus
+exact physical input types into `Box<dyn Expression>`.
 
-The reusable core already contains both contracts, but Chapter 7 leaves its nullable-aware helpers
-private. This chapter first publishes that core boundary, then keeps the operation choice in the
-facade: three small scalar functions define SQL truth, and the expression builder selects the
-matching core evaluator once per batch.
-
-## Checkpoint 1: expose the truth table through an expression
-
-Begin from completed Chapter 7:
+Begin from completed Checkpoint 7 and copy the cumulative tests:
 
 ```console
-cargo x copy-test --chapter 8 --checkpoint 1
+cargo x copy-test --chapter 8
 cargo test -p type-exercise-starter-supplied-tests chapter_8 --locked
 ```
 
-Open `core/src/expression.rs`. The nullable-aware unary and binary helpers already own their row
-loops, but they are private in the completed Chapter 7 state. Make both functions public without
-changing their bodies. The strict `evaluate_unary` helper is already public.
+The focused run should fail only because `try_auto_vectorize_ternary` and the Checkpoint 8
+catalog/factory surface are missing.
 
-Enable the private `expr/src/boolean.rs` module in `expr/src/lib.rs`, then implement the three
-crate-visible scalar helpers:
+## Complete the fallible ternary bridge
+
+Checked division already established the strict fallible rule for two inputs. Add its ternary
+counterpart in `core/src/expression.rs`:
 
 ```rust,ignore
-pub(crate) fn not(value: bool) -> bool;
-pub(crate) fn and(left: Option<bool>, right: Option<bool>) -> Option<bool>;
-pub(crate) fn or(left: Option<bool>, right: Option<bool>) -> Option<bool>;
+pub fn try_auto_vectorize_ternary<A, B, C, O, F, E>(
+    first: ColumnViewImpl<'_>,
+    second: ColumnViewImpl<'_>,
+    third: ColumnViewImpl<'_>,
+    function_name: &str,
+    function: F,
+) -> anyhow::Result<ArrayImpl>
+where
+    F: Fn(A, B, C) -> Result<O, E>,
+    E: std::fmt::Display;
 ```
 
-Keep the functions concise. `NOT` flips a present Boolean. `AND` returns false as soon as either
-side is false, true only for two true inputs, and null otherwise. `OR` returns true as soon as
-either side is true, false only for two false inputs, and null otherwise.
+Validate all three physical types and lengths before the first callback. Skip the callback when any
+input is null. Stop at the first non-null scalar failure and return an error with useful function
+and row context. Specialize Array/Array/Array and send every other shape through the typed fallback,
+just as the infallible ternary adapter does. Both routes build a fresh owned output.
 
-Define public `BooleanOperator::{And, Or, Not}`, `BooleanExpression`, and
-`build_boolean_expression`, and export that expression boundary from `expr/src/lib.rs`. Give the
-expression an inherent `evaluate` method. Validate a one-element Boolean type slice for `Not` and
-a two-element Boolean type slice for `And` and `Or`, then select the matching core evaluator outside
-the row loop: strict unary for `Not`, nullable-aware binary for `And` and `Or`.
+This small core-owned bridge lets physical `clamp` report invalid bounds without panicking or
+moving a row loop into the facade.
 
-The checkpoint sends the exhaustive 21 truth rows through the public builder,
-`ColumnViewImpl`, and `evaluate`; it never imports the private helpers or depends on their names,
-file, or signatures. Do not export a production truth-table constant or `BooleanTruthRow` merely
-to make the test convenient: production code owns behavior, while tests own enumerated examples.
+## Give each scalar family concrete builders
 
-## Checkpoint 2: complete the batch contract
+Enable the numeric, Boolean, and String facade modules. Each module owns scalar meaning and selects
+an existing core evaluator once for a complete batch:
 
-Copy the completed stage:
+- numeric builders cover losslessly widened `+`, `-`, `*`, `/`, negation, fallible clamp, and six
+  comparisons;
+- Boolean builders cover three-valued `AND` and `OR`, strict `NOT`, equality, and inequality; and
+- String builders cover writer-backed concatenation, containment, and six comparisons.
+
+Keep physical signature choice outside every kernel. Integer overflow uses the course's wrapping
+arithmetic rule. Division and clamp use fallible core lifts. String concatenation writes directly
+through the consumed `Writer`, so a partially written failing row cannot be published.
+
+Lossless numeric widening is the same for arithmetic, comparisons, and each step of clamp:
+
+- `Int16` widens to any numeric family;
+- `Int32` combines with `Int64` or `Float64`;
+- `Int32` plus `Float32` produces `Float64`;
+- `Float32` combines with `Float64`; and
+- `Int64` with either floating family is rejected.
+
+List is not a numeric family here.
+
+## Build one discoverable physical catalog
+
+In `expr/src/catalog.rs`, add the public equivalents of this surface:
+
+```rust,ignore
+pub enum PhysicalFunction { /* numeric, Boolean, and String functions */ }
+
+pub struct PhysicalFunctionEntry {
+    pub function: PhysicalFunction,
+    pub name: &'static str,
+    pub arity: usize,
+}
+
+pub const PHYSICAL_FUNCTION_CATALOG: &[PhysicalFunctionEntry];
+
+pub fn find_physical_function(name: &str) -> Option<PhysicalFunction>;
+
+pub fn build_physical_expression(
+    function: PhysicalFunction,
+    inputs: &[PhysicalType],
+) -> anyhow::Result<Box<dyn Expression>>;
+```
+
+The catalog metadata is for discovery. Construction is the checked boundary: reject unsupported
+arity or physical input types before returning an expression. Numeric construction computes one
+lossless common physical type, then instantiates the matching typed builder. Boolean and String
+construction accept only their exact physical signatures.
+
+Do not add `DataType`, logical names, casts, a binder, or overload resolution. A caller at this
+checkpoint already has physical columns and chooses a physical function deliberately.
+
+## Use the complete physical loop
+
+Suppose execution already holds an `Int16` column and an `Int32` column. The caller can inspect
+those physical types, choose the catalog's numeric-add identifier, and ask for one erased
+expression:
+
+```rust,ignore
+let function = find_physical_function("numeric_add").expect("catalog entry");
+let expression = build_physical_expression(
+    function,
+    &[PhysicalType::Int16, PhysicalType::Int32],
+)?;
+
+assert_eq!(expression.output_type(), PhysicalType::Int32);
+let output = expression.evaluate(&[left, right])?;
+```
+
+The dynamic choice happens once. The returned expression validates the actual batch and delegates
+rows to its already-selected typed kernel.
+
+Run the focused and cumulative checks:
 
 ```console
-cargo x copy-test --chapter 8 --checkpoint 2
 cargo test -p type-exercise-starter-supplied-tests chapter_8 --locked
-cargo test -p type-exercise-starter-expr --lib --locked
+cargo test -p type-exercise-starter-supplied-tests --locked
 ```
 
-Add public `operator`, `arity`, `input_types`, and `output_type` metadata to the expression. Refactor
-`evaluate` to validate with `input_types`; its evaluator selection and truth semantics remain those
-from Checkpoint 1. The completed test now exercises array-backed inputs, metadata, arity/type/length
-errors, and the same shared-core integration.
-
-The scalar helpers remain crate-visible implementation details. Later chapters depend only on the
-public expression surface exported at Checkpoint 1.
-
-Keep operator selection outside the shared loops. A null-policy enum tested per row would make
-the core depend on Boolean semantics and would put dispatch back into the hot path. The selected
-function itself may branch because those branches *are* SQL Boolean semantics, not operation
-dispatch.
-
-The focused tests cover all truth rows, array evaluation, absorption rules, strict `NOT`,
-arity and metadata, operation selection through public results, and unchanged type/length
-validation.
-
-## Inspect the boundary
-
-There are now two kinds of control flow and they should not be confused:
-
-1. batch-level dispatch chooses `AND`, `OR`, or `NOT` once;
-2. scalar-level matching implements the chosen SQL truth table for one row.
-
-The core crate knows only whether a callback accepts values or `Option` values. The facade owns the
-meaning of `FALSE AND NULL`. This one-way ownership is why adding a different nullable-aware
-operation does not require another core loop.
-
-With specialized execution and Boolean nulls in place, [Chapter 9 erases complete typed
-expressions at runtime](./chapter-9-binding-coercion.md).
+Passing covers every supported and rejected physical signature plus representative mixed numeric,
+fallible clamp, nullable Boolean, and transactional String evaluation through `dyn Expression`.
+It still is not logical binding: nothing here decides which physical function a SQL name and
+logical schema should mean. That is Checkpoint 9.
 
 {{#include copyright.md}}

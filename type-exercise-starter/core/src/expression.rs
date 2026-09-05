@@ -57,5 +57,22 @@
 //! its whole-batch kernel, then validate the returned array's physical type and row count.
 //! Erasing the value behind `Box<dyn Expression>` must preserve the same metadata and evaluation.
 //!
-//! Keep raw representation support private. Concrete expression factories, registries, List
-//! evaluation, and asynchronous evaluation belong to later checkpoints.
+//! Checkpoint 8 adds `try_auto_vectorize_ternary`, the fallible counterpart of the existing
+//! ternary adapter. Validate before any callback, skip null rows, stop at the first scalar error,
+//! and return a fresh owned array. The physical `clamp` factory needs this core-owned traversal.
+//!
+//! ```rust,ignore
+//! pub fn try_auto_vectorize_ternary<A, B, C, O, F, E>(
+//!     first: ColumnViewImpl<'_>,
+//!     second: ColumnViewImpl<'_>,
+//!     third: ColumnViewImpl<'_>,
+//!     function_name: &str,
+//!     function: F,
+//! ) -> anyhow::Result<ArrayImpl>
+//! where
+//!     F: Fn(A, B, C) -> Result<O, E>,
+//!     E: std::fmt::Display;
+//! ```
+//!
+//! Keep raw representation support private. Logical registries, List evaluation, and asynchronous
+//! evaluation belong to later checkpoints.
