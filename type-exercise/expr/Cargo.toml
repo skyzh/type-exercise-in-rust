@@ -8,7 +8,7 @@ publish.workspace = true
 [dependencies]
 anyhow = "1"
 bitvec = "1"
-type-exercise-core = { path = "../core" }
+type-exercise-core = { path = "../core", version = "0.2.0-alpha.1" }
 
 [dev-dependencies]
 criterion = "0.8.2"

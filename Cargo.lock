@@ -701,7 +701,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-checkpoint-01-core"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "bitvec",
@@ -709,14 +709,14 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-checkpoint-01-expr"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "type-exercise-checkpoint-01-core",
 ]
 
 [[package]]
 name = "type-exercise-checkpoint-01-supplied-tests"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "bitvec",
  "type-exercise-checkpoint-01-core",
@@ -725,7 +725,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-checkpoint-02-core"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "bitvec",
@@ -733,14 +733,14 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-checkpoint-02-expr"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "type-exercise-checkpoint-02-core",
 ]
 
 [[package]]
 name = "type-exercise-checkpoint-02-supplied-tests"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "bitvec",
  "type-exercise-checkpoint-02-core",
@@ -749,7 +749,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-checkpoint-03-core"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "bitvec",
@@ -757,7 +757,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-checkpoint-03-expr"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "type-exercise-checkpoint-03-core",
@@ -765,7 +765,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-checkpoint-03-supplied-tests"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "bitvec",
  "type-exercise-checkpoint-03-core",
@@ -774,7 +774,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-checkpoint-04-core"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "bitvec",
@@ -782,7 +782,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-checkpoint-04-expr"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "type-exercise-checkpoint-04-core",
@@ -790,7 +790,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-checkpoint-04-supplied-tests"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "bitvec",
  "type-exercise-checkpoint-04-core",
@@ -799,7 +799,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-checkpoint-05-core"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "bitvec",
@@ -807,7 +807,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-checkpoint-05-expr"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "type-exercise-checkpoint-05-core",
@@ -815,7 +815,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-checkpoint-05-supplied-tests"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "bitvec",
  "type-exercise-checkpoint-05-core",
@@ -824,7 +824,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-checkpoint-06-core"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "bitvec",
@@ -832,7 +832,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-checkpoint-06-expr"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "type-exercise-checkpoint-06-core",
@@ -840,7 +840,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-checkpoint-06-supplied-tests"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "bitvec",
@@ -850,7 +850,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-checkpoint-07-core"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "bitvec",
@@ -858,7 +858,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-checkpoint-07-expr"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "type-exercise-checkpoint-07-core",
@@ -866,7 +866,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-checkpoint-07-supplied-tests"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "bitvec",
@@ -876,7 +876,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-checkpoint-08-core"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "bitvec",
@@ -884,7 +884,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-checkpoint-08-expr"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "type-exercise-checkpoint-08-core",
@@ -892,7 +892,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-checkpoint-08-supplied-tests"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "bitvec",
@@ -902,7 +902,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-checkpoint-09-core"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "bitvec",
@@ -910,7 +910,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-checkpoint-09-expr"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "type-exercise-checkpoint-09-core",
@@ -918,7 +918,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-checkpoint-09-supplied-tests"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "bitvec",
@@ -928,7 +928,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-checkpoint-10-core"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "bitvec",
@@ -936,7 +936,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-checkpoint-10-expr"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "type-exercise-checkpoint-10-core",
@@ -944,7 +944,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-checkpoint-10-supplied-tests"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "bitvec",
@@ -954,7 +954,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-core"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "bitvec",
@@ -962,7 +962,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-expr"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "bitvec",
@@ -972,7 +972,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-starter-core"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "bitvec",
@@ -980,7 +980,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-starter-expr"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "bitvec",
@@ -989,7 +989,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-starter-supplied-tests"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "bitvec",
@@ -999,7 +999,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-supplied-tests"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "bitvec",
@@ -1009,7 +1009,7 @@ dependencies = [
 
 [[package]]
 name = "type-exercise-xtask"
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 dependencies = [
  "anyhow",
  "clap",

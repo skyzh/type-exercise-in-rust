@@ -8,5 +8,5 @@ publish.workspace = true
 [dependencies]
 anyhow = "1"
 bitvec = "1"
-type-exercise-starter-expr = { path = "../expr" }
-type-exercise-starter-core = { path = "../core" }
+type-exercise-starter-expr = { path = "../expr", version = "0.2.0-alpha.1" }
+type-exercise-starter-core = { path = "../core", version = "0.2.0-alpha.1" }
