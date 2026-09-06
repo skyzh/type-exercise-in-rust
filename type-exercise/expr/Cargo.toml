@@ -3,12 +3,15 @@ name = "type-exercise-expr"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-publish.workspace = true
+publish = true
+repository.workspace = true
+homepage.workspace = true
+description = "Completed expression engine for the Type Exercise in Rust course"
 
 [dependencies]
 anyhow = "1"
 bitvec = "1"
-type-exercise-core = { path = "../core" }
+type-exercise-core = { version = "0.1.1", path = "../core" }
 
 [dev-dependencies]
 criterion = "0.8.2"

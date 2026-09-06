@@ -3,7 +3,10 @@ name = "type-exercise-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-publish.workspace = true
+publish = true
+repository.workspace = true
+homepage.workspace = true
+description = "Core array, scalar, and type primitives for the Type Exercise in Rust course"
 
 [dependencies]
 anyhow = "1"

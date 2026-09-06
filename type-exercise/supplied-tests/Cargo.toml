@@ -3,10 +3,13 @@ name = "type-exercise-supplied-tests"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-publish.workspace = true
+publish = true
+repository.workspace = true
+homepage.workspace = true
+description = "Cumulative public tests for the Type Exercise in Rust reference implementation"
 
 [dependencies]
 anyhow = "1"
 bitvec = "1"
-type-exercise-expr = { path = "../expr" }
-type-exercise-core = { path = "../core" }
+type-exercise-expr = { version = "0.1.1", path = "../expr" }
+type-exercise-core = { version = "0.1.1", path = "../core" }
