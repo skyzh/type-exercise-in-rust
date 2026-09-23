@@ -1,9 +1,10 @@
 # Checkpoint 3: Build Shared Typed Evaluation
 
 You now have owned nullable arrays and borrowed Array, Constant, Null, and Indexed views. This
-checkpoint turns them into one complete evaluation path: validate a batch once, read typed rows
-through `ColumnView::get`, call one scalar function when its inputs are present, and append a newly
-owned output array. Later optimizations will still fall back to this path.
+checkpoint turns them into one complete evaluation path: check the batch's arity, types, and row
+counts, convert its inputs to typed views, read rows through `ColumnView::get`, call one scalar
+function when its inputs are present, and append a newly owned output array. Later optimizations
+will still fall back to this path.
 
 Begin from your completed Checkpoint 2 workspace. Copy the cumulative tests, then run only the new
 Chapter 3 cases:
@@ -33,8 +34,12 @@ Reject an arity mismatch first. Then compare each input's physical type with its
 check that every input has the same length as the first. Return that common length; an empty input
 list has length zero.
 
-After validation, the row loop can rely on two facts: each typed view has the requested family,
-and every input can be read at each output row.
+This checks the whole batch before traversal; it does not construct typed views. Each later
+`ColumnView::<S>::try_from` still checks the physical type while constructing a typed Array,
+Constant, or Indexed view, because that conversion is a fallible API in its own right. The evaluator
+therefore compares physical type twice. For unary evaluation, the validator's type check adds no
+independent safety beyond the conversion; the shared preflight keeps arity, type, and row-count
+checks together for all three evaluator shapes.
 
 ## Lift scalar functions through typed views
 
@@ -53,6 +58,9 @@ Each evaluator follows one sequence:
 3. allocate `<O as Scalar>::ArrayType::Builder` for the validated row count;
 4. read each row with typed `get` and call the scalar function only when every input is non-null;
 5. append the resulting value or null, finish the builder, and erase the owned array.
+
+After validation and conversion succeed, the row loop has typed inputs of equal length and can
+read each input at every output row.
 
 Use `Option::map` for unary input and `Option::zip` for binary and ternary inputs. That makes strict
 null propagation part of the shared traversal: a null input produces a null output without calling
