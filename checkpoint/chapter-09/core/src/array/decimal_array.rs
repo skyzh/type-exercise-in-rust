@@ -35,7 +35,7 @@ impl DecimalArray {
     }
 
     pub fn try_from_slice(decimal_type: DecimalType, values: &[Option<Decimal>]) -> Result<Self> {
-        let mut builder = DecimalArrayBuilder::try_with_type(decimal_type, values.len())?;
+        let mut builder = DecimalArrayBuilder::with_type(decimal_type, values.len());
         for value in values {
             builder.try_push(*value)?;
         }
@@ -81,13 +81,12 @@ pub struct DecimalArrayBuilder {
 }
 
 impl DecimalArrayBuilder {
-    pub fn try_with_type(decimal_type: DecimalType, capacity: usize) -> Result<Self> {
-        // `DecimalType` can only be created by its checked constructor. Keep this
-        // result fallible so metadata-bearing builders share one explicit boundary.
-        Ok(Self {
+    /// Creates an empty builder with an already-checked Decimal descriptor.
+    pub fn with_type(decimal_type: DecimalType, capacity: usize) -> Self {
+        Self {
             storage: PrimitiveArrayBuilder::with_raw_capacity(capacity),
             decimal_type,
-        })
+        }
     }
 
     pub fn try_push(&mut self, value: Option<Decimal>) -> Result<()> {

@@ -83,6 +83,7 @@ fn stores_strings_as_bytes_offsets_and_validity() {
 #[test]
 fn keeps_one_checked_decimal_descriptor_per_array() {
     assert!(DecimalType::try_new(0, 0).is_err());
+    assert!(DecimalType::try_new(39, 0).is_err());
     assert!(DecimalType::try_new(3, 4).is_err());
 
     let money = DecimalType::try_new(6, 2).unwrap();
@@ -95,7 +96,7 @@ fn keeps_one_checked_decimal_descriptor_per_array() {
     assert_eq!(array.get(0), Some(first));
     assert_eq!(array.get(1), None);
 
-    let mut builder = DecimalArrayBuilder::try_with_type(money, 2).unwrap();
+    let mut builder = DecimalArrayBuilder::with_type(money, 2);
     builder.try_push(Some(first)).unwrap();
     assert!(
         builder
@@ -106,6 +107,85 @@ fn keeps_one_checked_decimal_descriptor_per_array() {
         builder.len(),
         1,
         "a rejected row must not mutate the builder"
+    );
+    let different_precision = DecimalType::try_new(7, 2).unwrap();
+    assert!(
+        builder
+            .try_push(Some(Decimal::try_new(7, different_precision).unwrap()))
+            .is_err()
+    );
+    builder.try_push(Some(second)).unwrap();
+    let finished = builder.finish();
+    assert_eq!(finished.decimal_type(), money);
+    assert_eq!(finished.values(), &[12_345, -50]);
+    assert_eq!(
+        (0..finished.len())
+            .map(|row| finished.get(row))
+            .collect::<Vec<_>>(),
+        [Some(first), Some(second)]
+    );
+}
+
+#[test]
+fn checks_decimal_coefficients_at_precision_boundaries() {
+    for precision in [1, 6, 38] {
+        let limit = 10_i128.pow(u32::from(precision));
+        for scale in [0, precision] {
+            let decimal_type = DecimalType::try_new(precision, scale).unwrap();
+            for coefficient in [0, limit - 1, -(limit - 1)] {
+                let scalar = Decimal::try_new(coefficient, decimal_type).unwrap();
+                assert_eq!(scalar.unscaled(), coefficient);
+                assert_eq!(scalar.decimal_type(), decimal_type);
+            }
+            for coefficient in [limit, -limit, i128::MIN] {
+                assert!(Decimal::try_new(coefficient, decimal_type).is_err());
+                assert!(
+                    DecimalArray::try_from_raw_parts(
+                        decimal_type,
+                        vec![coefficient],
+                        [true].into_iter().collect(),
+                    )
+                    .is_err()
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn retains_decimal_type_for_empty_and_all_null_arrays() {
+    let money = DecimalType::try_new(6, 2).unwrap();
+    let empty = DecimalArrayBuilder::with_type(money, 0).finish();
+    assert!(empty.is_empty());
+    assert_eq!(empty.decimal_type(), money);
+
+    let empty_slice = DecimalArray::try_from_slice(money, &[]).unwrap();
+    assert!(empty_slice.is_empty());
+    assert_eq!(empty_slice.decimal_type(), money);
+
+    let mut builder = DecimalArrayBuilder::with_type(money, 2);
+    builder.try_push(None).unwrap();
+    builder.try_push(None).unwrap();
+    let all_null = builder.finish();
+    assert_eq!(all_null.decimal_type(), money);
+    assert_eq!(all_null.values(), &[0, 0]);
+    assert_eq!(
+        (0..all_null.len())
+            .map(|row| all_null.get(row))
+            .collect::<Vec<_>>(),
+        [None, None]
+    );
+    assert_eq!(
+        all_null.validity().iter().by_vals().collect::<Vec<_>>(),
+        [false, false]
+    );
+    let null_slice = DecimalArray::try_from_slice(money, &[None, None]).unwrap();
+    assert_eq!(null_slice.decimal_type(), money);
+    assert_eq!(
+        (0..null_slice.len())
+            .map(|row| null_slice.get(row))
+            .collect::<Vec<_>>(),
+        [None, None]
     );
 }
 

@@ -58,11 +58,10 @@ cargo test -p type-exercise-starter-supplied-tests chapter_5 --locked
 cargo test -p type-exercise-starter-supplied-tests --lib --locked
 ```
 
-The three Checkpoint 5 tests compare nullable owned results across Array and Constant combinations,
-mixed scalar families, Indexed and non-dense ternary fallback, and invalid types and lengths.
-Together with Checkpoints 1–4, the cumulative suite has 17 tests. Because callers see results and
-errors rather than an internal route, both specialized and fallback paths must keep the same
-contract.
+The supplied tests compare nullable owned results across Array and Constant combinations, mixed
+scalar families, Indexed and non-dense ternary fallback, and invalid types and lengths. Both the
+focused and cumulative runs should pass. Because callers see results and errors rather than an
+internal route, both specialized and fallback paths must keep the same contract.
 
 The next checkpoint keeps that contract while separating operations that are total, fallible, or
 nullable-aware.
