@@ -56,9 +56,22 @@ panicking or reinterpreting bytes.
 
 ## Map logical types to storage
 
-Define `DecimalType` and `Decimal` in `decimal.rs`. Check precision and scale when the descriptor
-is created, and reject an unscaled coefficient that cannot fit its precision. One descriptor
-belongs to the whole Decimal array, so precision and scale are not repeated beside each `i128`.
+For a Decimal with precision 6 and scale 2, the coefficient `12_345` represents `123.45`:
+its numeric value is the coefficient multiplied by `10^(-scale)`. The `i128` stores only that
+unscaled integer; precision and scale live in a separate checked `DecimalType`.
+
+Define `DecimalType` and `Decimal` in `decimal.rs` with two checked construction boundaries:
+
+- `DecimalType::try_new(precision, scale)` accepts precision 1–38 and scale 0–precision.
+- `Decimal::try_new(unscaled, decimal_type)` pairs the coefficient with an already-checked
+  descriptor and rejects `abs(unscaled) >= 10^precision`. For precision 6, `1_000_000` is rejected,
+  while `999_999` fits. Check negative coefficients too, including `i128::MIN`, without overflowing
+  while taking the absolute value.
+
+A standalone `Decimal` carries both the coefficient and its descriptor. A `DecimalArray` stores
+one shared descriptor alongside a dense `i128` coefficient buffer and validity bits. Reading a
+non-null row pairs its stored coefficient with that shared descriptor again; precision and scale
+are not packed into each `i128` or stored separately for every row.
 
 Define the planner-facing `DataType` in `data_type.rs`. Map SQL names such as `SmallInt`,
 `Integer`, `Varchar`, and `Decimal` to the physical families above. Add the string and numeric
@@ -93,13 +106,18 @@ column views arrive when the evaluator needs them.
 
 ## Keep Decimal metadata stable
 
-In `array/decimal_array.rs`, wrap dense `i128` storage with one `DecimalType`. Validate raw-part
-lengths and every non-null coefficient. If a new row carries different Decimal metadata, reject it
-before changing the builder's length or buffers.
+In `array/decimal_array.rs`, wrap dense `i128` storage with one `DecimalType`. Keep that descriptor
+even when the array is empty or every row is null: those rows cannot supply the column's type.
+Validate raw-part lengths and every non-null coefficient.
+
+Create the builder with `DecimalArrayBuilder::with_type(decimal_type, capacity) -> Self`. Its
+descriptor is already checked, so creating an empty builder needs no `Result`. Keep row insertion
+fallible: if a scalar carries different precision or scale, `try_push` must reject it before
+changing the builder's length or buffers.
 
 ## Run the checkpoint
 
-Run the same learner command until all five public behaviors pass:
+Run the same learner command until all seven public behaviors pass:
 
 ```console
 cargo x copy-test --chapter 1
