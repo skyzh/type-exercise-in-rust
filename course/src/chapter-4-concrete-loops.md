@@ -66,7 +66,7 @@ cargo test -p type-exercise-starter-supplied-tests --lib --locked
 
 The two Checkpoint 4 tests distinguish empty from null strings, pin bytes and offsets, and prove
 failed writes do not leak partial bytes. Together with Checkpoints 1–3, the cumulative suite has
-14 tests. With publication now transactional, the next checkpoint can change the loop shape
+16 tests. With publication now transactional, the next checkpoint can change the loop shape
 without changing its visible results.
 
 {{#include copyright.md}}

@@ -99,7 +99,7 @@ cargo test -p type-exercise-starter-supplied-tests chapter_2 --locked
 cargo test -p type-exercise-starter-supplied-tests --locked
 ```
 
-The cumulative run should pass nine tests: five from Checkpoint 1 and four from Checkpoint 2. You
+The cumulative run should pass eleven tests: seven from Checkpoint 1 and four from Checkpoint 2. You
 can run the completed snapshot independently:
 
 ```console

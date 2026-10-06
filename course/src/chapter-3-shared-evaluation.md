@@ -107,7 +107,7 @@ cargo test -p type-exercise-starter-supplied-tests chapter_3 --locked
 cargo test -p type-exercise-starter-supplied-tests --locked
 ```
 
-The cumulative run should pass twelve tests: five from Checkpoint 1, four from Checkpoint 2, and
+The cumulative run should pass fourteen tests: seven from Checkpoint 1, four from Checkpoint 2, and
 three from Checkpoint 3. The new cases cover the public numeric facade, mixed numeric types,
 Array/Constant/Indexed inputs, strict null propagation, owned output, and arity/type/length
 validation.
