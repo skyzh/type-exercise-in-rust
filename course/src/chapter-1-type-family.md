@@ -117,7 +117,7 @@ changing the builder's length or buffers.
 
 ## Run the checkpoint
 
-Run the same learner command until all seven public behaviors pass:
+Run the same learner command until all supplied tests pass:
 
 ```console
 cargo x copy-test --chapter 1
